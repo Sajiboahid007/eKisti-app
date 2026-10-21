@@ -1,0 +1,61 @@
+<div class="modal-backdrop" (click)="onClose()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="header-content">
+        <span class="material-symbols-outlined history-header-icon">manage_history</span>
+        <h3>{{ title }}</h3>
+      </div>
+      <button class="close-btn" (click)="onClose()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      @if (!historyList || historyList.length === 0) {
+        <div class="empty-history">
+          <span class="material-symbols-outlined">history_toggle_off</span>
+          <p>কোনো পূর্ববর্তী এডিট হিস্ট্রি পাওয়া যায়নি।</p>
+        </div>
+      } @else {
+        <div class="timeline">
+          @for (entry of historyList; track entry.historyId) {
+            <div class="timeline-item">
+              <div class="timeline-dot"></div>
+              <div class="timeline-content">
+                <div class="entry-header">
+                  <span class="badge" [ngClass]="getActionBadgeClass(entry.action)">
+                    {{ getActionLabelBangla(entry.action) }}
+                  </span>
+                  <span class="entry-time">{{ entry.timestamp | date:'medium' }}</span>
+                </div>
+
+                <div class="entry-author">
+                  <span class="material-symbols-outlined author-icon">person</span>
+                  <span class="author-name">{{ entry.changedByName }}</span>
+                  <span class="author-role">({{ entry.changedByRole }})</span>
+                </div>
+
+                @if (entry.reason) {
+                  <div class="entry-reason">
+                    <strong>কারণ:</strong> {{ entry.reason }}
+                  </div>
+                }
+
+                @if (entry.newData && (entry.newData | keyvalue)?.length) {
+                  <div class="changes-box">
+                    <div class="box-title">পরিবর্তিত তথ্য:</div>
+                    <pre class="json-preview">{{ entry.newData | json }}</pre>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="onClose()">বন্ধ করুন</button>
+    </div>
+  </div>
+</div>

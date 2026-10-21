@@ -1,0 +1,176 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <h2>মানি রসিদ রেজিস্টার (Collection Receipts)</h2>
+      <p class="sub-text">সকল কিস্তি ও সঞ্চয় আদায়ের ডিজিটাল প্রমাণপত্র ও অডিট ট্রেইল</p>
+    </div>
+  </div>
+
+  <!-- Search Card -->
+  <div class="card filter-card">
+    <div class="search-box">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input 
+        type="text" 
+        class="form-control search-input" 
+        placeholder="গ্রাহকের নাম বা রসিদ নম্বর (#40001) দিয়ে খুঁজুন..." 
+        [(ngModel)]="searchQuery" />
+    </div>
+    <div class="count-tag">
+      মোট রসিদ: <strong>{{ filteredReceipts().length }} টি</strong>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-body p-0">
+      @if (loading()) {
+        <div class="loading-state">
+          <span class="material-symbols-outlined spinning">sync</span>
+          <p>রসিদ তালিকা লোড হচ্ছে...</p>
+        </div>
+      } @else if (filteredReceipts().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined">receipt</span>
+          <p>কোনো রসিদ পাওয়া যায়নি।</p>
+        </div>
+      } @else {
+        <div class="table-container border-0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>রসিদ নং</th>
+                <th>গ্রাহক</th>
+                <th>কিস্তি নং</th>
+                <th>আসল ও লাভ</th>
+                <th>সঞ্চয় জমা</th>
+                <th>সর্বমোট আদায়</th>
+                <th>মাধ্যম</th>
+                <th>সংগ্রহকারী কর্মী</th>
+                <th>শাখা জমা</th>
+                <th class="text-right">অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (rec of filteredReceipts(); track rec.receiptId) {
+                <tr>
+                  <td>
+                    <span class="id-tag">#{{ rec.receiptId }}</span>
+                    @if (rec.receiptNumberManual) {
+                      <div class="sub-text">{{ rec.receiptNumberManual }}</div>
+                    }
+                  </td>
+                  <td>
+                    <strong>{{ rec.customerName }}</strong>
+                    <div class="sub-text">হিসাব #LN-{{ rec.loanId }}</div>
+                  </td>
+                  <td>
+                    <span class="badge badge-secondary">কিস্তি {{ rec.installmentNo }}</span>
+                  </td>
+                  <td class="amount-bdt">{{ (rec.principalAmountCollected + rec.profitAmountCollected) | number }}</td>
+                  <td class="amount-bdt text-success">+ ৳{{ rec.savingsAmountCollected | number }}</td>
+                  <td>
+                    <strong class="amount-bdt text-primary">{{ rec.totalAmountCollected | number }}</strong>
+                  </td>
+                  <td>
+                    <span class="badge" [ngClass]="rec.paymentMethod === 'CASH' ? 'badge-secondary' : 'badge-paid'">
+                      {{ rec.paymentMethod }}
+                    </span>
+                  </td>
+                  <td>{{ rec.collectedByName }}</td>
+                  <td>
+                    @if (rec.isHandedOverToBranch) {
+                      <span class="badge badge-paid">জমা সম্পন্ন</span>
+                    } @else {
+                      <span class="badge badge-warning">মাঠকর্মীর কাছে</span>
+                    }
+                  </td>
+                  <td class="text-right">
+                    <button class="btn btn-sm btn-primary" (click)="viewReceipt(rec)">
+                      <span class="material-symbols-outlined">visibility</span>
+                      <span>রসিদ দেখুন</span>
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+</div>
+
+<!-- Printable Money Receipt Modal -->
+@if (selectedReceiptForPrint()) {
+  <div class="modal-backdrop" (click)="closeReceipt()">
+    <div class="modal-dialog receipt-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">receipt_long</span>
+          <h3>ডিজিটাল মানি রসিদ (Official Receipt)</h3>
+        </div>
+        <button class="close-btn" (click)="closeReceipt()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body print-area">
+        <!-- Receipt Voucher Design -->
+        <div class="receipt-voucher">
+          <div class="voucher-top">
+            <div class="org-name">eKisti মাইক্রোফাইন্যান্স সিস্টেম</div>
+            <div class="branch-line">মিরপুর শাখা • ঢাকা</div>
+            <div class="voucher-title">টাকা প্রাপ্তির মানি রসিদ (গ্রাহক কপি)</div>
+          </div>
+
+          <div class="voucher-meta-grid">
+            <div>রসিদ নং: <strong>#{{ selectedReceiptForPrint()!.receiptId }}</strong></div>
+            <div class="text-right">তারিখ: <strong>{{ selectedReceiptForPrint()!.collectionDate | date:'mediumDate' }}</strong></div>
+            <div>গ্রাহকের নাম: <strong>{{ selectedReceiptForPrint()!.customerName }}</strong></div>
+            <div class="text-right">ঋণ হিসাব নং: <strong>LN-{{ selectedReceiptForPrint()!.loanId }}</strong></div>
+          </div>
+
+          <div class="voucher-items-table">
+            <div class="v-row v-header">
+              <span>বিবরণ</span>
+              <span class="text-right">টাকার পরিমাণ</span>
+            </div>
+            <div class="v-row">
+              <span>কিস্তি নং {{ selectedReceiptForPrint()!.installmentNo }} (আসল ও সার্ভিস চার্জ)</span>
+              <span class="amount-bdt text-right">{{ (selectedReceiptForPrint()!.principalAmountCollected + selectedReceiptForPrint()!.profitAmountCollected) | number }}</span>
+            </div>
+            <div class="v-row">
+              <span>সাপ্তাহিক বাধ্যতামূলক সঞ্চয় জমা</span>
+              <span class="amount-bdt text-right">{{ selectedReceiptForPrint()!.savingsAmountCollected | number }}</span>
+            </div>
+            <div class="v-row v-total">
+              <span>সর্বমোট আদায়কৃত টাকা:</span>
+              <span class="amount-bdt total-bold text-right">{{ selectedReceiptForPrint()!.totalAmountCollected | number }}</span>
+            </div>
+          </div>
+
+          <div class="voucher-signatures">
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-title">আদায়কারী কর্মীর স্বাক্ষর</div>
+              <div class="sig-name">{{ selectedReceiptForPrint()!.collectedByName }}</div>
+            </div>
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-title">গ্রাহকের স্বাক্ষর / টিপসহি</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeReceipt()">বন্ধ করুন</button>
+        <button class="btn btn-primary" (click)="printReceipt()">
+          <span class="material-symbols-outlined">print</span>
+          <span>প্রিন্ট করুন</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,98 @@
+<div class="login-wrapper">
+  <!-- Top Language Switcher Bar -->
+  <div class="lang-bar">
+    <button class="lang-toggle-btn" (click)="lang.toggleLanguage()">
+      <span class="material-symbols-outlined lang-icon">translate</span>
+      <span>{{ lang.isBangla() ? 'English' : 'বাংলা' }}</span>
+    </button>
+  </div>
+
+  <div class="login-card">
+    <!-- Header with App Logo -->
+    <div class="login-header">
+      <div class="logo-box">
+        <span class="material-symbols-outlined logo-icon">account_balance</span>
+      </div>
+      <h2>{{ lang.t('appName') }}</h2>
+      <p class="tagline">{{ lang.t('appTagline') }}</p>
+    </div>
+
+    <!-- 1-Click Role Login Selector -->
+    <div class="role-selector-section">
+      <div class="section-title">
+        <span class="material-symbols-outlined title-icon">touch_app</span>
+        <span>{{ lang.t('quickDemoLogin') }}</span>
+      </div>
+
+      <div class="role-cards-grid">
+        @for (demo of demoRoles; track demo.role) {
+          <button type="button" class="role-card-btn" (click)="quickLogin(demo.role)">
+            <div class="role-icon-box" [ngClass]="demo.badgeClass">
+              <span class="material-symbols-outlined">{{ demo.icon }}</span>
+            </div>
+            <div class="role-card-info">
+              <div class="role-card-title" [title]="lang.isBangla() ? demo.titleBn : demo.titleEn">
+                {{ lang.isBangla() ? demo.titleBn : demo.titleEn }}
+              </div>
+              <div class="role-card-desc" [title]="lang.isBangla() ? demo.descBn : demo.descEn">
+                {{ lang.isBangla() ? demo.descBn : demo.descEn }}
+              </div>
+            </div>
+            <span class="material-symbols-outlined arrow-icon">arrow_forward_ios</span>
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="or-divider">
+      <span>{{ lang.isBangla() ? 'অথবা পাসওয়ার্ড দিয়ে লগইন করুন' : 'OR SIGN IN WITH PASSWORD' }}</span>
+    </div>
+
+    <!-- Standard Login Form -->
+    <form (ngSubmit)="onSubmit()" class="login-form">
+      @if (errorMessage()) {
+        <div class="alert alert-danger">
+          <span class="material-symbols-outlined alert-icon">error</span>
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
+      <div class="form-group">
+        <label>{{ lang.t('emailOrPhone') }}</label>
+        <div class="input-with-icon">
+          <span class="material-symbols-outlined input-icon">mail</span>
+          <input 
+            type="text" 
+            class="form-control" 
+            [(ngModel)]="emailOrPhone" 
+            name="emailOrPhone" 
+            required 
+            placeholder="admin@ekisti.com / 017XXXXXXXX" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>{{ lang.t('password') }}</label>
+        <div class="input-with-icon">
+          <span class="material-symbols-outlined input-icon">lock</span>
+          <input 
+            type="password" 
+            class="form-control" 
+            [(ngModel)]="password" 
+            name="password" 
+            required 
+            placeholder="••••••" />
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block btn-lg" [disabled]="loading()">
+        <span class="material-symbols-outlined">login</span>
+        <span>{{ loading() ? (lang.isBangla() ? 'যাচাই হচ্ছে...' : 'Signing in...') : lang.t('signInBtn') }}</span>
+      </button>
+    </form>
+
+    <div class="login-footer">
+      <span>{{ lang.isBangla() ? 'নিরাপদ ক্লাউড ডেটাবেজ • ইন্টিজার আইডি আর্কিটেকচার' : 'Secure Cloud Database • Integer ID Architecture' }}</span>
+    </div>
+  </div>
+</div>

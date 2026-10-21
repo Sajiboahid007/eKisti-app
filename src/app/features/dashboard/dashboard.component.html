@@ -1,0 +1,215 @@
+<div class="dashboard-container">
+  <!-- Welcome Banner -->
+  <div class="welcome-banner">
+    <div class="banner-text">
+      <h1>{{ lang.isBangla() ? 'স্বাগতম, ' : 'Welcome, ' }}{{ authService.currentUser().name }}</h1>
+      <p class="banner-sub">
+        {{ lang.isBangla() ? authService.currentUser().roleTitleBangla : authService.currentUser().roleTitleEnglish }} — {{ authService.currentUser().branchName }}
+        @if (authService.isFieldOfficer()) {
+          <span> • {{ lang.isBangla() ? 'আজকের নির্ধারিত রুট: শাপলা মহিলা সমিতি (রুট ১০১)' : 'Today Route: Shapla Samity (Route 101)' }}</span>
+        }
+      </p>
+    </div>
+
+    <div class="banner-actions">
+      @if (authService.canCollectKisti()) {
+        <a routerLink="/collections/daily" class="btn btn-primary">
+          <span class="material-symbols-outlined">payments</span>
+          <span>{{ lang.isBangla() ? 'কিস্তি সংগ্রহ শুরু করুন' : 'Start Kisti Collection' }}</span>
+        </a>
+      }
+      <a routerLink="/loans/disburse" class="btn btn-secondary">
+        <span class="material-symbols-outlined">add_circle</span>
+        <span>{{ lang.isBangla() ? 'নতুন ঋণ বিতরণ' : 'Disburse Loan' }}</span>
+      </a>
+      <a routerLink="/customers/new" class="btn btn-secondary">
+        <span class="material-symbols-outlined">person_add</span>
+        <span>{{ lang.isBangla() ? 'নতুন গ্রাহক KYC' : 'New Customer KYC' }}</span>
+      </a>
+      @if (authService.canManageUsers()) {
+        <a routerLink="/users/new" class="btn btn-secondary">
+          <span class="material-symbols-outlined">manage_accounts</span>
+          <span>{{ lang.isBangla() ? 'নতুন ইউজার তৈরি' : 'Create User' }}</span>
+        </a>
+      }
+    </div>
+  </div>
+
+  <!-- KPI Summary Cards Grid -->
+  <div class="kpi-grid">
+    <!-- Today Collection Card -->
+    <div class="kpi-card highlight-kpi">
+      <div class="kpi-icon-wrap primary-icon">
+        <span class="material-symbols-outlined">point_of_sale</span>
+      </div>
+      <div class="kpi-info">
+        <div class="kpi-label">{{ lang.t('todayCollection') }}</div>
+        <div class="kpi-value amount-bdt">{{ todayCollectedAmount() | number:'1.2-2' }}</div>
+        <div class="kpi-subtext">
+          {{ lang.t('target') }}: <span class="amount-bdt">{{ todayExpectedTarget() | number:'1.0-0' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Loans Outstanding -->
+    <div class="kpi-card">
+      <div class="kpi-icon-wrap info-icon">
+        <span class="material-symbols-outlined">account_balance_wallet</span>
+      </div>
+      <div class="kpi-info">
+        <div class="kpi-label">{{ lang.t('outstandingLoans') }}</div>
+        <div class="kpi-value amount-bdt">{{ totalOutstanding() | number:'1.2-2' }}</div>
+        <div class="kpi-subtext">
+          {{ lang.isBangla() ? 'সক্রিয় ঋণ:' : 'Active Loans:' }} <strong>{{ activeLoansCount() }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vault Cash -->
+    <div class="kpi-card">
+      <div class="kpi-icon-wrap success-icon">
+        <span class="material-symbols-outlined">savings</span>
+      </div>
+      <div class="kpi-info">
+        <div class="kpi-label">{{ lang.t('vaultCash') }}</div>
+        <div class="kpi-value amount-bdt">{{ totalVaultCash() | number:'1.2-2' }}</div>
+        <div class="kpi-subtext text-success">
+          <span class="material-symbols-outlined icon-mini">verified</span> {{ lang.t('verifiedCashier') }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Overdue Warning Card -->
+    <div class="kpi-card" [class.danger-alert]="overdueAmount() > 0">
+      <div class="kpi-icon-wrap danger-icon">
+        <span class="material-symbols-outlined">warning</span>
+      </div>
+      <div class="kpi-info">
+        <div class="kpi-label">{{ lang.t('overdueLoans') }}</div>
+        <div class="kpi-value amount-bdt">{{ overdueAmount() | number:'1.2-2' }}</div>
+        <div class="kpi-subtext">
+          @if (overdueAmount() === 0) {
+            <span class="text-success">{{ lang.t('noOverdue') }}</span>
+          } @else {
+            <span class="text-danger">{{ lang.t('urgentFollowup') }}</span>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Split Grid -->
+  <div class="dashboard-content-grid">
+    <!-- Active Loans Section -->
+    <div class="card">
+      <div class="card-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">receipt_long</span>
+          <h3>{{ lang.t('recentLoans') }}</h3>
+        </div>
+        <a routerLink="/loans" class="btn btn-sm btn-secondary">{{ lang.t('allView') }}</a>
+      </div>
+      <div class="card-body p-0">
+        @if (recentLoans().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            <p>{{ lang.isBangla() ? 'কোনো ঋণ রেকর্ড পাওয়া যায়নি।' : 'No active loans found.' }}</p>
+          </div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ lang.isBangla() ? 'ঋণ আইডি' : 'Loan ID' }}</th>
+                  <th>{{ lang.isBangla() ? 'গ্রাহকের নাম' : 'Customer Name' }}</th>
+                  <th>{{ lang.isBangla() ? 'বিতরণকৃত আসল' : 'Principal Disbursed' }}</th>
+                  <th>{{ lang.isBangla() ? 'বর্তমান বাকি' : 'Outstanding' }}</th>
+                  <th>{{ lang.isBangla() ? 'পরিশোধিত কিস্তি' : 'Paid Inst.' }}</th>
+                  <th>{{ lang.t('status') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (loan of recentLoans(); track loan.loanId) {
+                  <tr>
+                    <td>
+                      <span class="id-tag">#{{ loan.loanId }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ loan.customerName }}</strong>
+                      <div class="sub-text">{{ loan.loanAccountNo }}</div>
+                    </td>
+                    <td class="amount-bdt">{{ loan.principalAmount | number }}</td>
+                    <td class="amount-bdt text-danger">{{ loan.outstandingBalance | number }}</td>
+                    <td>
+                      <span class="badge badge-secondary">
+                        {{ loan.paidInstallmentsCount }} / {{ loan.totalInstallments }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="badge badge-active">{{ lang.isBangla() ? 'বিতরণকৃত' : 'Disbursed' }}</span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Recent Collections Section -->
+    <div class="card">
+      <div class="card-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-success">receipt</span>
+          <h3>{{ lang.t('recentReceipts') }}</h3>
+        </div>
+        <a routerLink="/collections/receipts" class="btn btn-sm btn-secondary">{{ lang.t('allView') }}</a>
+      </div>
+      <div class="card-body p-0">
+        @if (recentCollections().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined">receipt_long</span>
+            <p>{{ lang.isBangla() ? 'কোনো সাম্প্রতিক আদায় রেকর্ড নেই।' : 'No recent receipts found.' }}</p>
+          </div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ lang.isBangla() ? 'রসিদ নং' : 'Receipt #' }}</th>
+                  <th>{{ lang.isBangla() ? 'গ্রাহক' : 'Customer' }}</th>
+                  <th>{{ lang.isBangla() ? 'মোট জমা' : 'Collected' }}</th>
+                  <th>{{ lang.isBangla() ? 'সংগ্রহকারী' : 'Collector' }}</th>
+                  <th>{{ lang.isBangla() ? 'শাখা জমা' : 'Branch Handover' }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (rec of recentCollections(); track rec.receiptId) {
+                  <tr>
+                    <td>
+                      <span class="id-tag">#{{ rec.receiptId }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ rec.customerName }}</strong>
+                      <div class="sub-text">{{ lang.isBangla() ? 'কিস্তি নং ' : 'Inst #' }}{{ rec.installmentNo }}</div>
+                    </td>
+                    <td class="amount-bdt text-success">{{ rec.totalAmountCollected | number }}</td>
+                    <td>{{ rec.collectedByName }}</td>
+                    <td>
+                      @if (rec.isHandedOverToBranch) {
+                        <span class="badge badge-paid">{{ lang.isBangla() ? 'জমা সম্পন্ন' : 'Reconciled' }}</span>
+                      } @else {
+                        <span class="badge badge-warning">{{ lang.isBangla() ? 'মাঠকর্মীর কাছে' : 'In Field' }}</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

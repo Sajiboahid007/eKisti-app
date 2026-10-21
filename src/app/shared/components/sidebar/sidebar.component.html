@@ -1,0 +1,68 @@
+<aside class="app-sidebar">
+  <nav class="sidebar-nav">
+    <div class="nav-section-title">{{ lang.t('navMainMenu') }}</div>
+
+    <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+      <span class="material-symbols-outlined nav-icon">dashboard</span>
+      <span class="nav-label">{{ lang.t('navDashboard') }}</span>
+    </a>
+
+    <!-- Field Officer or BM: Daily Collection Sheet -->
+    @if (authService.canCollectKisti()) {
+      <a routerLink="/collections/daily" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link highlight-link">
+        <span class="material-symbols-outlined nav-icon">payments</span>
+        <span class="nav-label">{{ lang.t('navDailySheet') }}</span>
+        <span class="nav-badge">{{ lang.isBangla() ? 'রুট ১০১' : 'Route 101' }}</span>
+      </a>
+    }
+
+    <a routerLink="/customers" routerLinkActive="active" class="nav-link">
+      <span class="material-symbols-outlined nav-icon">group</span>
+      <span class="nav-label">{{ lang.t('navCustomers') }}</span>
+    </a>
+
+    <a routerLink="/loans" routerLinkActive="active" class="nav-link">
+      <span class="material-symbols-outlined nav-icon">receipt_long</span>
+      <span class="nav-label">{{ lang.t('navLoans') }}</span>
+    </a>
+
+    <a routerLink="/collections/receipts" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+      <span class="material-symbols-outlined nav-icon">receipt</span>
+      <span class="nav-label">{{ lang.t('navReceipts') }}</span>
+    </a>
+
+    <!-- Cashier or BM: Day-end Cash Closing -->
+    @if (authService.canVerifyCash()) {
+      <div class="nav-section-title">{{ lang.t('navAccounting') }}</div>
+      <a routerLink="/reconciliation" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+        <span class="material-symbols-outlined nav-icon">point_of_sale</span>
+        <span class="nav-label">{{ lang.t('navCashClosing') }}</span>
+      </a>
+    }
+
+    <!-- Super Admin Administration: Organization Setup & User Management -->
+    @if (authService.canManageUsers()) {
+      <div class="nav-section-title">{{ lang.t('navAdministration') }}</div>
+      <a routerLink="/branches" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+        <span class="material-symbols-outlined nav-icon">alt_route</span>
+        <span class="nav-label">{{ lang.isBangla() ? 'শাখা ও রুট/সমিতি' : 'Branches & Routes' }}</span>
+      </a>
+      <a routerLink="/users" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link admin-link">
+        <span class="material-symbols-outlined nav-icon">manage_accounts</span>
+        <span class="nav-label">{{ lang.t('navUsers') }}</span>
+        <span class="admin-badge">Admin</span>
+      </a>
+    }
+  </nav>
+
+  <!-- Quick Info Card at bottom of sidebar -->
+  <div class="sidebar-footer-card">
+    <div class="footer-card-header">
+      <span class="material-symbols-outlined info-icon">verified_user</span>
+      <span>{{ lang.isBangla() ? 'ইন্টিজার আইডি সিস্টেম' : 'Integer ID System' }}</span>
+    </div>
+    <p class="footer-card-desc">
+      {{ lang.isBangla() ? 'সকল গ্রাহক ও ঋণে ১০০% অডিট ট্রেইল ও এডিট হিস্ট্রি সক্রিয় রয়েছে।' : '100% audit trail and edit history enabled for all records.' }}
+    </p>
+  </div>
+</aside>

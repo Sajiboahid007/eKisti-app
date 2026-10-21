@@ -1,0 +1,235 @@
+<div class="page-container">
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-symbols-outlined spinning">sync</span>
+      <p>ঋণ ও কিস্তির হিসাব লোড হচ্ছে...</p>
+    </div>
+  } @else if (!loan()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">error</span>
+      <p>ঋণ অ্যাকাউন্ট পাওয়া যায়নি।</p>
+      <a routerLink="/loans" class="btn btn-secondary mt-3">তালিকায় ফিরে যান</a>
+    </div>
+  } @else {
+    <!-- Loan Header Banner -->
+    <div class="loan-header-card">
+      <div class="header-main">
+        <div class="account-badge">
+          <span class="id-tag">#{{ loan()!.loanId }}</span>
+          <span class="account-no">{{ loan()!.loanAccountNo }}</span>
+        </div>
+        <h2>{{ loan()!.customerName }}</h2>
+        <div class="loan-purpose">উদ্দেশ্য: {{ loan()!.purposeOfLoan }}</div>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat-item">
+          <div class="stat-label">আসল ঋণ</div>
+          <div class="stat-value amount-bdt">{{ loan()!.principalAmount | number }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">মোট প্রদেয়</div>
+          <div class="stat-value amount-bdt text-primary">{{ loan()!.totalRepayableAmount | number }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">মোট পরিশোধিত</div>
+          <div class="stat-value amount-bdt text-success">{{ loan()!.totalPaidAmount | number }}</div>
+        </div>
+        <div class="stat-item highlight-stat">
+          <div class="stat-label">বর্তমান বাকি</div>
+          <div class="stat-value amount-bdt text-danger">{{ loan()!.outstandingBalance | number }}</div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-secondary" (click)="showHistoryModal.set(true)">
+          <span class="material-symbols-outlined">history</span>
+          <span>অডিট হিস্ট্রি</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Weekly Lock Alert Banner -->
+    @if (isLockedByWeeklyRule()) {
+      <div class="weekly-lock-banner mt-3">
+        <span class="material-symbols-outlined banner-icon">verified_user</span>
+        <div class="banner-content">
+          <h4>এই সপ্তাহের কিস্তি ইতিমধ্যে আদায় সম্পন্ন হয়েছে</h4>
+          <p>
+            সাপ্তাহিক কিস্তির নিয়ম অনুযায়ী পরবর্তী কিস্তি (কিস্তি নং {{ getFirstPendingInstallment()?.installmentNo }}) আগামী 
+            <strong>{{ getNextEligiblePaymentDate() }}</strong> তারিখের পর ({{ getDaysRemainingForNextInstallment() }} দিন পর) নিয়মিত আদায়যোগ্য।
+            @if (canTakeAmount()) {
+              <strong class="d-block mt-1 text-success">
+                ✓ শাখা ব্যবস্থাপক, হেড অফিস বা অ্যাডমিন হিসেবে আপনি নিচে "আদায় করুন" বাটনে ক্লিক করে যেকোনো সময় বিশেষ আদায় সম্পন্ন করতে পারবেন।
+              </strong>
+            }
+          </p>
+        </div>
+      </div>
+    }
+
+    <!-- 40 Installments Schedule Section -->
+    <div class="card mt-3 schedule-card">
+      <div class="card-header py-2 px-3">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">calendar_month</span>
+          <h3>৪০টি কিস্তির বিস্তারিত সময়সূচি (Installment Repayment Schedule)</h3>
+        </div>
+        <div class="schedule-summary-badge">
+          পরিশোধিত: <strong>{{ loan()!.paidInstallmentsCount }} টি</strong> / বাকি: <strong>{{ loan()!.remainingInstallmentsCount }} টি</strong>
+        </div>
+      </div>
+
+      <div class="card-body p-0">
+        <div class="schedule-table-wrapper">
+          <table class="schedule-compact-table">
+            <thead>
+              <tr>
+                <th style="width: 55px;">কিস্তি</th>
+                <th style="width: 95px;">নির্ধারিত তারিখ</th>
+                <th style="width: 75px;">আসল</th>
+                <th style="width: 70px;">লাভ</th>
+                <th style="width: 75px;">সঞ্চয়</th>
+                <th style="width: 85px;">সর্বমোট প্রদেয়</th>
+                <th style="width: 85px;">পরিশোধিত</th>
+                <th style="width: 95px;">পরিশোধের তারিখ</th>
+                <th style="width: 80px;">স্ট্যাটাস</th>
+                <th class="text-right" style="width: 140px;">অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (inst of installments(); track inst.installmentId) {
+                <tr [class.paid-row]="inst.status === 'PAID'">
+                  <td>
+                    <span class="inst-no-badge">#{{ inst.installmentNo }}</span>
+                  </td>
+                  <td>
+                    <span class="font-bold font-mono">{{ inst.dueDate }}</span>
+                  </td>
+                  <td class="amount-bdt">{{ inst.expectedPrincipal | number }}</td>
+                  <td class="amount-bdt text-muted">{{ inst.expectedProfit | number }}</td>
+                  <td class="text-success font-semibold text-xs">+ ৳{{ inst.expectedSavings | number }}</td>
+                  <td>
+                    <strong class="amount-bdt text-primary">{{ inst.expectedTotalAmount | number }}</strong>
+                  </td>
+                  <td>
+                    @if (inst.paidTotalAmount > 0) {
+                      <span class="amount-bdt text-success font-bold">{{ inst.paidTotalAmount | number }}</span>
+                    } @else {
+                      <span class="text-muted">—</span>
+                    }
+                  </td>
+                  <td>
+                    @if (inst.paidDate) {
+                      <span class="paid-date-text">{{ inst.paidDate | date:'mediumDate' }}</span>
+                    } @else {
+                      <span class="text-muted">—</span>
+                    }
+                  </td>
+                  <td>
+                    @if (inst.status === 'PAID') {
+                      <span class="badge badge-paid badge-xs">
+                        <span class="material-symbols-outlined icon-mini">check_circle</span>
+                        পরিশোধিত
+                      </span>
+                    } @else {
+                      <span class="badge badge-pending badge-xs">বাকি</span>
+                    }
+                  </td>
+                  <td class="text-right">
+                    @if (inst.status === 'PAID') {
+                      @if (inst.collectionReceiptId) {
+                        <span class="receipt-tag">রসিদ #{{ inst.collectionReceiptId }}</span>
+                      } @else {
+                        <span class="text-success font-semibold text-xs">✓ পরিশোধিত</span>
+                      }
+                    } @else {
+                      @if (isInstallmentCollectable(inst)) {
+                        <button class="btn btn-xs btn-success" (click)="openCollectModal(inst)"
+                          [title]="'কিস্তি নং ' + inst.installmentNo + ' আদায় ও রসিদ তৈরি করুন'">
+                          <span class="material-symbols-outlined icon-xs">payments</span>
+                          <span>আদায় করুন</span>
+                        </button>
+                      } @else {
+                        <span class="badge badge-pending badge-xs">বাকি</span>
+                      }
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+<!-- Quick Collection Modal -->
+@if (selectedInstallmentForCollect()) {
+  <div class="modal-backdrop" (click)="closeCollectModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-success">payments</span>
+          <h3>কিস্তি নং {{ selectedInstallmentForCollect()!.installmentNo }} আদায় ও রসিদ তৈরি</h3>
+        </div>
+        <button class="close-btn" (click)="closeCollectModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="cust-info-box mb-3">
+          <div>গ্রাহক: <strong>{{ loan()!.customerName }}</strong> (হিসাব #{{ loan()!.loanAccountNo }})</div>
+          <div>তারিখ: <strong>{{ selectedInstallmentForCollect()!.dueDate }}</strong></div>
+          <div class="text-xs text-muted mt-1">
+            নির্ধারিত কিস্তি: ৳{{ ((selectedInstallmentForCollect()!.expectedPrincipal || 0) + (selectedInstallmentForCollect()!.expectedProfit || 0)) | number }}
+            (আসল: ৳{{ selectedInstallmentForCollect()!.expectedPrincipal | number }}, লাভ: ৳{{ selectedInstallmentForCollect()!.expectedProfit | number }}) | সঞ্চয়: ৳{{ selectedInstallmentForCollect()!.expectedSavings | number }}
+          </div>
+        </div>
+
+        <div class="form-grid-modal">
+          <div class="form-group">
+            <label>মূল কিস্তির টাকা (আসল + লাভ) <span class="required">*</span></label>
+            <input type="number" class="form-control" [(ngModel)]="collectInstallmentAmount" min="0" placeholder="0" />
+          </div>
+
+          <div class="form-group">
+            <label>সাপ্তাহিক বাধ্যতামূলক সঞ্চয়</label>
+            <input type="number" class="form-control" [(ngModel)]="collectSavingsAmount" min="0" placeholder="0" />
+          </div>
+
+          <div class="form-group span-2">
+            <label>আদায়ের মাধ্যম (Payment Method)</label>
+            <select class="form-control" [(ngModel)]="collectPaymentMethod">
+              <option value="CASH">নগদ ক্যাশ (Cash)</option>
+              <option value="BKASH">বিকাশ (bKash)</option>
+              <option value="NAGAD">নগদ (Nagad)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="total-collection-preview">
+          <span>সর্বমোট আদায়:</span>
+          <span class="amount-bdt total-val">{{ getTotalCollectionAmount() | number }}</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeCollectModal()">বাতিল</button>
+        <button class="btn btn-success" (click)="submitCollection()" [disabled]="collecting">
+          <span class="material-symbols-outlined">check</span>
+          <span>{{ collecting ? 'আদায় প্রক্রিয়াধীন...' : 'কালেকশন ও রসিদ নিশ্চিত করুন' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- History Modal -->
+@if (showHistoryModal() && loan()) {
+  <app-history-modal
+    [title]="'ঋণ হিসাব #' + loan()!.loanId + ' সম্পূর্ণ অডিট হিস্ট্রি'"
+    [historyList]="loan()!.history"
+    (close)="showHistoryModal.set(false)">
+  </app-history-modal>
+}

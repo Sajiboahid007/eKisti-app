@@ -1,0 +1,320 @@
+<div [class.modal-backdrop]="isModal" (click)="isModal && onCancel()">
+  <div [class.modal-dialog]="isModal" [class.blank-form-modal-dialog]="isModal" [class.page-form-wrapper]="!isModal"
+    id="printableCustomerAdmissionForm" (click)="$event.stopPropagation()">
+
+    <!-- Top Modal Header Bar (Screen Only) -->
+    <div class="form-header-bar no-print">
+      <div class="header-title">
+        <span class="material-symbols-outlined text-primary">description</span>
+        <h3>সদস্য ভর্তি ও নিবন্ধন আবেদন ফরম (Official 1-Page Application Form)</h3>
+      </div>
+      <div class="header-actions">
+        <div class="branch-select-inline" title="শাখা নির্বাচন করুন">
+          <label>শাখা:</label>
+          <select class="form-control form-control-sm" [ngModel]="form.branchId"
+            (ngModelChange)="onBranchChange($event)">
+            @for (b of branches(); track b.branchId) {
+            <option [value]="b.branchId">{{ b.name }} ({{ b.branchCode }})</option>
+            }
+          </select>
+        </div>
+        @if (isModal) {
+        <button type="button" class="close-btn" (click)="onCancel()" title="বন্ধ করুন">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+        } @else {
+        <a routerLink="/customers" class="btn btn-outline-secondary btn-sm">
+          <span class="material-symbols-outlined">arrow_back</span>
+          <span>তালিকায় ফিরে যান</span>
+        </a>
+        }
+      </div>
+    </div>
+
+    <!-- Scrollable Canvas / Print Container -->
+    <div class="form-scroll-body print-area">
+      @if (loading() && !isBlank) {
+      <div class="form-loading-state no-print">
+        <span class="material-symbols-outlined spinning">sync</span>
+        <p>শাখা ও ফরমের ডেটা লোড হচ্ছে...</p>
+      </div>
+      }
+
+      <!-- ============================================================ -->
+      <!-- OFFICIAL SINGLE-PAGE A4 ADMISSION & LOAN APPLICATION FORM    -->
+      <!-- ============================================================ -->
+      <div class="a4-page-sheet single-page-form">
+        <div class="sheet-inner-content">
+
+          <!-- Form Top Header with Organization Branding & Photo Box -->
+          <div class="form-top-header">
+            <div class="org-titles">
+              <div class="org-logo-row">
+                <span class="material-symbols-outlined app-logo-icon">account_balance</span>
+                <span class="org-main-name">eKisti ক্ষুদ্রঋণ ও সমবায় সমিতি লিমিটেড</span>
+              </div>
+              <div class="org-sub-tagline">রেজিস্ট্রেশন নং: ডিএইচ-৭৮৮৯ • সরকারি অনুমোদনপ্রাপ্ত ক্ষুদ্রঋণ ও বহুমুখী সঞ্চয় কর্মসূচি</div>
+              <div class="app-form-badge">
+                <span>সদস্য ভর্তি ও ক্ষুদ্রঋণ আবেদন ফরম (Member Admission & Loan Application Form)</span>
+              </div>
+            </div>
+
+            <!-- Passport Photo Box -->
+            <div class="photo-attachment-box">
+              <span class="material-symbols-outlined photo-icon">account_box</span>
+              <span class="photo-text">আবেদনকারীর ১ কপি রঙিন ছবি</span>
+            </div>
+          </div>
+
+          <!-- Official Assignment & Serial Strip -->
+          <div class="form-office-strip">
+            <div class="strip-item">
+              <span class="s-lbl">ফরম নং:</span>
+              <span class="s-val font-mono font-bold">{{ isBlank ? '..................' : (form.formNo || 'AF-100234') }}</span>
+            </div>
+            <div class="strip-item">
+              <span class="s-lbl">সদস্য আইডি (অফিস পূরণীয়):</span>
+              <div class="id-boxes">
+                <span class="id-cell"></span>
+                <span class="id-cell"></span>
+                <span class="id-cell"></span>
+                <span class="id-cell"></span>
+                <span class="id-cell"></span>
+              </div>
+            </div>
+            <div class="strip-item">
+              <span class="s-lbl">আবেদনের তারিখ:</span>
+              <span class="s-val">{{ formattedApplicationDate }}</span>
+            </div>
+          </div>
+
+          <!-- Branch, Route & Field Officer Strip -->
+          <div class="form-office-strip sub-strip">
+            <div class="strip-item">
+              <span class="s-lbl">শাখার নাম:</span>
+              <span class="s-val font-bold">{{ selectedBranchName }}</span>
+            </div>
+            <div class="strip-item">
+              <span class="s-lbl">সমিতি / রুট:</span>
+              <span class="s-val">{{ isBlank ? '....................................' : (selectedCenterName || '....................................') }}</span>
+            </div>
+            <div class="strip-item">
+              <span class="s-lbl">দায়িত্বপ্রাপ্ত মাঠকর্মী:</span>
+              <span class="s-val">{{ isBlank ? '....................................' : (selectedOfficerName || '....................................') }}</span>
+            </div>
+          </div>
+
+          <!-- Section 1: Member KYC -->
+          <div class="form-section-block">
+            <div class="sec-title">
+              <span class="sec-num">১</span>
+              <span>আবেদনকারী / সদস্যর ব্যক্তিগত পরিচিতি ও KYC তথ্য</span>
+            </div>
+            <div class="sec-content">
+              <!-- Name Row -->
+              <div class="form-field-row">
+                <div class="f-item flex-2">
+                  <span class="f-lbl">আবেদনকারীর পূর্ণ নাম (বাংলায়):</span>
+                  <span class="f-val font-bold">{{ isBlank ? '' : form.fullName }}</span>
+                  <span class="f-line dotted">{{ getDottedLine(form.fullName, 35) }}</span>
+                </div>
+                <div class="f-item flex-1">
+                  <span class="f-lbl">লিঙ্গ:</span>
+                  <span class="gender-options">
+                    <span class="g-opt">[ {{ !isBlank && form.gender === 'FEMALE' ? '✔' : ' ' }} ] মহিলা</span>
+                    <span class="g-opt">[ {{ !isBlank && form.gender === 'MALE' ? '✔' : ' ' }} ] পুরুষ</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- English Name Box Array -->
+              <div class="form-field-row name-box-row">
+                <div class="f-item flex-1">
+                  <span class="f-lbl">Full Name (English Block Letters):</span>
+                  <div class="box-array-container">
+                    @for (ch of getBoxArray(form.fullNameEnglish || form.fullName, 26); track $index) {
+                    <span class="char-box">{{ ch }}</span>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <!-- Father, Mother, Spouse Row -->
+              <div class="form-field-row">
+                <div class="f-item flex-1">
+                  <span class="f-lbl">পিতা/স্বামীর নাম:</span>
+                  <span class="f-val">{{ isBlank ? '' : (form.spouseName || form.fatherName) }}</span>
+                  <span class="f-line dotted">{{ getDottedLine(form.spouseName || form.fatherName, 26) }}</span>
+                </div>
+                <div class="f-item flex-1">
+                  <span class="f-lbl">মাতার নাম:</span>
+                  <span class="f-val">{{ isBlank ? '' : form.motherName }}</span>
+                  <span class="f-line dotted">{{ getDottedLine(form.motherName, 26) }}</span>
+                </div>
+              </div>
+
+              <!-- DOB, Age, NID & Phone -->
+              <div class="form-field-row">
+                <div class="f-item flex-1">
+                  <span class="f-lbl">জন্ম তারিখ:</span>
+                  <span class="f-val font-mono">{{ formattedDob }}</span>
+                  <span class="f-lbl ml-2">বয়স:</span>
+                  <span class="f-val">{{ isBlank ? '____' : (calculatedAge() || '___') }} বছর</span>
+                </div>
+                <div class="f-item flex-1">
+                  <span class="f-lbl">মোবাইল নম্বর:</span>
+                  <div class="phone-box-row">
+                    <span class="phone-prefix">01</span>
+                    <div class="box-array-container">
+                      @for (d of getPhoneBoxArray(form.phonePrimary); track $index) {
+                      <span class="digit-box">{{ d }}</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- NID Box Array & Occupation -->
+              <div class="form-field-row">
+                <div class="f-item flex-1">
+                  <span class="f-lbl">জাতীয় পরিচয়পত্র (NID):</span>
+                  <div class="box-array-container">
+                    @for (d of getBoxArray(form.nidNumber, 17); track $index) {
+                    <span class="digit-box">{{ d }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="f-item flex-1">
+                  <span class="f-lbl">পেশা ও মাসিক আয়:</span>
+                  <span class="f-val">{{ isBlank ? '....................................' : (form.occupation + ' (৳ ' + (form.monthlyIncome || '0') + ')') }}</span>
+                </div>
+              </div>
+
+              <!-- Address Row: Present & Permanent -->
+              <div class="form-field-row">
+                <div class="f-item flex-1">
+                  <span class="f-lbl">বর্তমান ঠিকানা:</span>
+                  <span class="f-val">{{ isBlank ? '' : (form.presentAddress?.villageOrStreet + ', ' + form.presentAddress?.postOffice + ', ' + form.presentAddress?.thanaOrUpazila + ', ' + form.presentAddress?.district) }}</span>
+                  <span class="f-line dotted">{{ getDottedLine(form.presentAddress?.villageOrStreet, 40) }}</span>
+                </div>
+                <div class="f-item flex-1">
+                  <span class="f-lbl">স্থায়ী ঠিকানা:</span>
+                  <span class="f-val">{{ isBlank ? '' : (form.permanentAddress?.villageOrStreet + ', ' + form.permanentAddress?.postOffice + ', ' + form.permanentAddress?.thanaOrUpazila + ', ' + form.permanentAddress?.district) }}</span>
+                  <span class="f-line dotted">{{ getDottedLine(form.permanentAddress?.villageOrStreet, 40) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Guarantor Details (২ জন জামিনদার পাশাপশি) -->
+          <div class="form-section-block">
+            <div class="sec-title">
+              <span class="sec-num">২</span>
+              <span>জামিনদারগণের বিবরণ (Guarantor Details)</span>
+            </div>
+            <div class="sec-content">
+              <div class="guarantor-two-col">
+                <div class="g-box">
+                  <div class="g-badge">১ম জামিনদার (বাধ্যতামূলক)</div>
+                  <div class="g-line"><span class="g-lbl">নাম:</span> <span class="g-val font-bold">{{ isBlank ? '' : form.primaryGuarantor.name }}</span><span class="g-dot">{{ getDottedLine(form.primaryGuarantor.name, 20) }}</span> <span class="g-lbl">সম্পর্ক:</span> <span class="g-val">{{ isBlank ? '......' : (form.primaryGuarantor.relation || '......') }}</span></div>
+                  <div class="g-line"><span class="g-lbl">মোবাইল:</span> <span class="g-val font-mono">{{ isBlank ? '..................' : (form.primaryGuarantor.phone || '..................') }}</span> <span class="g-lbl">পেশা:</span> <span class="g-val">{{ isBlank ? '..........' : (form.primaryGuarantor.occupation || '..........') }}</span></div>
+                  <div class="g-line"><span class="g-lbl">NID নং:</span> <span class="g-val font-mono">{{ isBlank ? '................................' : (form.primaryGuarantor.nidNumber || '................................') }}</span></div>
+                  <div class="g-line sig-line"><span class="g-lbl">১ম জামিনদারের স্বাক্ষর:</span> <span class="g-sig-dots">................................................</span></div>
+                </div>
+
+                <div class="g-box">
+                  <div class="g-badge">২য় জামিনদার (ঐচ্ছিক / বিশেষ ঋণ)</div>
+                  <div class="g-line"><span class="g-lbl">নাম:</span> <span class="g-val font-bold">{{ isBlank ? '' : form.secondaryGuarantor.name }}</span><span class="g-dot">{{ getDottedLine(form.secondaryGuarantor.name, 20) }}</span> <span class="g-lbl">সম্পর্ক:</span> <span class="g-val">{{ isBlank ? '......' : (form.secondaryGuarantor.relation || '......') }}</span></div>
+                  <div class="g-line"><span class="g-lbl">মোবাইল:</span> <span class="g-val font-mono">{{ isBlank ? '..................' : (form.secondaryGuarantor.phone || '..................') }}</span> <span class="g-lbl">পেশা:</span> <span class="g-val">{{ isBlank ? '..........' : (form.secondaryGuarantor.occupation || '..........') }}</span></div>
+                  <div class="g-line"><span class="g-lbl">NID নং:</span> <span class="g-val font-mono">{{ isBlank ? '................................' : (form.secondaryGuarantor.nidNumber || '................................') }}</span></div>
+                  <div class="g-line sig-line"><span class="g-lbl">২য় জামিনদারের স্বাক্ষর:</span> <span class="g-sig-dots">................................................</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Savings, Fees & Collateral Security -->
+          <div class="form-section-block">
+            <div class="sec-title">
+              <span class="sec-num">৩</span>
+              <span>সঞ্চয় ও জামানতের বিবরণ (Savings & Collateral Security)</span>
+            </div>
+            <div class="sec-content">
+              <div class="form-field-row compact-row">
+                <div class="f-item flex-1">
+                  <span class="f-lbl">ভর্তি ফি:</span>
+                  <span class="f-val font-bold">{{ isBlank ? '...........' : (form.admissionFee || 100) }} টাকা</span>
+                  <span class="f-lbl ml-2">প্রাথমিক সঞ্চয়:</span>
+                  <span class="f-val font-bold">{{ isBlank ? '...........' : (form.initialSavingsDeposit || 500) }} টাকা</span>
+                </div>
+                <div class="f-item flex-1">
+                  <span class="f-lbl">ব্যাংক চেক:</span>
+                  <span class="f-val">{{ isBlank ? '[ ] জমা আছে' : (form.collateral.hasBankCheque ? 'জমা আছে (চেক #' + (form.collateral.chequeNumber || '.....') + ')' : 'প্রযোজ্য নয়') }}</span>
+                  <span class="f-lbl ml-2">৩০০ টাকার স্ট্যাম্প:</span>
+                  <span class="f-val">{{ isBlank ? '[ ] জমা আছে' : (form.collateral.hasStamp ? 'জমা আছে' : 'প্রযোজ্য নয়') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Applicant Declaration -->
+          <div class="form-section-block declaration-block">
+            <div class="sec-title">
+              <span class="sec-num">৪</span>
+              <span>আবেদনকারীর অঙ্গীকারনামা ও ঘোষণাপত্র</span>
+            </div>
+            <div class="sec-content dec-content">
+              <p class="dec-text">
+                আমি অঙ্গীকার করিতেছি যে, উপরে বর্ণিত সকল তথ্য সম্পূর্ণ সত্য ও সঠিক। আমি সমিতির সকল নিয়ম-কানুন ও সিদ্ধান্তের প্রতি অনুগত থাকিব এবং গৃহীত ঋণের কিস্তি ও সঞ্চয়ের টাকা নির্ধারিত সময়ে পরিশোধ করিতে বাধ্য থাকিব। কোনো অসত্য তথ্য প্রমাণিত হইলে সমিতি কর্তৃপক্ষ যেকোনো আইনানুগ ব্যবস্থা গ্রহণ করিতে পারিবে।
+              </p>
+            </div>
+          </div>
+
+          <!-- Section 5: Official Signatures (4 Columns in 1 Row) -->
+          <div class="signatures-strip">
+            <div class="sig-col">
+              <div class="sig-line"></div>
+              <div class="sig-title">আবেদনকারী / সদস্যর স্বাক্ষর</div>
+              <div class="sig-date">তারিখ: .......................</div>
+            </div>
+            <div class="sig-col">
+              <div class="sig-line"></div>
+              <div class="sig-title">প্রধান জামিনদারের স্বাক্ষর</div>
+              <div class="sig-date">তারিখ: .......................</div>
+            </div>
+            <div class="sig-col">
+              <div class="sig-line"></div>
+              <div class="sig-title">যাচাইকারী মাঠকর্মীর স্বাক্ষর</div>
+              <div class="sig-date">তারিখ: .......................</div>
+            </div>
+            <div class="sig-col">
+              <div class="sig-line"></div>
+              <div class="sig-title">শাখা ব্যবস্থাপকের অনুমোদন ও সিল</div>
+              <div class="sig-date">তারিখ: .......................</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 1-Page Bottom Footer -->
+        <div class="sheet-bottom-footer">
+          <span>eKisti মাইক্রোফাইন্যান্স সিস্টেম • অফিশিয়াল সদস্য আবেদন ফরম (১ পাতা) • প্রিন্ট তারিখ: {{ printDate }}</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Modal / Page Footer Actions (Screen Only) -->
+    <div class="form-footer-bar no-print">
+      <button type="button" class="btn btn-secondary" (click)="onCancel()" [disabled]="submitting()">
+        <span class="material-symbols-outlined">close</span>
+        <span>বন্ধ করুন</span>
+      </button>
+      <button type="button" class="btn btn-teal-print" (click)="printForm()">
+        <span class="material-symbols-outlined">print</span>
+        <span>প্রিন্ট করুন (Print 1-Page Form)</span>
+      </button>
+    </div>
+
+  </div>
+</div>

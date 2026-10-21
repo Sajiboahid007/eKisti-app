@@ -1,0 +1,124 @@
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .history-header-icon {
+    color: var(--primary);
+    font-size: 24px;
+  }
+}
+
+.empty-history {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+
+  span {
+    font-size: 48px;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.timeline {
+  position: relative;
+  padding-left: 1.5rem;
+  border-left: 2px dashed var(--border-color);
+  margin-left: 0.5rem;
+
+  .timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: calc(-1.5rem - 6px);
+      top: 4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--primary);
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 2px var(--primary-border);
+    }
+  }
+}
+
+.timeline-content {
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+
+  .entry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+
+    .entry-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+  }
+
+  .entry-author {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+
+    .author-icon {
+      font-size: 16px;
+      color: var(--primary);
+    }
+
+    .author-name {
+      font-weight: 700;
+    }
+
+    .author-role {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+  }
+
+  .entry-reason {
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    background-color: #fff;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    margin-bottom: 0.5rem;
+  }
+
+  .changes-box {
+    margin-top: 0.5rem;
+
+    .box-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+
+    .json-preview {
+      background-color: #1e293b;
+      color: #38bdf8;
+      padding: 0.5rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-family: monospace;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+  }
+}

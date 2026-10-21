@@ -1,0 +1,216 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <div class="breadcrumb">
+        <a routerLink="/users">{{ lang.t('navUsers') }}</a>
+        <span class="material-symbols-outlined separator">chevron_right</span>
+        <span>{{ lang.t('createUserTitle') }}</span>
+      </div>
+      <h2>{{ lang.t('createUserTitle') }}</h2>
+      <p class="sub-text">{{ lang.isBangla() ? 'সিস্টেম অ্যাডমিন, হেড অফিস এক্সিকিউটিভ ও শাখা কর্মী অন্তর্ভুক্তি' : 'Create System Admins, Head Office Executives and Branch Staff' }}</p>
+    </div>
+    <div class="header-right">
+      <a routerLink="/users" class="btn btn-secondary">
+        <span class="material-symbols-outlined">arrow_back</span>
+        <span>{{ lang.t('back') }}</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="card form-card">
+    <div class="card-header bg-primary-subtle">
+      <div class="header-title text-primary">
+        <span class="material-symbols-outlined">manage_accounts</span>
+        <h3>{{ lang.isBangla() ? 'ব্যবহারকারীর স্তর ও বিবরণ' : 'User Tier & Profile Details' }}</h3>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <form (ngSubmit)="onSubmit()" class="user-form-grid">
+        <!-- Tier Selection (3-Tier Separation) -->
+        <div class="form-group span-2">
+          <label class="d-block mb-2 font-weight-bold">
+            {{ lang.isBangla() ? 'ব্যবহারকারী টিয়ার / বিভাগ নির্বাচন করুন' : 'Select User Tier / Category' }} 
+            <span class="required">*</span>
+          </label>
+          <div class="category-toggle-grid">
+            <div 
+              class="cat-toggle-card" 
+              [class.selected]="category === 'SYSTEM_ADMIN'" 
+              (click)="onCategoryChange('SYSTEM_ADMIN')">
+              <span class="material-symbols-outlined cat-icon text-danger">security</span>
+              <div class="cat-text">
+                <strong>{{ lang.isBangla() ? '🛡️ সিস্টেম অ্যাডমিন' : '🛡️ System Admin' }}</strong>
+                <span>{{ lang.isBangla() ? 'সর্বজনীন সিস্টেম ও ডাটাবেজ নিয়ন্ত্রণ' : 'Root & System Owner' }}</span>
+              </div>
+            </div>
+
+            <div 
+              class="cat-toggle-card" 
+              [class.selected]="category === 'HEAD_OFFICE'" 
+              (click)="onCategoryChange('HEAD_OFFICE')">
+              <span class="material-symbols-outlined cat-icon text-primary">corporate_fare</span>
+              <div class="cat-text">
+                <strong>{{ lang.isBangla() ? '🏢 প্রধান কার্যালয়' : '🏢 Head Office' }}</strong>
+                <span>{{ lang.isBangla() ? 'হেড অফিস এক্সিকিউটিভ ও সেন্ট্রাল অডিট' : 'Central Governance & Audit' }}</span>
+              </div>
+            </div>
+
+            <div 
+              class="cat-toggle-card" 
+              [class.selected]="category === 'BRANCH_STAFF'" 
+              (click)="onCategoryChange('BRANCH_STAFF')">
+              <span class="material-symbols-outlined cat-icon text-success">storefront</span>
+              <div class="cat-text">
+                <strong>{{ lang.isBangla() ? '🌾 শাখা ও মাঠকর্মী' : '🌾 Branch Staff' }}</strong>
+                <span>{{ lang.isBangla() ? 'শাখা ঋণ ও ফিল্ড কিস্তি কালেকশন' : 'Local Branch & Field Ops' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full Name -->
+        <div class="form-group">
+          <label>{{ lang.t('userName') }} <span class="required">*</span></label>
+          <input 
+            type="text" 
+            class="form-control" 
+            [(ngModel)]="name" 
+            name="name" 
+            required 
+            [placeholder]="lang.isBangla() ? 'যেমন: মোঃ তারেক হোসেন' : 'e.g. Md. Tareq Hossain'" />
+        </div>
+
+        <!-- Role Selector (Dynamic from Database based on Category) -->
+        <div class="form-group">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="mb-0">{{ lang.t('userRole') }} <span class="required">*</span></label>
+            <a routerLink="/users" [queryParams]="{ tab: 'roles' }" class="text-xs text-primary text-decoration-none">
+              <span class="material-symbols-outlined icon-xs align-middle">add_circle</span>
+              <span class="align-middle">{{ lang.isBangla() ? 'নতুন পদবী তৈরি করুন' : 'Create Role' }}</span>
+            </a>
+          </div>
+          @if (loadingRoles()) {
+            <div class="form-control text-muted d-flex align-items-center gap-2">
+              <span class="material-symbols-outlined spinning icon-sm">sync</span>
+              <span>{{ lang.isBangla() ? 'ডাটাবেজ থেকে রোল লোড হচ্ছে...' : 'Loading roles from database...' }}</span>
+            </div>
+          } @else {
+            <select class="form-control" [(ngModel)]="role" name="role" required>
+              @for (r of filteredRolesByCategory(); track r.roleId) {
+                <option [value]="r.code">
+                  {{ lang.isBangla() ? r.nameBn : r.nameEn }} ({{ r.code }})
+                </option>
+              }
+            </select>
+            <div class="form-hint">
+              {{ lang.isBangla() ? 'নির্বাচিত ক্যাটাগরির জন্য সক্রিয় পদবী।' : 'Active roles for the selected tier.' }}
+            </div>
+          }
+        </div>
+
+        <!-- Email Address -->
+        <div class="form-group">
+          <label>{{ lang.t('userEmail') }} <span class="required">*</span></label>
+          <input 
+            type="email" 
+            class="form-control" 
+            [(ngModel)]="email" 
+            name="email" 
+            required 
+            placeholder="admin@ekisti.com" />
+        </div>
+
+        <!-- Phone Number -->
+        <div class="form-group">
+          <label>{{ lang.t('userPhone') }} <span class="required">*</span></label>
+          <input 
+            type="tel" 
+            class="form-control" 
+            [(ngModel)]="phone" 
+            name="phone" 
+            required 
+            placeholder="017XXXXXXXX" />
+        </div>
+
+        <!-- Password / PIN -->
+        <div class="form-group">
+          <label>{{ lang.t('passwordNote') }} <span class="required">*</span></label>
+          <input 
+            type="password" 
+            class="form-control" 
+            [(ngModel)]="password" 
+            name="password" 
+            required 
+            placeholder="••••••" />
+          <div class="form-hint">{{ lang.isBangla() ? 'লগইন করার জন্য পিন বা পাসওয়ার্ড' : 'PIN or password for app login' }}</div>
+        </div>
+
+        <!-- Branch Assignment (Separated strictly by tier) -->
+        <div class="form-group">
+          <label>{{ lang.t('userBranch') }}</label>
+          @if (category === 'SYSTEM_ADMIN') {
+            <input 
+              type="text" 
+              class="form-control bg-light" 
+              value="🛡️ সিস্টেম প্রশাসন (সর্বজনীন — কোনো নির্দিষ্ট শাখা নয়)" 
+              readonly 
+              disabled />
+            <div class="form-hint text-danger">
+              {{ lang.isBangla() ? 'সিস্টেম অ্যাডমিনদের শাখা নেই, সর্বজনীন ডাটাবেজ অ্যাক্সেস।' : 'System admins operate globally across all branches.' }}
+            </div>
+          } @else if (category === 'HEAD_OFFICE') {
+            <input 
+              type="text" 
+              class="form-control bg-light" 
+              value="🏢 প্রধান কার্যালয় (হেড অফিস — ঢাকা)" 
+              readonly 
+              disabled />
+            <div class="form-hint text-primary">
+              {{ lang.isBangla() ? 'প্রধান কার্যালয় কর্মকর্তা বহু-শাখা অডিট ও পরিচালনা করেন।' : 'Head Office executives oversee multi-branch operations.' }}
+            </div>
+          } @else {
+            <select class="form-control" [(ngModel)]="branchId" name="branchId">
+              @for (b of branches(); track b.branchId) {
+                <option [value]="b.branchId">{{ b.name }} (শাখা #{{ b.branchId }})</option>
+              }
+            </select>
+            <div class="form-hint">
+              {{ lang.isBangla() ? 'কর্মী যে শাখায় কর্মরত থাকবেন তা সিলেক্ট করুন।' : 'Select the branch this staff is stationed at.' }}
+            </div>
+          }
+        </div>
+
+        <!-- NID Number -->
+        <div class="form-group">
+          <label>এনআইডি (NID)</label>
+          <input 
+            type="text" 
+            class="form-control" 
+            [(ngModel)]="nidNumber" 
+            name="nidNumber" 
+            placeholder="19902692518000XXX" />
+        </div>
+
+        <!-- Monthly Salary -->
+        <div class="form-group">
+          <label>{{ lang.t('userSalary') }} (টাকা)</label>
+          <input 
+            type="number" 
+            class="form-control" 
+            [(ngModel)]="salary" 
+            name="salary" 
+            step="1000" />
+        </div>
+
+        <div class="form-actions span-2">
+          <a routerLink="/users" class="btn btn-secondary">{{ lang.t('cancel') }}</a>
+          <button type="submit" class="btn btn-primary btn-lg" [disabled]="submitting()">
+            <span class="material-symbols-outlined">person_add</span>
+            <span>{{ submitting() ? (lang.isBangla() ? 'সংরক্ষণ হচ্ছে...' : 'Saving...') : (lang.isBangla() ? 'ইউজার তৈরি নিশ্চিত করুন' : 'Create User') }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

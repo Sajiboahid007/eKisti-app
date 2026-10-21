@@ -1,0 +1,229 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <div class="title-with-badge">
+        <h2>ঋণ হিসাব ও বিতরণ রেজিস্টার (Loan Portfolio)</h2>
+        <span class="scope-pill" [ngClass]="userScopeInfo().cssClass">
+          <span class="material-symbols-outlined">{{ userScopeInfo().icon }}</span>
+          <span>{{ userScopeInfo().tag }}</span>
+        </span>
+      </div>
+      <p class="sub-text">{{ userScopeInfo().subtitle }}</p>
+    </div>
+    <div class="header-right">
+      @if (authService.canDisburseLoan()) {
+        <a routerLink="/loans/disburse" class="btn btn-primary">
+          <span class="material-symbols-outlined">add_circle</span>
+          <span>নতুন ঋণ বিতরণ</span>
+        </a>
+      }
+    </div>
+  </div>
+
+  <!-- Filters & Search -->
+  <div class="card filter-card">
+    <div class="search-box">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input 
+        type="text" 
+        class="form-control search-input" 
+        placeholder="গ্রাহকের নাম, ঋণ হিসাব নং (LN-20001) দিয়ে খুঁজুন..." 
+        [(ngModel)]="searchQuery"
+        (ngModelChange)="currentPage.set(1)" />
+    </div>
+
+    <div class="filter-pills">
+      <button class="pill-btn" [class.active]="selectedFilter === 'ALL'" (click)="setFilter('ALL')">
+        সব ঋণ ({{ getPermittedCount('ALL') }})
+      </button>
+      <button class="pill-btn" [class.active]="selectedFilter === 'ACTIVE'" (click)="setFilter('ACTIVE')">
+        চলমান ({{ getPermittedCount('ACTIVE') }})
+      </button>
+      <button class="pill-btn" [class.active]="selectedFilter === 'OVERDUE'" (click)="setFilter('OVERDUE')">
+        বকেয়া ({{ getPermittedCount('OVERDUE') }})
+      </button>
+      <button class="pill-btn" [class.active]="selectedFilter === 'CLOSED'" (click)="setFilter('CLOSED')">
+        পরিশোধিত ({{ getPermittedCount('CLOSED') }})
+      </button>
+    </div>
+  </div>
+
+  <!-- Loans Table -->
+  <div class="card table-card">
+    <div class="card-body p-0">
+      @if (loading()) {
+        <div class="loading-state">
+          <span class="material-symbols-outlined spinning">sync</span>
+          <p>ঋণ সংক্রান্ত ডেটা লোড হচ্ছে...</p>
+        </div>
+      } @else if (filteredLoans().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <p>কোনো ঋণ পাওয়া যায়নি।</p>
+        </div>
+      } @else {
+        <div class="table-container loan-table-container border-0">
+          <table class="data-table loan-table compact-table">
+            <colgroup>
+              <col style="width: 8.5%;">
+              <col style="width: 16%;">
+              <col style="width: 9.5%;">
+              <col style="width: 10.5%;">
+              <col style="width: 9.5%;">
+              <col style="width: 10%;">
+              <col style="width: 11%;">
+              <col style="width: 9%;">
+              <col style="width: 8%;">
+              <col style="width: 8%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>হিসাব নং</th>
+                <th>গ্রাহক ও সমিতি</th>
+                <th>আসল বিতরণ</th>
+                <th>মোট পরিশোধযোগ্য</th>
+                <th>মোট আদায়</th>
+                <th>বর্তমান বাকি</th>
+                <th>কিস্তির অগ্রগতি</th>
+                <th>প্রতি কিস্তি</th>
+                <th class="text-center">স্ট্যাটাস</th>
+                <th class="text-center">অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (loan of paginatedLoans(); track loan.loanId) {
+                <tr>
+                  <td>
+                    <div class="account-cell">
+                      <div class="id-and-acc">
+                        <span class="id-tag">#{{ loan.loanId }}</span>
+                        <span class="loan-acc-no">{{ loan.loanAccountNo }}</span>
+                      </div>
+                      <div class="branch-name-text" [title]="getBranchName(loan.branchId)">
+                        {{ getBranchName(loan.branchId) }}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="customer-cell">
+                      <strong class="customer-name" [title]="loan.customerName">{{ loan.customerName }}</strong>
+                      <div class="purpose-text" [title]="loan.purposeOfLoan">উদ্দেশ্য: {{ loan.purposeOfLoan }}</div>
+                      <div class="route-info-badge" [title]="getCenterName(loan.centerId)">
+                        <span class="material-symbols-outlined mini-icon">place</span>
+                        <span class="route-text">{{ getCenterName(loan.centerId) }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="amount-cell">
+                    <span class="amount-bdt">{{ loan.principalAmount | number }}</span>
+                  </td>
+                  <td class="amount-cell">
+                    <span class="amount-bdt">{{ loan.totalRepayableAmount | number }}</span>
+                  </td>
+                  <td class="amount-cell">
+                    <span class="amount-bdt text-success">{{ loan.totalPaidAmount | number }}</span>
+                  </td>
+                  <td class="amount-cell">
+                    <span class="amount-bdt text-danger font-bold">{{ loan.outstandingBalance | number }}</span>
+                  </td>
+                  <td>
+                    <div class="progress-block">
+                      <div class="progress-text">
+                        {{ loan.paidInstallmentsCount }} / {{ loan.totalInstallments }} কিস্তি
+                      </div>
+                      <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" [style.width.%]="(loan.paidInstallmentsCount / loan.totalInstallments) * 100"></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="installment-block">
+                      <div class="amount-bdt font-semibold">{{ loan.installmentAmount | number }}</div>
+                      <div class="savings-subtext">+ ৳{{ loan.savingsPerInstallment }} সঞ্চয়</div>
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    @if (loan.status === 'CLOSED') {
+                      <span class="badge badge-closed">পরিশোধিত</span>
+                    } @else if (loan.overdueAmount > 0) {
+                      <span class="badge badge-overdue">বকেয়া</span>
+                    } @else {
+                      <span class="badge badge-active">চলমান</span>
+                    }
+                  </td>
+                  <td class="text-center">
+                    <div class="action-buttons-compact">
+                      <!-- View 40 Installments Schedule -->
+                      <a [routerLink]="['/loans/detail', loan.loanId]" 
+                         class="btn-action-icon btn-schedule" 
+                         title="৪০টি কিস্তির শিডিউল দেখুন">
+                        <span class="material-symbols-outlined">calendar_month</span>
+                      </a>
+
+                      <!-- View History -->
+                      <button class="btn-action-icon btn-history" 
+                              (click)="openHistory(loan)" 
+                              title="অডিট ও হিস্ট্রি">
+                        <span class="material-symbols-outlined">history</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Table Footer / Pagination -->
+        <div class="table-pagination-footer">
+          <div class="pagination-info">
+            <span class="material-symbols-outlined count-icon">format_list_bulleted</span>
+            <span>মোট <strong>{{ filteredLoans().length }}</strong> টি ঋণ</span>
+            @if (pageSize() > 0 && totalPages() > 1) {
+              <span class="page-badge">(পৃষ্ঠা {{ currentPage() }} / {{ totalPages() }})</span>
+            }
+          </div>
+
+          <div class="pagination-controls">
+            <div class="page-size-selector">
+              <span class="size-label">প্রতি পৃষ্ঠায়:</span>
+              <select id="pageSizeSelect" class="page-size-select" [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)">
+                <option [value]="10">১০টি</option>
+                <option [value]="20">২০টি</option>
+                <option [value]="50">৫০টি</option>
+                <option [value]="0">সব ঋণ</option>
+              </select>
+            </div>
+
+            @if (totalPages() > 1 && pageSize() > 0) {
+              <div class="page-nav-buttons">
+                <button class="page-btn nav-btn" [disabled]="currentPage() === 1" (click)="setPage(currentPage() - 1)" title="পূর্ববর্তী পৃষ্ঠা">
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+
+                @for (p of getVisiblePages(); track p) {
+                  <button class="page-btn number-btn" [class.active]="currentPage() === p" (click)="setPage(p)">
+                    {{ p }}
+                  </button>
+                }
+
+                <button class="page-btn nav-btn" [disabled]="currentPage() === totalPages()" (click)="setPage(currentPage() + 1)" title="পরবর্তী পৃষ্ঠা">
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>
+
+<!-- History Modal -->
+@if (selectedLoanForHistory()) {
+  <app-history-modal
+    [title]="'ঋণ হিসাব #' + selectedLoanForHistory()!.loanId + ' (' + selectedLoanForHistory()!.customerName + ') অডিট হিস্ট্রি'"
+    [historyList]="selectedLoanForHistory()!.history"
+    (close)="closeHistory()">
+  </app-history-modal>
+}

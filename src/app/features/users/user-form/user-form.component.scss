@@ -1,0 +1,126 @@
+.page-container {
+  padding: 1.5rem;
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 800;
+  }
+}
+
+.bg-primary-subtle {
+  background-color: var(--primary-subtle);
+}
+
+.user-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 650px) {
+  .user-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .span-2 {
+    grid-column: span 1;
+  }
+}
+
+/* Category Toggle Cards */
+.category-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+
+  @media (max-width: 680px) {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-toggle-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    user-select: none;
+
+    .cat-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .cat-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.25;
+
+      strong {
+        font-size: 0.875rem;
+        color: var(--text-primary);
+      }
+
+      span {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+    }
+
+    &:hover {
+      border-color: #cbd5e1;
+      background-color: #f8fafc;
+      transform: translateY(-1px);
+    }
+
+    &.selected {
+      border-color: var(--primary);
+      background-color: #f0fdf4;
+      box-shadow: 0 4px 12px rgba(13, 148, 136, 0.12);
+
+      strong {
+        color: var(--primary);
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+@if (showLayout()) {
+  <div class="app-layout">
+    <app-navbar></app-navbar>
+    <div class="app-main-body">
+      <app-sidebar></app-sidebar>
+      <main class="app-content-area">
+        <router-outlet></router-outlet>
+      </main>
+    </div>
+  </div>
+} @else {
+  <router-outlet></router-outlet>
+}

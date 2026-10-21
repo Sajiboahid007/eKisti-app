@@ -1,0 +1,581 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <div class="breadcrumb">
+        <a routerLink="/loans">ঋণ হিসাব</a>
+        <span class="material-symbols-outlined separator">chevron_right</span>
+        <span>নতুন ঋণ বিতরণ</span>
+      </div>
+      <h2>নতুন ঋণ অনুমোদন ও বিতরণ (Disbursement)</h2>
+      <p class="sub-text">ঋণের শর্তাবলি পূরণ করুন, কিস্তি ক্যালকুলেশন দেখুন এবং অনুমোদনের সাথে সাথে মানি রসিদ প্রিন্ট করুন</p>
+    </div>
+    <div class="header-right no-print">
+      <button type="button" class="btn btn-secondary" (click)="previewReceipt()">
+        <span class="material-symbols-outlined">visibility</span>
+        <span>খসড়া রসিদ প্রিভিউ</span>
+      </button>
+      <a routerLink="/loans" class="btn btn-secondary">ফিরে যান</a>
+    </div>
+  </div>
+
+  <div class="disburse-grid">
+    <!-- Form Side -->
+    <div class="card form-card">
+      <div class="card-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">post_add</span>
+          <h3>ঋণের বিবরণ ও কিস্তি পরিকল্পনা</h3>
+        </div>
+      </div>
+      <div class="card-body">
+        <form (ngSubmit)="onDisburse()">
+          <div class="form-row">
+            <!-- Select Customer -->
+            <div class="form-group flex-2">
+              <label>গ্রাহক নির্বাচন করুন <span class="required">*</span></label>
+              <select class="form-control" [ngModel]="selectedCustomerId()" (ngModelChange)="selectedCustomerId.set(+$event)" name="customerSelect" required>
+                @for (c of customers(); track c.customerId) {
+                  <option [value]="c.customerId">
+                    #{{ c.customerId }} — {{ c.fullName }} ({{ c.phonePrimary }} / NID: {{ c.nidNumber }})
+                  </option>
+                }
+              </select>
+              <div class="form-hint">গ্রাহকের নাম বা আইডি দেখে নির্বাচন করুন</div>
+            </div>
+
+            <!-- Custom / Set Loan Account Number -->
+            <div class="form-group flex-1">
+              <label class="label-with-tag">
+                <span>ঋণ হিসাব নং (Loan No)</span>
+                <span class="badge-optional">ঐচ্ছিক</span>
+              </label>
+              <input 
+                type="text" 
+                class="form-control font-mono font-bold" 
+                [ngModel]="customLoanAccountNo()" 
+                (ngModelChange)="customLoanAccountNo.set($event)" 
+                name="customLoanAccountNo" 
+                [placeholder]="'LN-' + estimatedNextLoanId() + ' (Auto)'" 
+              />
+              <div class="form-hint">ফাঁকা রাখলে স্বয়ংক্রিয়ভাবে তৈরি হবে</div>
+            </div>
+          </div>
+
+          <!-- Core Loan Configuration (Principal & Installment Tenure - Up / Down Stacked Hero Layout) -->
+          <div class="loan-core-box">
+            <!-- 1. Principal Amount (Up) -->
+            <div class="core-field-group">
+              <div class="field-header">
+                <label class="core-label">
+                  <span class="material-symbols-outlined label-icon">payments</span>
+                  <span>বিতরণকৃত মূল ঋণ (আসল টাকা)</span>
+                  <span class="required">*</span>
+                </label>
+                <span class="field-hint-tag">নগদ প্রদানযোগ্য আসল</span>
+              </div>
+              <div class="input-with-currency">
+                <span class="currency-prefix">৳</span>
+                <input type="number" class="form-control form-control-lg pl-curr font-mono-amount" [ngModel]="principalAmount()" (ngModelChange)="setPrincipal($event)" name="principal" required min="1000" step="1000" />
+              </div>
+              <!-- Quick Principal Amount Presets in 4-col Balanced Grid -->
+              <div class="preset-grid">
+                <button type="button" class="preset-chip" [class.active]="principalAmount() === 20000" (click)="setPrincipal(20000)">
+                  <span class="chip-val">৳ ২০,০০০</span>
+                  <span class="chip-sub">জনপ্রিয় (২০ হাজার)</span>
+                </button>
+                <button type="button" class="preset-chip" [class.active]="principalAmount() === 50000" (click)="setPrincipal(50000)">
+                  <span class="chip-val">৳ ৫০,০০০</span>
+                  <span class="chip-sub">৫০ হাজার</span>
+                </button>
+                <button type="button" class="preset-chip" [class.active]="principalAmount() === 100000" (click)="setPrincipal(100000)">
+                  <span class="chip-val">৳ ১,০০,০০০</span>
+                  <span class="chip-sub">১ লাখ টাকা</span>
+                </button>
+                <button type="button" class="preset-chip" [class.active]="principalAmount() === 1000000" (click)="setPrincipal(1000000)">
+                  <span class="chip-val">৳ ১০,০০,০০০</span>
+                  <span class="chip-sub">১০ লাখ টাকা (SME)</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="core-box-divider"></div>
+
+            <!-- 2. Total Installments & Frequency (Down) -->
+            <div class="core-field-group">
+              <div class="field-header">
+                <label class="core-label">
+                  <span class="material-symbols-outlined label-icon">calendar_month</span>
+                  <span>মোট কিস্তির সংখ্যা (পরিশোধ মেয়াদ)</span>
+                  <span class="required">*</span>
+                </label>
+                <div class="freq-toggle">
+                  <button type="button" class="freq-btn" [class.active]="installmentFrequency() === 'WEEKLY'" (click)="setFrequency('WEEKLY')">
+                    <span class="material-symbols-outlined toggle-icon">event_repeat</span>
+                    <span>সাপ্তাহিক কিস্তি</span>
+                  </button>
+                  <button type="button" class="freq-btn" [class.active]="installmentFrequency() === 'MONTHLY'" (click)="setFrequency('MONTHLY')">
+                    <span class="material-symbols-outlined toggle-icon">calendar_month</span>
+                    <span>মাসিক কিস্তি</span>
+                  </button>
+                  <button type="button" class="freq-btn" [class.active]="installmentFrequency() === 'DAILY'" (click)="setFrequency('DAILY')">
+                    <span class="material-symbols-outlined toggle-icon">today</span>
+                    <span>দৈনিক কিস্তি</span>
+                  </button>
+                </div>
+              </div>
+              <div class="input-with-suffix">
+                <input type="number" class="form-control form-control-lg font-mono-amount" [ngModel]="totalInstallments()" (ngModelChange)="setInstallments($event)" name="installmentsCount" required min="1" max="365" />
+                <span class="suffix-badge">{{ totalInstallments() }} টি কিস্তি</span>
+              </div>
+              <!-- Quick Installment Presets in 4-col Balanced Grid -->
+              <div class="preset-grid">
+                @if (installmentFrequency() === 'WEEKLY') {
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 20" (click)="setInstallments(20)">
+                    <span class="chip-val">২০ কিস্তি</span>
+                    <span class="chip-sub">৫ মাস মেয়াদ</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 40" (click)="setInstallments(40)">
+                    <span class="chip-val">৪০ কিস্তি</span>
+                    <span class="chip-sub">১০ মাস (স্ট্যান্ডার্ড)</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 45" (click)="setInstallments(45)">
+                    <span class="chip-val">৪৫ কিস্তি</span>
+                    <span class="chip-sub">প্রায় ১১ মাস</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 50" (click)="setInstallments(50)">
+                    <span class="chip-val">৫০ কিস্তি</span>
+                    <span class="chip-sub">১ বছর মেয়াদ</span>
+                  </button>
+                } @else if (installmentFrequency() === 'MONTHLY') {
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 6" (click)="setInstallments(6)">
+                    <span class="chip-val">৬ কিস্তি</span>
+                    <span class="chip-sub">৬ মাস মেয়াদ</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 12" (click)="setInstallments(12)">
+                    <span class="chip-val">১২ কিস্তি</span>
+                    <span class="chip-sub">১ বছর (স্ট্যান্ডার্ড)</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 18" (click)="setInstallments(18)">
+                    <span class="chip-val">১৮ কিস্তি</span>
+                    <span class="chip-sub">দেড় বছর মেয়াদ</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 24" (click)="setInstallments(24)">
+                    <span class="chip-val">২৪ কিস্তি</span>
+                    <span class="chip-sub">২ বছর মেয়াদ</span>
+                  </button>
+                } @else {
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 50" (click)="setInstallments(50)">
+                    <span class="chip-val">৫০ কিস্তি</span>
+                    <span class="chip-sub">৫০ দিন</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 100" (click)="setInstallments(100)">
+                    <span class="chip-val">১০০ কিস্তি</span>
+                    <span class="chip-sub">১০০ দিন (স্ট্যান্ডার্ড)</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 120" (click)="setInstallments(120)">
+                    <span class="chip-val">১২০ কিস্তি</span>
+                    <span class="chip-sub">৪ মাস মেয়াদ</span>
+                  </button>
+                  <button type="button" class="preset-chip" [class.active]="totalInstallments() === 200" (click)="setInstallments(200)">
+                    <span class="chip-val">২০০ কিস্তি</span>
+                    <span class="chip-sub">২০০ দিন মেয়াদ</span>
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <!-- Profit / Service Charge Rate with Flat vs Annual Toggle -->
+            <div class="form-group">
+              <div class="label-with-badge">
+                <label>সার্ভিস চার্জ / লাভ (%)</label>
+                <div class="profit-type-toggle">
+                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'FLAT'" (click)="setProfitType('FLAT')">
+                    ফ্ল্যাট লাভ
+                  </button>
+                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'ANNUAL'" (click)="setProfitType('ANNUAL')">
+                    বাৎসরিক লাভ
+                  </button>
+                </div>
+              </div>
+              <input type="number" class="form-control" [ngModel]="profitRate()" (ngModelChange)="setProfitRate($event)" name="profitRate" step="0.5" min="0" />
+              <div class="form-hint">
+                @if (profitCalculationType() === 'FLAT') {
+                  মোট এককালীন ফ্ল্যাট লাভ: <strong>{{ effectiveProfitRate() | number:'1.1-2' }}%</strong> (৳{{ profitAmount() | number }})
+                } @else {
+                  বাৎসরিক {{ profitRate() }}% হারে {{ totalInstallments() }} কিস্তির কার্যকর লাভ: <strong>{{ effectiveProfitRate() | number:'1.1-2' }}%</strong> (৳{{ profitAmount() | number }})
+                }
+              </div>
+            </div>
+
+            <!-- Mandatory Savings -->
+            <div class="form-group">
+              <label>প্রতি কিস্তির সঞ্চয় (টাকা)</label>
+              <input type="number" class="form-control" [ngModel]="savingsPerInstallment()" (ngModelChange)="setSavings($event)" name="savingsPerInstallment" step="10" min="0" />
+              <div class="form-hint">{{ frequencyLabel() }}র সাথে বাধ্যতামূলক জমা হবে</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <!-- First Due Date -->
+            <div class="form-group">
+              <label>১ম কিস্তির পরিশোধ তারিখ <span class="required">*</span></label>
+              <input type="date" class="form-control" [ngModel]="firstInstallmentDueDate()" (ngModelChange)="firstInstallmentDueDate.set($event)" name="firstDueDate" required />
+            </div>
+
+            <!-- Form Fee -->
+            <div class="form-group">
+              <label>ভর্তি ও ফরম ফি (টাকা)</label>
+              <input type="number" class="form-control" [ngModel]="formFeePaid()" (ngModelChange)="formFeePaid.set(+$event)" name="formFee" />
+            </div>
+          </div>
+
+          <!-- Purpose -->
+          <div class="form-group">
+            <label>ঋণের উদ্দেশ্য / খাত</label>
+            <input type="text" class="form-control" [ngModel]="purposeOfLoan()" (ngModelChange)="purposeOfLoan.set($event)" name="purpose" placeholder="যেমন: মুদি দোকানের মালামাল ক্রয়" />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg" [disabled]="submitting()">
+              <span class="material-symbols-outlined">send</span>
+              <span>{{ submitting() ? 'বিতরণ প্রক্রিয়াধীন...' : 'ঋণ অনুমোদন ও বিতরণ সম্পন্ন করুন' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Live Calculation & Summary Card -->
+    <div class="summary-column">
+      <div class="card calculation-card">
+        <div class="card-header bg-primary-subtle">
+          <div class="header-title text-primary">
+            <span class="material-symbols-outlined">calculate</span>
+            <h3>স্বয়ংক্রিয় কিস্তি হিসাব (Live Summary)</h3>
+          </div>
+          <span class="badge badge-frequency-pill">{{ frequencyLabel() }}</span>
+        </div>
+        <div class="card-body">
+          <div class="calc-row">
+            <span class="calc-label">বিতরণকৃত আসল ঋণ:</span>
+            <span class="calc-val amount-bdt font-bold">{{ principalAmount() | number }}</span>
+          </div>
+
+          <div class="calc-row">
+            <span class="calc-label">মোট সার্ভিস চার্জ / লাভ ({{ effectiveProfitRate() | number:'1.1-2' }}% - {{ profitCalculationType() === 'FLAT' ? 'ফ্ল্যাট' : 'বাৎসরিক' }}):</span>
+            <span class="calc-val amount-bdt text-primary font-bold">{{ profitAmount() | number }}</span>
+          </div>
+
+          <div class="calc-divider"></div>
+
+          <div class="calc-row highlight-row">
+            <span class="calc-label font-bold">মোট পরিশোধযোগ্য টাকা:</span>
+            <span class="calc-val amount-bdt font-bold text-success">{{ totalRepayable() | number }}</span>
+          </div>
+
+          <div class="calc-row">
+            <span class="calc-label">মোট কিস্তির সংখ্যা:</span>
+            <span class="calc-val badge badge-secondary font-bold">{{ totalInstallments() }} টি কিস্তি</span>
+          </div>
+
+          <div class="calc-row">
+            <span class="calc-label">কিস্তির সময়কাল / ফ্রিকোয়েন্সি:</span>
+            <span class="calc-val font-semibold">{{ frequencyNameBangla() }}</span>
+          </div>
+
+          <div class="calc-row highlight-box">
+            <div class="box-left">
+              <div class="box-label">প্রতি কিস্তির মূল টাকা (আসল + লাভ)</div>
+              <div class="box-val amount-bdt font-bold">{{ installmentAmount() | number }}</div>
+              <div class="box-subtext">আসল ৳{{ principalPerInstallment() | number }} + লাভ ৳{{ profitPerInstallment() | number }}</div>
+            </div>
+            <div class="box-plus">+</div>
+            <div class="box-right">
+              <div class="box-label">{{ frequencySavingsLabel() }}</div>
+              <div class="box-val amount-bdt">{{ savingsPerInstallment() | number }}</div>
+              <div class="box-subtext">সদস্যের সঞ্চয় ব্যালেন্সে জমা</div>
+            </div>
+          </div>
+
+          <div class="total-weekly-box">
+            <div class="text-muted text-sm">{{ frequencyCollectionLabel() }} (কিস্তি + সঞ্চয়)</div>
+            <div class="big-weekly amount-bdt">{{ totalCycleCollection() | number }}</div>
+            <div class="repay-summary-note">
+              {{ totalInstallments() }} টি কিস্তিতে মোট পরিশোধ: ৳{{ totalRepayable() | number }} + সঞ্চয়: ৳{{ totalSavingsCollected() | number }}
+            </div>
+          </div>
+
+          <div class="schedule-meta-box">
+            <div class="meta-item">
+              <span class="material-symbols-outlined meta-icon">event</span>
+              <div>
+                <div class="meta-label">১ম কিস্তির তারিখ:</div>
+                <div class="meta-val">{{ firstInstallmentDueDate() }}</div>
+              </div>
+            </div>
+            <div class="meta-item">
+              <span class="material-symbols-outlined meta-icon">event_available</span>
+              <div>
+                <div class="meta-label">সমাপ্তির সম্ভাব্য তারিখ:</div>
+                <div class="meta-val">{{ expectedClosingDate() }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-note">
+            <span class="material-symbols-outlined note-icon">info</span>
+            <span>অনুমোদন বাটনে চাপলে সিস্টেমে স্বয়ংক্রিয়ভাবে {{ totalInstallments() }} টি কিস্তির শিডিউল তৈরি হবে এবং প্রিন্ট করার জন্য অফিশিয়াল মানি রসিদ পাওয়া যাবে।</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Printable Loan Disbursement & Sanction Receipt Modal -->
+<!-- ============================================================ -->
+@if (selectedReceiptForPrint()) {
+  <div class="modal-backdrop" (click)="closeReceipt()">
+    <div class="modal-dialog receipt-modal-dialog" id="printableLoanDisburseReceipt" (click)="$event.stopPropagation()">
+      <div class="modal-header no-print">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">receipt_long</span>
+          <h3>ঋণ বিতরণ ও কিস্তি অনুমোদন রসিদ (Loan Sanction & Disbursement Receipt)</h3>
+        </div>
+        <button class="close-btn" (click)="closeReceipt()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body print-area">
+        @if (selectedReceiptForPrint()!.loanId > 0) {
+          <div class="disburse-success-ribbon no-print">
+            <span class="material-symbols-outlined success-icon">task_alt</span>
+            <div class="ribbon-text">
+              <span class="ribbon-title">ঋণ সফলভাবে সিস্টেমে সংরক্ষিত ও বিতরণ হয়েছে!</span>
+              <span class="ribbon-sub">অফিশিয়াল ঋণ হিসাব নং <strong>{{ selectedReceiptForPrint()!.loanAccountNo }}</strong> নিশ্চিত করা হয়েছে। নিচের রসিদটি প্রিন্ট করে গ্রাহককে প্রদান করুন।</span>
+            </div>
+          </div>
+        }
+
+        <div class="receipt-voucher">
+          <!-- Voucher Header -->
+          <div class="voucher-top">
+            <div class="org-brand">
+              <span class="material-symbols-outlined brand-icon">account_balance</span>
+              <div class="org-title-group">
+                <div class="org-name">eKisti মাইক্রোফাইন্যান্স অ্যান্ড কো-অপারেটিভ সিস্টেম</div>
+                <div class="org-tagline">স্বচ্ছ ও নির্ভরযোগ্য ডিজিটাল ক্ষুদ্রঋণ ও কিস্তি ব্যবস্থাপনা</div>
+              </div>
+            </div>
+            <div class="voucher-title-banner">
+              <span>ঋণ অনুমোদন ও বিতরণ রসিদ (গ্রাহক কপি)</span>
+            </div>
+          </div>
+
+          <!-- Branch & Route / FO Quick Bar -->
+          <div class="voucher-badge-bar">
+            <div class="badge-item">
+              <span class="b-lbl">শাখা:</span>
+              <strong class="b-val">{{ selectedReceiptForPrint()!.branchName }}</strong>
+              @if (selectedReceiptForPrint()!.branchPhone) {
+                <span class="b-sub">({{ selectedReceiptForPrint()!.branchPhone }})</span>
+              }
+            </div>
+            <div class="badge-item">
+              <span class="b-lbl">সমিতি / রুট:</span>
+              <strong class="b-val">{{ selectedReceiptForPrint()!.centerName }}</strong>
+              @if (selectedReceiptForPrint()!.centerCode) {
+                <span class="b-sub">[{{ selectedReceiptForPrint()!.centerCode }}]</span>
+              }
+            </div>
+            <div class="badge-item">
+              <span class="b-lbl">দায়িত্বপ্রাপ্ত মাঠ কর্মকর্তা (FO):</span>
+              <strong class="b-val">{{ selectedReceiptForPrint()!.fieldOfficerName }}</strong>
+              @if (selectedReceiptForPrint()!.fieldOfficerPhone) {
+                <span class="b-sub">(মোবাইল: {{ selectedReceiptForPrint()!.fieldOfficerPhone }})</span>
+              }
+            </div>
+          </div>
+
+          <!-- Customer & Loan Identification Grid -->
+          <div class="voucher-meta-grid">
+            <div class="meta-col">
+              <div class="meta-row loan-no-meta-row">
+                <span class="m-lbl">ঋণ হিসাব নং:</span>
+                <div class="loan-no-control-group">
+                  @if (!isEditingReceiptLoanNo()) {
+                    <span class="m-val highlight-val font-mono">{{ selectedReceiptForPrint()!.loanAccountNo }}</span>
+                    <button type="button" class="btn-icon-xs-edit no-print" title="লোন নম্বর পরিবর্তন বা সেট করুন" (click)="startEditReceiptLoanNo()">
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  } @else {
+                    <div class="loan-no-inline-edit no-print">
+                      <input type="text" class="form-control form-control-xs font-mono font-bold" [ngModel]="tempReceiptLoanNo()" (ngModelChange)="tempReceiptLoanNo.set($event)" />
+                      <button type="button" class="btn btn-xs btn-primary" (click)="saveReceiptLoanNo()" title="সেভ">✓</button>
+                      <button type="button" class="btn btn-xs btn-secondary" (click)="cancelEditReceiptLoanNo()" title="বাতিল">✕</button>
+                    </div>
+                  }
+                </div>
+              </div>
+              <div class="meta-row">
+                <span class="m-lbl">গ্রাহকের নাম:</span>
+                <span class="m-val font-bold">{{ selectedReceiptForPrint()!.customerName }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="m-lbl">সদস্য আইডি:</span>
+                <span class="m-val">#{{ selectedReceiptForPrint()!.customerId }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="m-lbl">পিতা / স্বামীর নাম:</span>
+                <span class="m-val">{{ selectedReceiptForPrint()!.customerFatherOrSpouse }}</span>
+              </div>
+            </div>
+
+            <div class="meta-col">
+              <div class="meta-row">
+                <span class="m-lbl">বিতরণের তারিখ:</span>
+                <span class="m-val">{{ selectedReceiptForPrint()!.disbursementDate }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="m-lbl">গ্রাহকের মোবাইল:</span>
+                <span class="m-val font-bold">{{ selectedReceiptForPrint()!.customerPhone }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="m-lbl">এনআইডি (NID):</span>
+                <span class="m-val">{{ selectedReceiptForPrint()!.customerNid || 'N/A' }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="m-lbl">ঠিকানা:</span>
+                <span class="m-val text-truncate-custom">{{ selectedReceiptForPrint()!.customerAddress || 'N/A' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Financial Breakdown Table -->
+          <div class="voucher-financial-table">
+            <div class="vf-header">
+              <span class="col-desc">বিবরণ / শর্তাবলি</span>
+              <span class="col-val text-right">টাকার পরিমাণ ও মেয়াদ</span>
+            </div>
+
+            <div class="vf-row">
+              <span class="col-desc">বিতরণকৃত মূল ঋণ (আসল টাকা)</span>
+              <span class="col-val amount-bdt text-right font-bold">৳ {{ selectedReceiptForPrint()!.principalAmount | number }}</span>
+            </div>
+
+            <div class="vf-row">
+              <span class="col-desc">
+                সার্ভিস চার্জ / লাভ ({{ selectedReceiptForPrint()!.effectiveProfitRate | number:'1.1-2' }}% - {{ selectedReceiptForPrint()!.profitType === 'FLAT' ? 'ফ্ল্যাট লাভ' : 'বাৎসরিক হার' }})
+              </span>
+              <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.profitAmount | number }}</span>
+            </div>
+
+            <div class="vf-row highlight-sum-row">
+              <span class="col-desc font-bold">মোট পরিশোধযোগ্য ঋণের টাকা (আসল + লাভ)</span>
+              <span class="col-val amount-bdt text-right font-bold text-success">৳ {{ selectedReceiptForPrint()!.totalRepayable | number }}</span>
+            </div>
+
+            <div class="vf-row">
+              <span class="col-desc">মোট কিস্তির সংখ্যা ও সময়কাল</span>
+              <span class="col-val text-right font-bold">
+                {{ selectedReceiptForPrint()!.totalInstallments }} টি কিস্তি ({{ selectedReceiptForPrint()!.frequencyLabel }})
+              </span>
+            </div>
+
+            <div class="vf-row">
+              <span class="col-desc">প্রতি কিস্তির মূল টাকা (আসল + লাভ)</span>
+              <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.installmentAmount | number }}</span>
+            </div>
+
+            <div class="vf-row">
+              <span class="col-desc">প্রতি কিস্তির বাধ্যতামূলক সঞ্চয় জমা</span>
+              <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.savingsPerInstallment | number }}</span>
+            </div>
+
+            <div class="vf-row total-collection-row">
+              <span class="col-desc">
+                <strong>প্রতি কিস্তিতে মোট আদায়যোগ্য টাকা (কিস্তি + সঞ্চয়)</strong>
+                <span class="sub-caption">গ্রাহক মাঠ কর্মকর্তার নিকট প্রতি কিস্তিতে এই পরিমাণ টাকা জমা দিবেন</span>
+              </span>
+              <span class="col-val amount-bdt text-right big-amount">৳ {{ selectedReceiptForPrint()!.totalCollectionPerCycle | number }}</span>
+            </div>
+
+            <div class="vf-row meta-dates-row">
+              <span class="col-desc">১ম কিস্তির পরিশোধ তারিখ: <strong>{{ selectedReceiptForPrint()!.firstInstallmentDueDate }}</strong></span>
+              <span class="col-val text-right">সমাপ্তির সম্ভাব্য তারিখ: <strong>{{ selectedReceiptForPrint()!.expectedClosingDate }}</strong></span>
+            </div>
+
+            @if (selectedReceiptForPrint()!.formFeePaid > 0) {
+              <div class="vf-row">
+                <span class="col-desc">ভর্তি ও ফরম ফি বাবদ গ্রহণ</span>
+                <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.formFeePaid | number }}</span>
+              </div>
+            }
+
+            @if (selectedReceiptForPrint()!.purposeOfLoan) {
+              <div class="vf-row">
+                <span class="col-desc">ঋণের খাত / উদ্দেশ্য</span>
+                <span class="col-val text-right">{{ selectedReceiptForPrint()!.purposeOfLoan }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- Customer Notice / Declaration -->
+          <div class="voucher-notice">
+            <span class="material-symbols-outlined notice-icon">verified_user</span>
+            <p>
+              <strong>ঘোষণা ও নির্দেশিকা:</strong> আমি উপরোক্ত শর্তাবলি ও কিস্তির হিসাব সম্পূর্ণরূপে বুঝিয়া নগদ ঋণ গ্রহণ করিলাম। প্রতি {{ selectedReceiptForPrint()!.frequencyLabel }}-র নির্ধারিত তারিখে দায়িত্বপ্রাপ্ত মাঠ কর্মকর্তা <strong>{{ selectedReceiptForPrint()!.fieldOfficerName }}</strong> (মোবাইল: <strong>{{ selectedReceiptForPrint()!.fieldOfficerPhone }}</strong>) এর নিকট কিস্তি ও সঞ্চয় বাবদ মোট <strong>৳{{ selectedReceiptForPrint()!.totalCollectionPerCycle | number }}</strong> রসিদের মাধ্যমে যথাসময়ে পরিশোধ করিতে বাধ্য থাকিব।
+            </p>
+          </div>
+
+          <!-- Signatures Section -->
+          <div class="voucher-signatures">
+            <div class="sig-block">
+              <div class="sig-line"></div>
+              <div class="sig-title">ঋণগ্রহীতার স্বাক্ষর / টিপসহি</div>
+              <div class="sig-sub">{{ selectedReceiptForPrint()!.customerName }}</div>
+            </div>
+
+            <div class="sig-block">
+              <div class="sig-line"></div>
+              <div class="sig-title">দায়িত্বপ্রাপ্ত মাঠ কর্মকর্তা (FO)</div>
+              <div class="sig-sub">{{ selectedReceiptForPrint()!.fieldOfficerName }}</div>
+            </div>
+
+            <div class="sig-block">
+              <div class="sig-line"></div>
+              <div class="sig-title">শাখা ব্যবস্থাপক / অনুমোদনকারী</div>
+              <div class="sig-sub">{{ selectedReceiptForPrint()!.approvedByName }}</div>
+            </div>
+          </div>
+
+          <!-- Voucher Footer -->
+          <div class="voucher-footer">
+            <span>সফটওয়্যার জেনারেটেড ডিজিটাল রসিদ • eKisti সিস্টেম • প্রিন্টের সময়: {{ selectedReceiptForPrint()!.disbursementDate }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer no-print">
+        <button type="button" class="btn btn-secondary" (click)="closeReceipt()">
+          <span class="material-symbols-outlined">close</span>
+          <span>বন্ধ করুন</span>
+        </button>
+        <button type="button" class="btn btn-primary btn-print" (click)="printReceipt()">
+          <span class="material-symbols-outlined">print</span>
+          <span>প্রিন্ট করুন (Print Slip)</span>
+        </button>
+        @if (selectedReceiptForPrint()!.loanId > 0) {
+          <button type="button" class="btn btn-success" (click)="viewLoanDetails()">
+            <span class="material-symbols-outlined">arrow_forward</span>
+            <span>ঋণ বিস্তারিত দেখুন</span>
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}

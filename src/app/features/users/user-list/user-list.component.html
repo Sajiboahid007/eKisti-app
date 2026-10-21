@@ -1,0 +1,1647 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <h2>{{ lang.isBangla() ? 'কর্মী ও পদবী ব্যবস্থাপনা (Staff & Roles Management)' : 'Staff & Roles Management' }}</h2>
+      <p class="sub-text">
+        @if (activeTab() === 'admins') {
+          {{ lang.isBangla() ? 'সিস্টেমের সর্বোচ্চ প্রশাসনিক নিয়ন্ত্রণ, ডাটাবেজ এক্সেস ও গ্লোবাল কনফিগারেশন' : 'Root System Administration, Nationwide DB Control & Security' }}
+        } @else if (activeTab() === 'head_office') {
+          {{ lang.isBangla() ? 'প্রধান কার্যালয়ের বিভাগীয় কর্মকর্তা, এরিয়া ম্যানেজার ও কেন্দ্রীয় নিরীক্ষক' : 'Head Office Executives, Area Managers & Central Auditors' }}
+        } @else if (activeTab() === 'branch_staff') {
+          {{ lang.isBangla() ? 'শাখা ব্যবস্থাপক, হিসাবরক্ষক (ক্যাশিয়ার) এবং মাঠকর্মী (ফিল্ড অফিসার ও কালেকশন)' : 'Branch Managers, Cashiers and Field Loan Officers' }}
+        } @else {
+          {{ lang.isBangla() ? 'ডাটাবেজে সংরক্ষিত পদবীসমূহ, ডায়নামিক রোল তৈরি ও পারমিশন কন্ট্রোল' : 'Database Stored Roles, Dynamic Role Creation & Access Permissions' }}
+        }
+      </p>
+    </div>
+    <div class="header-right">
+      @if (authService.canManageUsers()) {
+        @if (activeTab() === 'roles') {
+          <button class="btn btn-primary" (click)="openAddRole()">
+            <span class="material-symbols-outlined">add_moderator</span>
+            <span>{{ lang.isBangla() ? '+ নতুন পদবী যোগ করুন' : '+ Add New Role' }}</span>
+          </button>
+        } @else {
+          <a routerLink="/users/new" [queryParams]="{ category: activeTab() === 'admins' ? 'SYSTEM_ADMIN' : (activeTab() === 'head_office' ? 'HEAD_OFFICE' : 'BRANCH_STAFF') }" class="btn btn-primary">
+            <span class="material-symbols-outlined">person_add</span>
+            <span>
+              {{ activeTab() === 'admins'
+                ? (lang.isBangla() ? '+ নতুন অ্যাডমিন তৈরি' : '+ Add System Admin')
+                : (activeTab() === 'head_office'
+                  ? (lang.isBangla() ? '+ হেড অফিস কর্মকর্তা' : '+ Add HO Staff')
+                  : (lang.t('newUserBtn')))
+              }}
+            </span>
+          </a>
+        }
+      }
+    </div>
+  </div>
+
+  <!-- Top 4-Tier Tabs Header -->
+  <div class="tabs-header">
+    <button 
+      class="tab-btn" 
+      [class.active]="activeTab() === 'admins'" 
+      (click)="activeTab.set('admins')">
+      <span class="material-symbols-outlined tab-icon-admin">security</span>
+      <span>{{ lang.isBangla() ? 'সুপার অ্যাডমিন ও অ্যাডমিন' : 'System Admins' }}</span>
+      <span class="tab-badge badge-admin">{{ systemAdminsCount() }}</span>
+    </button>
+    <button 
+      class="tab-btn" 
+      [class.active]="activeTab() === 'head_office'" 
+      (click)="activeTab.set('head_office')">
+      <span class="material-symbols-outlined tab-icon-ho">corporate_fare</span>
+      <span>{{ lang.isBangla() ? 'প্রধান কার্যালয় কর্মকর্তা' : 'Head Office' }}</span>
+      <span class="tab-badge badge-ho">{{ headOfficeCount() }}</span>
+    </button>
+    <button 
+      class="tab-btn" 
+      [class.active]="activeTab() === 'branch_staff'" 
+      (click)="activeTab.set('branch_staff')">
+      <span class="material-symbols-outlined tab-icon-branch">storefront</span>
+      <span>{{ lang.isBangla() ? 'শাখা ও মাঠকর্মী' : 'Branch Staff' }}</span>
+      <span class="tab-badge badge-branch">{{ branchStaffCount() }}</span>
+    </button>
+    <button 
+      class="tab-btn" 
+      [class.active]="activeTab() === 'roles'" 
+      (click)="activeTab.set('roles')">
+      <span class="material-symbols-outlined tab-icon-roles">admin_panel_settings</span>
+      <span>{{ lang.isBangla() ? 'পদবী ও রোল ব্যবস্থাপনা' : 'Roles & Permissions' }}</span>
+      <span class="tab-badge">{{ rolesCount() }}</span>
+    </button>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- TAB 1: SYSTEM ADMINS (সুপার অ্যাডমিন ও অ্যাডমিন) -->
+  <!-- ========================================== -->
+  @if (activeTab() === 'admins') {
+    <!-- Info Banner -->
+    <div class="info-banner info-banner-admin mb-3">
+      <span class="material-symbols-outlined banner-icon">shield_person</span>
+      <div class="banner-text">
+        <strong>{{ lang.isBangla() ? 'সিস্টেম প্রশাসন (Root & System Admins):' : 'System Administration Tier:' }}</strong>
+        {{ lang.isBangla() 
+          ? 'সুপার অ্যাডমিন ও অ্যাডমিনগণ কোনো স্থানীয় শাখা বা ফিল্ড রুটের অধীন নন। তাঁরা সর্বজনীন ডাটাবেজ নিরাপত্তা, অডিট লগ ও কেন্দ্রীয় সিস্টেম কনফিগারেশনের সর্বোচ্চ নিয়ন্ত্রক।' 
+          : 'Super Admins and System Admins operate nationwide without physical branch constraints, governing full database architecture, security and configurations.' }}
+      </div>
+    </div>
+
+    <!-- Search & Filter Card -->
+    <div class="card filter-card">
+      <div class="search-box">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input 
+          type="text" 
+          class="form-control search-input" 
+          [placeholder]="lang.isBangla() ? 'অ্যাডমিনের নাম, ইমেইল, মোবাইল বা ইউজার আইডি দিয়ে খুঁজুন...' : 'Search by name, email, phone or ID...'" 
+          [(ngModel)]="searchQuery" />
+      </div>
+      <div class="count-tag">
+        {{ lang.isBangla() ? 'মোট অ্যাডমিন:' : 'Total Admins:' }} <strong>{{ systemAdmins().length }} জন</strong>
+      </div>
+    </div>
+
+    <!-- System Admins Table -->
+    <div class="card">
+      <div class="card-body p-0">
+        @if (loading()) {
+          <div class="loading-state">
+            <span class="material-symbols-outlined spinning">sync</span>
+            <p>{{ lang.isBangla() ? 'অ্যাডমিন তথ্য লোড হচ্ছে...' : 'Loading admin data...' }}</p>
+          </div>
+        } @else if (systemAdmins().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined">shield</span>
+            <p>{{ lang.isBangla() ? 'কোনো সিস্টেম অ্যাডমিন পাওয়া যায়নি।' : 'No admins found.' }}</p>
+          </div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table compact-table">
+              <thead>
+                <tr>
+                  <th style="width: 80px;">{{ lang.t('userId') }}</th>
+                  <th>{{ lang.t('userName') }}</th>
+                  <th>{{ lang.t('userEmail') }}</th>
+                  <th>{{ lang.t('userPhone') }}</th>
+                  <th>{{ lang.t('userRole') }}</th>
+                  <th>{{ lang.isBangla() ? 'অধিক্ষেত্র / কর্মক্ষেত্র' : 'Scope / Jurisdiction' }}</th>
+                  <th>{{ lang.t('userSalary') }}</th>
+                  <th style="width: 90px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (staff of systemAdmins(); track staff.userId) {
+                  <tr>
+                    <td>
+                      <span class="id-tag">#{{ staff.userId }}</span>
+                    </td>
+                    <td>
+                      <div class="user-name-cell">
+                        <div class="user-avatar-mini avatar-admin">
+                          {{ staff.name.charAt(0) }}
+                        </div>
+                        <div class="user-info-text">
+                          <strong class="user-title">{{ staff.name }}</strong>
+                          <div class="user-subtext">NID: {{ staff.nidNumber || '19852692518000' + staff.userId }}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="email-cell">{{ staff.email }}</td>
+                    <td class="phone-cell">{{ staff.phone }}</td>
+                    <td>
+                      <span class="badge" [ngClass]="getRoleBadgeClass(staff.role)">
+                        {{ getRoleTitle(staff.role) }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="badge badge-cat-admin">
+                        <span class="material-symbols-outlined badge-icon-sm">public</span>
+                        {{ staff.branchName || 'সিস্টেম প্রশাসন (সর্বজনীন)' }}
+                      </span>
+                    </td>
+                    <td class="amount-bdt">৳ {{ staff.salary | number }}</td>
+                    <td>
+                      @if (staff.status === 'ACTIVE') {
+                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                      } @else {
+                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                      }
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-toggle-switch" 
+                            [class.active]="staff.status === 'ACTIVE'" 
+                            (click)="toggleUserStatus(staff)"
+                            [title]="staff.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
+                            <span class="toggle-track">
+                              <span class="toggle-thumb"></span>
+                            </span>
+                          </button>
+                        }
+
+                        <!-- View Details -->
+                        <button 
+                          class="btn-action-icon btn-view" 
+                          (click)="openStaffDetails(staff)" 
+                          [title]="lang.isBangla() ? 'অ্যাডমিন প্রোফাইল ও অ্যাক্সেস বিস্তারিত' : 'View profile details'">
+                          <span class="material-symbols-outlined">visibility</span>
+                        </button>
+
+                        <!-- Print ID Card / Security Pass -->
+                        <button 
+                          class="btn-action-icon btn-idcard" 
+                          (click)="openIdCard(staff)" 
+                          [title]="lang.isBangla() ? 'অ্যাডমিন পাস / আইডি কার্ড প্রিন্ট' : 'Print Admin Pass'">
+                          <span class="material-symbols-outlined">badge</span>
+                        </button>
+
+                        <!-- Edit Staff -->
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-action-icon btn-edit" 
+                            (click)="openEditStaff(staff)" 
+                            [title]="lang.isBangla() ? 'তথ্য এডিট করুন' : 'Edit admin'">
+                            <span class="material-symbols-outlined">edit</span>
+                          </button>
+
+                          <!-- Delete Staff -->
+                          <button 
+                            class="btn-action-icon btn-delete" 
+                            (click)="openDeleteStaff(staff)" 
+                            [title]="lang.isBangla() ? 'অ্যাডমিন সফট-ডিলিট' : 'Delete admin'">
+                            <span class="material-symbols-outlined">delete</span>
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ========================================== -->
+  <!-- TAB 2: HEAD OFFICE (প্রধান কার্যালয় কর্মকর্তা) -->
+  <!-- ========================================== -->
+  @if (activeTab() === 'head_office') {
+    <!-- Info Banner -->
+    <div class="info-banner info-banner-ho mb-3">
+      <span class="material-symbols-outlined banner-icon">domain</span>
+      <div class="banner-text">
+        <strong>{{ lang.isBangla() ? 'প্রধান কার্যালয় (Head Office Executives):' : 'Head Office Governance Tier:' }}</strong>
+        {{ lang.isBangla() 
+          ? 'কেন্দ্রীয় প্রধান কার্যালয়ের বিভাগীয় কর্মকর্তা, এরিয়া ম্যানেজার, আঞ্চলিক ব্যবস্থাপক ও কেন্দ্রীয় নিরীক্ষকবৃন্দ কেন্দ্রীয়ভাবে বহু-শাখা অডিট, পর্যবেক্ষণ ও কর্পোরেট সিদ্ধান্ত পরিচালনা করেন।' 
+          : 'Head Office executives, Area Managers and Central Auditors oversee multi-branch governance, corporate audit and central management from HQ.' }}
+      </div>
+    </div>
+
+    <!-- Search & Filter Card -->
+    <div class="card filter-card">
+      <div class="search-box">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input 
+          type="text" 
+          class="form-control search-input" 
+          [placeholder]="lang.isBangla() ? 'নাম, পদবী, ইমেইল বা ফোন নম্বর দিয়ে খুঁজুন...' : 'Search by name, role, email or phone...'" 
+          [(ngModel)]="searchQuery" />
+      </div>
+      <div class="count-tag">
+        {{ lang.isBangla() ? 'মোট হেড অফিস কর্মকর্তা:' : 'Total HO Staff:' }} <strong>{{ headOfficeStaff().length }} জন</strong>
+      </div>
+    </div>
+
+    <!-- Head Office Table -->
+    <div class="card">
+      <div class="card-body p-0">
+        @if (loading()) {
+          <div class="loading-state">
+            <span class="material-symbols-outlined spinning">sync</span>
+            <p>{{ lang.isBangla() ? 'হেড অফিস ডেটা লোড হচ্ছে...' : 'Loading Head Office data...' }}</p>
+          </div>
+        } @else if (headOfficeStaff().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined">corporate_fare</span>
+            <p>{{ lang.isBangla() ? 'কোনো প্রধান কার্যালয় কর্মকর্তা পাওয়া যায়নি।' : 'No head office staff found.' }}</p>
+          </div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table compact-table">
+              <thead>
+                <tr>
+                  <th style="width: 80px;">{{ lang.t('userId') }}</th>
+                  <th>{{ lang.t('userName') }}</th>
+                  <th>{{ lang.t('userEmail') }}</th>
+                  <th>{{ lang.t('userPhone') }}</th>
+                  <th>{{ lang.t('userRole') }}</th>
+                  <th>{{ lang.isBangla() ? 'কর্মস্থল' : 'Workplace' }}</th>
+                  <th>{{ lang.t('userSalary') }}</th>
+                  <th style="width: 90px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (staff of headOfficeStaff(); track staff.userId) {
+                  <tr>
+                    <td>
+                      <span class="id-tag">#{{ staff.userId }}</span>
+                    </td>
+                    <td>
+                      <div class="user-name-cell">
+                        <div class="user-avatar-mini avatar-ho">
+                          {{ staff.name.charAt(0) }}
+                        </div>
+                        <div class="user-info-text">
+                          <strong class="user-title">{{ staff.name }}</strong>
+                          <div class="user-subtext">NID: {{ staff.nidNumber || '19852692518000' + staff.userId }}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="email-cell">{{ staff.email }}</td>
+                    <td class="phone-cell">{{ staff.phone }}</td>
+                    <td>
+                      <span class="badge" [ngClass]="getRoleBadgeClass(staff.role)">
+                        {{ getRoleTitle(staff.role) }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="badge badge-cat-ho">
+                        <span class="material-symbols-outlined badge-icon-sm">corporate_fare</span>
+                        {{ staff.branchName || 'প্রধান কার্যালয় (হেড অফিস)' }}
+                      </span>
+                    </td>
+                    <td class="amount-bdt">৳ {{ staff.salary | number }}</td>
+                    <td>
+                      @if (staff.status === 'ACTIVE') {
+                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                      } @else {
+                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                      }
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-toggle-switch" 
+                            [class.active]="staff.status === 'ACTIVE'" 
+                            (click)="toggleUserStatus(staff)"
+                            [title]="staff.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
+                            <span class="toggle-track">
+                              <span class="toggle-thumb"></span>
+                            </span>
+                          </button>
+                        }
+
+                        <!-- View Details -->
+                        <button 
+                          class="btn-action-icon btn-view" 
+                          (click)="openStaffDetails(staff)" 
+                          [title]="lang.isBangla() ? 'তদারকি ও প্রোফাইল বিস্তারিত দেখুন' : 'View profile details'">
+                          <span class="material-symbols-outlined">visibility</span>
+                        </button>
+
+                        <!-- Print ID Card -->
+                        <button 
+                          class="btn-action-icon btn-idcard" 
+                          (click)="openIdCard(staff)" 
+                          [title]="lang.isBangla() ? 'হেড অফিস আইডি কার্ড প্রিন্ট' : 'Print ID Card'">
+                          <span class="material-symbols-outlined">badge</span>
+                        </button>
+
+                        <!-- Edit Staff -->
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-action-icon btn-edit" 
+                            (click)="openEditStaff(staff)" 
+                            [title]="lang.isBangla() ? 'তথ্য এডিট করুন' : 'Edit staff'">
+                            <span class="material-symbols-outlined">edit</span>
+                          </button>
+
+                          <!-- Delete Staff -->
+                          <button 
+                            class="btn-action-icon btn-delete" 
+                            (click)="openDeleteStaff(staff)" 
+                            [title]="lang.isBangla() ? 'কর্মকর্তা সফট-ডিলিট' : 'Delete staff'">
+                            <span class="material-symbols-outlined">delete</span>
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ========================================== -->
+  <!-- TAB 3: BRANCH & FIELD STAFF (শাখা ও মাঠকর্মী) -->
+  <!-- ========================================== -->
+  @if (activeTab() === 'branch_staff') {
+    <!-- Info Banner -->
+    <div class="info-banner info-banner-branch mb-3">
+      <span class="material-symbols-outlined banner-icon">agriculture</span>
+      <div class="banner-text">
+        <strong>{{ lang.isBangla() ? 'শাখা ও মাঠকর্মী (Branch & Field Operations):' : 'Branch & Field Operations Tier:' }}</strong>
+        {{ lang.isBangla() 
+          ? 'স্থানীয় শাখা ব্যবস্থাপক, হিসাবরক্ষক (ক্যাশিয়ার) এবং মাঠকর্মীগণ সরাসরি ফিল্ডে সমিতি পরিচালনা, ঋণ বিতরণ ও দৈনিক কিস্তি আদায় করেন।' 
+          : 'Branch managers, cashiers and field officers manage physical branch loans, borrower samities and daily collections in the field.' }}
+      </div>
+    </div>
+
+    <!-- Search & Filter Card -->
+    <div class="card filter-card">
+      <div class="search-box">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input 
+          type="text" 
+          class="form-control search-input" 
+          [placeholder]="lang.isBangla() ? 'নাম, ইমেইল, মোবাইল, NID বা ইউজার আইডি দিয়ে খুঁজুন...' : 'Search by name, email, phone, NID or user ID...'" 
+          [(ngModel)]="searchQuery" />
+      </div>
+      <div class="count-tag">
+        {{ lang.isBangla() ? 'মোট শাখা কর্মী:' : 'Total Branch Staff:' }} <strong>{{ branchStaff().length }} জন</strong>
+      </div>
+    </div>
+
+    <!-- Branch Staff Table -->
+    <div class="card">
+      <div class="card-body p-0">
+        @if (loading()) {
+          <div class="loading-state">
+            <span class="material-symbols-outlined spinning">sync</span>
+            <p>{{ lang.isBangla() ? 'শাখা কর্মী ডেটা লোড হচ্ছে...' : 'Loading branch staff data...' }}</p>
+          </div>
+        } @else if (branchStaff().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined">group_off</span>
+            <p>{{ lang.isBangla() ? 'কোনো শাখা কর্মী পাওয়া যায়নি।' : 'No branch staff found.' }}</p>
+          </div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table compact-table">
+              <thead>
+                <tr>
+                  <th style="width: 80px;">{{ lang.t('userId') }}</th>
+                  <th>{{ lang.t('userName') }}</th>
+                  <th>{{ lang.t('userEmail') }}</th>
+                  <th>{{ lang.t('userPhone') }}</th>
+                  <th>{{ lang.t('userRole') }}</th>
+                  <th>{{ lang.t('userBranch') }}</th>
+                  <th>{{ lang.isBangla() ? 'রুট / সমিতি' : 'Assigned Routes' }}</th>
+                  <th>{{ lang.t('userSalary') }}</th>
+                  <th style="width: 90px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (staff of branchStaff(); track staff.userId) {
+                  <tr>
+                    <td>
+                      <span class="id-tag">#{{ staff.userId }}</span>
+                    </td>
+                    <td>
+                      <div class="user-name-cell">
+                        <div class="user-avatar-mini avatar-branch">
+                          {{ staff.name.charAt(0) }}
+                        </div>
+                        <div class="user-info-text">
+                          <strong class="user-title">{{ staff.name }}</strong>
+                          <div class="user-subtext">NID: {{ staff.nidNumber || '19852692518000' + staff.userId }}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="email-cell">{{ staff.email }}</td>
+                    <td class="phone-cell">{{ staff.phone }}</td>
+                    <td>
+                      <span class="badge" [ngClass]="getRoleBadgeClass(staff.role)">
+                        {{ getRoleTitle(staff.role) }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="branch-pill">
+                        <span class="material-symbols-outlined branch-icon">store</span>
+                        {{ getBranchName(staff.branchId) }}
+                      </span>
+                    </td>
+                    <td>
+                      @if (staff.assignedCenterIds && staff.assignedCenterIds.length > 0) {
+                        <span class="center-pill">
+                          <span class="material-symbols-outlined icon-xs">map</span>
+                          {{ staff.assignedCenterIds.length }} টি সমিতি
+                        </span>
+                      } @else {
+                        <span class="text-muted text-xs">শাখা ভিত্তিক</span>
+                      }
+                    </td>
+                    <td class="amount-bdt">৳ {{ staff.salary | number }}</td>
+                    <td>
+                      @if (staff.status === 'ACTIVE') {
+                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                      } @else {
+                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                      }
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
+                        <!-- Active / Inactive Switch -->
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-toggle-switch" 
+                            [class.active]="staff.status === 'ACTIVE'" 
+                            (click)="toggleUserStatus(staff)"
+                            [title]="staff.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
+                            <span class="toggle-track">
+                              <span class="toggle-thumb"></span>
+                            </span>
+                          </button>
+                        }
+
+                        <!-- View Details: Work Area & Customers -->
+                        <button 
+                          class="btn-action-icon btn-view" 
+                          (click)="openStaffDetails(staff)" 
+                          [title]="lang.isBangla() ? 'কাজের এলাকা ও গ্রাহক বিস্তারিত দেখুন' : 'View working area & assigned customers'">
+                          <span class="material-symbols-outlined">visibility</span>
+                        </button>
+
+                        <!-- Print ID Card -->
+                        <button 
+                          class="btn-action-icon btn-idcard" 
+                          (click)="openIdCard(staff)" 
+                          [title]="lang.isBangla() ? 'কর্মচারী আইডি কার্ড প্রিন্ট করুন' : 'Print employee ID card'">
+                          <span class="material-symbols-outlined">badge</span>
+                        </button>
+
+                        <!-- Edit Staff -->
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-action-icon btn-edit" 
+                            (click)="openEditStaff(staff)" 
+                            [title]="lang.isBangla() ? 'তথ্য এডিট করুন' : 'Edit staff'">
+                            <span class="material-symbols-outlined">edit</span>
+                          </button>
+
+                          <!-- Delete Staff -->
+                          <button 
+                            class="btn-action-icon btn-delete" 
+                            (click)="openDeleteStaff(staff)" 
+                            [title]="lang.isBangla() ? 'স্টাফ সফট-ডিলিট' : 'Delete staff'">
+                            <span class="material-symbols-outlined">delete</span>
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ========================================== -->
+  <!-- TAB 4: ROLES & PERMISSIONS (পদবী ও রোল ব্যবস্থাপনা) -->
+  <!-- ========================================== -->
+  @if (activeTab() === 'roles') {
+    <!-- Roles Filter Card -->
+    <div class="card filter-card">
+      <div class="search-box">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input 
+          type="text" 
+          class="form-control search-input" 
+          [placeholder]="lang.isBangla() ? 'রোল কোড, পদবীর নাম বা বিবরণ দিয়ে খুঁজুন...' : 'Search roles by code or title...'" 
+          [(ngModel)]="roleSearchQuery" />
+      </div>
+      <div class="count-tag">
+        {{ lang.isBangla() ? 'মোট সংরক্ষিত পদবী:' : 'Total Database Roles:' }} <strong>{{ filteredRoles().length }} টি</strong>
+      </div>
+    </div>
+
+    <!-- Roles Table -->
+    <div class="card">
+      <div class="card-body p-0">
+        @if (filteredRoles().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined">admin_panel_settings</span>
+            <p>{{ lang.isBangla() ? 'কোনো পদবী পাওয়া যায়নি।' : 'No roles found.' }}</p>
+          </div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table compact-table">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">{{ lang.isBangla() ? 'আইডি' : 'ID' }}</th>
+                  <th>{{ lang.isBangla() ? 'পদবীর নাম ও কোড' : 'Role Title & Code' }}</th>
+                  <th>{{ lang.isBangla() ? 'বিভাগ / টিয়ার' : 'Category / Tier' }}</th>
+                  <th>{{ lang.isBangla() ? 'বিবরণ' : 'Description' }}</th>
+                  <th style="width: 100px;">{{ lang.isBangla() ? 'ধরন' : 'Type' }}</th>
+                  <th style="width: 120px;">{{ lang.isBangla() ? 'নিযুক্ত কর্মী' : 'Staff Count' }}</th>
+                  <th>{{ lang.isBangla() ? 'অনুমোদিত অধিকার' : 'Permissions' }}</th>
+                  <th style="width: 90px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (role of filteredRoles(); track role.roleId) {
+                  <tr>
+                    <td>
+                      <span class="id-tag">#{{ role.roleId }}</span>
+                    </td>
+                    <td>
+                      <div class="role-title-cell">
+                        <strong class="role-name-primary">{{ lang.isBangla() ? role.nameBn : role.nameEn }}</strong>
+                        <div class="role-code-badge">
+                          <code>{{ role.code }}</code>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="badge" [ngClass]="getCategoryBadgeClass(role.category)">
+                        <span class="material-symbols-outlined badge-icon-sm">
+                          {{ role.category === 'SYSTEM_ADMIN' ? 'security' : (role.category === 'HEAD_OFFICE' ? 'corporate_fare' : 'storefront') }}
+                        </span>
+                        {{ getCategoryLabel(role.category) }}
+                      </span>
+                    </td>
+                    <td class="text-muted text-xs" style="max-width: 220px;">
+                      {{ role.description || (lang.isBangla() ? 'কোনো বিবরণ দেওয়া নেই' : 'No description') }}
+                    </td>
+                    <td>
+                      @if (role.isSystem) {
+                        <span class="badge badge-system">
+                          <span class="material-symbols-outlined badge-icon-sm">verified</span>
+                          {{ lang.isBangla() ? 'সিস্টেম' : 'System' }}
+                        </span>
+                      } @else {
+                        <span class="badge badge-custom">
+                          <span class="material-symbols-outlined badge-icon-sm">tune</span>
+                          {{ lang.isBangla() ? 'কাস্টম' : 'Custom' }}
+                        </span>
+                      }
+                    </td>
+                    <td>
+                      <div class="staff-count-pill" [class.has-staff]="getStaffCountForRole(role.code) > 0">
+                        <span class="material-symbols-outlined">person</span>
+                        <strong>{{ getStaffCountForRole(role.code) }} জন</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="permissions-badges-wrap">
+                        @for (perm of role.permissions.slice(0, 3); track perm) {
+                          <span class="perm-pill">{{ perm }}</span>
+                        }
+                        @if (role.permissions.length > 3) {
+                          <span class="perm-pill perm-more">+{{ role.permissions.length - 3 }} টি</span>
+                        }
+                      </div>
+                    </td>
+                    <td>
+                      @if (role.status === 'ACTIVE') {
+                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                      } @else {
+                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                      }
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
+                        <!-- Quick Active / Inactive Switch -->
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-toggle-switch" 
+                            [class.active]="role.status === 'ACTIVE'" 
+                            (click)="toggleRoleStatus(role)"
+                            [title]="role.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
+                            <span class="toggle-track">
+                              <span class="toggle-thumb"></span>
+                            </span>
+                          </button>
+                        }
+
+                        <!-- Edit Role -->
+                        @if (authService.canManageUsers()) {
+                          <button 
+                            class="btn-action-icon btn-edit" 
+                            (click)="openEditRole(role)" 
+                            [title]="lang.isBangla() ? 'পদবী ও অধিকার এডিট করুন' : 'Edit role & permissions'">
+                            <span class="material-symbols-outlined">edit</span>
+                          </button>
+
+                          <!-- Delete Role (Only custom roles can be deleted) -->
+                          <button 
+                            class="btn-action-icon btn-delete" 
+                            [disabled]="role.isSystem"
+                            (click)="openDeleteRole(role)" 
+                            [title]="role.isSystem ? (lang.isBangla() ? 'সিস্টেম পদবী ডিলিট করা যাবে না' : 'System role cannot be deleted') : (lang.isBangla() ? 'পদবী ডিলিট করুন' : 'Delete role')">
+                            <span class="material-symbols-outlined">delete</span>
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
+
+<!-- ========================================== -->
+<!-- 1. VIEW DETAILS MODAL (Work Area & Customers) -->
+<!-- ========================================== -->
+@if (showDetailsModal() && selectedStaffForDetails()) {
+  <div class="modal-backdrop" (click)="closeStaffDetails()">
+    <div class="modal-dialog modal-xl" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="header-info">
+          <h3>
+            <span class="material-symbols-outlined title-icon">badge</span>
+            <span>{{ selectedStaffForDetails()!.name }}</span>
+            <span class="id-tag">#{{ selectedStaffForDetails()!.userId }}</span>
+          </h3>
+          <p class="sub-text">{{ getRoleTitle(selectedStaffForDetails()!.role) }} — {{ getCategoryLabel(selectedStaffForDetails()!.category) }} বিবরণী</p>
+        </div>
+        <button class="close-btn" (click)="closeStaffDetails()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Staff Top Profile Strip -->
+        <div class="staff-profile-banner">
+          <div class="profile-left">
+            <div class="profile-avatar-large" [ngClass]="{
+              'avatar-admin': selectedStaffForDetails()!.category === 'SYSTEM_ADMIN',
+              'avatar-ho': selectedStaffForDetails()!.category === 'HEAD_OFFICE',
+              'avatar-branch': selectedStaffForDetails()!.category === 'BRANCH_STAFF'
+            }">
+              {{ selectedStaffForDetails()!.name.charAt(0) }}
+            </div>
+            <div class="profile-details">
+              <h4>{{ selectedStaffForDetails()!.name }}</h4>
+              <div class="meta-row">
+                <span class="badge" [ngClass]="getRoleBadgeClass(selectedStaffForDetails()!.role)">
+                  {{ getRoleTitle(selectedStaffForDetails()!.role) }}
+                </span>
+                <span class="badge" [ngClass]="getCategoryBadgeClass(selectedStaffForDetails()!.category)">
+                  {{ getCategoryLabel(selectedStaffForDetails()!.category) }}
+                </span>
+                <span class="meta-item">
+                  <span class="material-symbols-outlined">call</span>
+                  {{ selectedStaffForDetails()!.phone }}
+                </span>
+                <span class="meta-item">
+                  <span class="material-symbols-outlined">mail</span>
+                  {{ selectedStaffForDetails()!.email }}
+                </span>
+                <span class="meta-item">
+                  <span class="material-symbols-outlined">credit_card</span>
+                  NID: {{ selectedStaffForDetails()!.nidNumber || 'প্রযোজ্য নয়' }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="profile-right">
+            <div class="stat-pill">
+              <span class="stat-label">মাসিক বেতন</span>
+              <strong class="stat-value text-primary">৳ {{ selectedStaffForDetails()!.salary | number }}</strong>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-label">বর্তমান অবস্থা</span>
+              @if (selectedStaffForDetails()!.status === 'ACTIVE') {
+                <span class="badge badge-paid">সক্রিয় (Active)</span>
+              } @else {
+                <span class="badge badge-overdue">নিষ্ক্রিয় (Inactive)</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Scope & Work Jurisdiction -->
+        @if (selectedStaffForDetails()!.category === 'SYSTEM_ADMIN') {
+          <div class="admin-scope-card p-4 rounded-3 border mb-4 bg-light">
+            <div class="d-flex align-items-center gap-3 mb-2">
+              <span class="material-symbols-outlined text-danger" style="font-size: 32px;">verified_user</span>
+              <h4 class="mb-0 text-dark">সিস্টেম প্রশাসন ও সর্বজনীন অধিক্ষেত্র</h4>
+            </div>
+            <p class="text-secondary mb-3">
+              সুপার অ্যাডমিন ও সিস্টেম অ্যাডমিনগণ নির্দিষ্ট কোনো শাখা বা ফিল্ড রুটের সাথে আবদ্ধ নন। সমগ্র প্ল্যাটফর্মের ডাটাবেজ স্থায়িত্ব, ব্যাকআপ ও সিকিউরিটির তত্ত্বাবধায়ক।
+            </p>
+            <div class="d-flex gap-3 flex-wrap">
+              <span class="badge badge-cat-admin p-2">🛡️ সম্পূর্ণ ডাটাবেজ রিড/রাইট</span>
+              <span class="badge badge-cat-admin p-2">⚙️ ডায়নামিক রোল ও পারমিশন কন্ট্রোল</span>
+              <span class="badge badge-cat-admin p-2">📑 সর্বজনীন অডিট লগ ও সফট-ডিলিট অ্যাক্সেস</span>
+            </div>
+          </div>
+        } @else if (selectedStaffForDetails()!.category === 'HEAD_OFFICE') {
+          <div class="ho-scope-card p-4 rounded-3 border mb-4 bg-light">
+            <div class="d-flex align-items-center gap-3 mb-2">
+              <span class="material-symbols-outlined text-primary" style="font-size: 32px;">corporate_fare</span>
+              <h4 class="mb-0 text-dark">প্রধান কার্যালয় এক্সিকিউটিভ ও অডিট অধিক্ষেত্র</h4>
+            </div>
+            <p class="text-secondary mb-3">
+              প্রধান কার্যালয়ের এই কর্মকর্তা কেন্দ্রীয়ভাবে বহুমুখী শাখা পরিদর্শন, অডিট নিরীক্ষা ও আঞ্চলিক ঋণ অনুমোদন প্রক্রিয়ার সাথে সম্পৃক্ত।
+            </p>
+            <div class="d-flex gap-3 flex-wrap">
+              <span class="badge badge-cat-ho p-2">🏢 প্রধান কার্যালয় (হেড অফিস)</span>
+              <span class="badge badge-cat-ho p-2">📊 সেন্ট্রাল অডিট ও ড্যাশবোর্ড ওভারসাইট</span>
+              <span class="badge badge-cat-ho p-2">🔍 বহু-শাখা পর্যবেক্ষণ ও সম্মতি নিয়ন্ত্রণ</span>
+            </div>
+          </div>
+        } @else {
+          <!-- Section 1: Assigned Work Area / Route / Centers for Branch Staff -->
+          <div class="details-section">
+            <div class="section-heading">
+              <div class="heading-left">
+                <span class="material-symbols-outlined section-icon">map</span>
+                <h4>দায়িত্বপ্রাপ্ত কাজের এলাকা ও রুট (Assigned Work Area & Routes)</h4>
+              </div>
+              <span class="count-badge">{{ getStaffAssignedCenters(selectedStaffForDetails()!).length }} টি রুট/সমিতি</span>
+            </div>
+
+            <!-- Branch Info Box -->
+            <div class="branch-summary-box mb-3">
+              <div class="branch-col">
+                <span class="sub-label">মূল কর্মস্থল / শাখা:</span>
+                <strong>{{ getBranchName(selectedStaffForDetails()!.branchId) }}</strong>
+              </div>
+              @if (getStaffBranch(selectedStaffForDetails()!.branchId); as b) {
+                <div class="branch-col">
+                  <span class="sub-label">শাখার ঠিকানা:</span>
+                  <span>{{ b.address }}</span>
+                </div>
+                <div class="branch-col">
+                  <span class="sub-label">অঞ্চল / জোন:</span>
+                  <span>{{ b.regionName }} — {{ b.areaName }}</span>
+                </div>
+              }
+            </div>
+
+            <!-- Routes Grid -->
+            @if (getStaffAssignedCenters(selectedStaffForDetails()!).length === 0) {
+              <div class="empty-mini-box">
+                <span class="material-symbols-outlined">route</span>
+                <p>এই কর্মকর্তার অধীনে বর্তমানে নির্দিষ্ট কোনো রুট/সমিতি অ্যাসাইন করা নেই।</p>
+              </div>
+            } @else {
+              <div class="routes-grid">
+                @for (center of getStaffAssignedCenters(selectedStaffForDetails()!); track center.centerId) {
+                  <div class="route-card">
+                    <div class="route-card-header">
+                      <span class="route-code-tag">{{ center.centerCode || ('CEN-' + center.centerId) }}</span>
+                      <span class="badge badge-active">{{ center.meetingDay }}</span>
+                    </div>
+                    <h5 class="route-name">{{ center.name }}</h5>
+                    <div class="route-meta">
+                      <div class="meta-row">
+                        <span class="material-symbols-outlined icon-mini">location_on</span>
+                        <span>{{ center.location }}</span>
+                      </div>
+                      <div class="meta-row">
+                        <span class="material-symbols-outlined icon-mini">schedule</span>
+                        <span>{{ center.meetingTime }}</span>
+                      </div>
+                      <div class="meta-row">
+                        <span class="material-symbols-outlined icon-mini">groups</span>
+                        <span>সদস্য: {{ center.totalMembers }} জন (সক্রিয় ঋণ: {{ center.activeLoansCount }})</span>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Section 2: Assigned Customers Table -->
+          <div class="details-section mt-4">
+            <div class="section-heading">
+              <div class="heading-left">
+                <span class="material-symbols-outlined section-icon">groups</span>
+                <h4>দায়িত্বপ্রাপ্ত সমিতিগুলোর ঋণগ্রহীতা তালিকা</h4>
+              </div>
+              <span class="count-badge">{{ getStaffAssignedCustomers(selectedStaffForDetails()!).length }} জন গ্রাহক</span>
+            </div>
+
+            @if (getStaffAssignedCustomers(selectedStaffForDetails()!).length === 0) {
+              <div class="empty-mini-box">
+                <span class="material-symbols-outlined">person_off</span>
+                <p>দায়িত্বপ্রাপ্ত সমিতিগুলোতে বর্তমানে কোনো নিবন্ধিত গ্রাহক নেই।</p>
+              </div>
+            } @else {
+              <div class="table-container border">
+                <table class="data-table compact-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 70px;">আইডি</th>
+                      <th>গ্রাহকের নাম ও মোবাইল</th>
+                      <th>সমিতি / রুট</th>
+                      <th>পিতা / স্বামীর নাম</th>
+                      <th>ক্রেডিট স্কোর</th>
+                      <th style="width: 90px;">স্ট্যাটাস</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (cust of getStaffAssignedCustomers(selectedStaffForDetails()!); track cust.customerId) {
+                      <tr>
+                        <td>
+                          <span class="id-tag">#{{ cust.customerId }}</span>
+                        </td>
+                        <td>
+                          <strong>{{ cust.fullName }}</strong>
+                          <div class="text-xs text-muted font-mono">{{ cust.phonePrimary }}</div>
+                        </td>
+                        <td>
+                          <span class="center-pill">
+                            <span class="material-symbols-outlined icon-xs">store</span>
+                            {{ getCenterName(cust.centerId) }}
+                          </span>
+                        </td>
+                        <td>{{ cust.fatherName || cust.spouseName || 'প্রযোজ্য নয়' }}</td>
+                        <td>
+                          <span class="badge badge-paid">স্কোর: {{ cust.creditScore }}</span>
+                        </td>
+                        <td>
+                          @if (cust.status === 'ACTIVE') {
+                            <span class="badge badge-paid">সক্রিয়</span>
+                          } @else {
+                            <span class="badge badge-overdue">নিষ্ক্রিয়</span>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeStaffDetails()">{{ lang.t('close') }}</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================== -->
+<!-- 2. PRINT ID CARD MODAL -->
+<!-- ========================================== -->
+@if (showIdCardModal() && selectedStaffForCard()) {
+  <div class="modal-backdrop" (click)="closeIdCard()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header no-print">
+        <h3>
+          <span class="material-symbols-outlined title-icon">badge</span>
+          <span>আইডি কার্ড প্রিন্ট প্রিভিউ</span>
+        </h3>
+        <button class="close-btn" (click)="closeIdCard()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body print-area">
+        <!-- Physical Badge Container -->
+        <div class="id-card-badge" id="printableEmployeeIdCard">
+          <div class="lanyard-hole-container no-print">
+            <div class="lanyard-hole"></div>
+          </div>
+
+          <!-- Card Header -->
+          <div class="id-card-header" [ngClass]="{
+            'card-header-admin': selectedStaffForCard()!.category === 'SYSTEM_ADMIN',
+            'card-header-ho': selectedStaffForCard()!.category === 'HEAD_OFFICE'
+          }">
+            <div class="header-logo-row">
+              <div class="company-logo-circle">
+                <span class="material-symbols-outlined logo-glyph">
+                  {{ selectedStaffForCard()!.category === 'SYSTEM_ADMIN' ? 'security' : 'payments' }}
+                </span>
+              </div>
+              <div class="company-titles">
+                <h3 class="company-name">eKisti Microfinance Ltd.</h3>
+                <p class="company-sub">স্মার্ট ক্ষুদ্রঋণ ও কিস্তি ব্যবস্থাপনা</p>
+              </div>
+            </div>
+            <div class="card-badge-strip">
+              <span>
+                {{ selectedStaffForCard()!.category === 'SYSTEM_ADMIN'
+                  ? 'SYSTEM ADMINISTRATOR PASS'
+                  : (selectedStaffForCard()!.category === 'HEAD_OFFICE' ? 'HEAD OFFICE EXECUTIVE PASS' : 'EMPLOYEE IDENTITY CARD')
+                }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Card Main Body -->
+          <div class="id-card-body">
+            <!-- Photo & ID -->
+            <div class="id-photo-wrapper">
+              <div class="id-photo-box">
+                <span class="material-symbols-outlined photo-placeholder">account_circle</span>
+              </div>
+              <div class="id-number-pill">
+                ID NO: #{{ selectedStaffForCard()!.userId }}
+              </div>
+            </div>
+
+            <!-- Employee Info -->
+            <div class="id-emp-info">
+              <h2 class="id-emp-name">{{ selectedStaffForCard()!.name }}</h2>
+              <div class="id-designation-badge">
+                {{ getRoleTitle(selectedStaffForCard()!.role) }}
+              </div>
+
+              <div class="id-details-table">
+                <div class="id-row">
+                  <span class="id-lbl">কর্মস্থল/টিয়ার:</span>
+                  <span class="id-val">
+                    {{ selectedStaffForCard()!.category === 'SYSTEM_ADMIN' 
+                      ? 'সিস্টেম প্রশাসন (সর্বজনীন)' 
+                      : (selectedStaffForCard()!.category === 'HEAD_OFFICE' ? 'প্রধান কার্যালয় (হেড অফিস)' : getBranchName(selectedStaffForCard()!.branchId))
+                    }}
+                  </span>
+                </div>
+                <div class="id-row">
+                  <span class="id-lbl">অধিক্ষেত্র:</span>
+                  <span class="id-val">
+                    {{ selectedStaffForCard()!.category === 'SYSTEM_ADMIN' 
+                      ? 'সারাদেশ (সকল শাখা)' 
+                      : (selectedStaffForCard()!.category === 'HEAD_OFFICE' ? 'কর্পোরেট অডিট ও তদারকি' : 'মিরপুর শাখা ও সংশ্লিষ্ট সমিতি')
+                    }}
+                  </span>
+                </div>
+                <div class="id-row">
+                  <span class="id-lbl">মোবাইল নং:</span>
+                  <span class="id-val font-mono">{{ selectedStaffForCard()!.phone }}</span>
+                </div>
+                <div class="id-row">
+                  <span class="id-lbl">ইমেইল:</span>
+                  <span class="id-val text-xs">{{ selectedStaffForCard()!.email }}</span>
+                </div>
+                <div class="id-row">
+                  <span class="id-lbl">এনআইডি:</span>
+                  <span class="id-val font-mono">{{ selectedStaffForCard()!.nidNumber || '19852692518000' + selectedStaffForCard()!.userId }}</span>
+                </div>
+                <div class="id-row">
+                  <span class="id-lbl">যোগদান তারিখ:</span>
+                  <span class="id-val">{{ selectedStaffForCard()!.joinedDate || '০১-০১-২০২৪' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Security & Verification Barcode -->
+            <div class="id-security-section">
+              <div class="qr-mock-box">
+                <div class="qr-pixel-grid">
+                  <span class="material-symbols-outlined qr-icon">qr_code_2</span>
+                </div>
+                <span class="qr-caption">Verification Pass</span>
+              </div>
+              <div class="signature-box">
+                <div class="signature-line">
+                  <span class="signature-scribble">Abdul Quader</span>
+                </div>
+                <span class="signature-label">অনুমোদিত স্বাক্ষর (Authorized)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Footer Strip -->
+          <div class="id-card-footer">
+            <p>কার্ডটি হারানো গেলে প্রধান কার্যালয়ে যোগাযোগ করুন • হেল্পলাইন: ১৬২৬৩</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer no-print">
+        <button class="btn btn-secondary" (click)="closeIdCard()">বাতিল</button>
+        <button class="btn btn-primary" (click)="printIdCard()">
+          <span class="material-symbols-outlined">print</span>
+          <span>প্রিন্ট করুন (Print Card)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================== -->
+<!-- 3. EDIT STAFF MODAL -->
+<!-- ========================================== -->
+@if (showEditModal() && selectedStaffForEdit()) {
+  <div class="modal-backdrop" (click)="closeEditStaff()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>
+          <span class="material-symbols-outlined title-icon">manage_accounts</span>
+          <span>কর্মী তথ্য হালনাগাদ (Edit Staff #{{ selectedStaffForEdit()!.userId }})</span>
+        </h3>
+        <button class="close-btn" (click)="closeEditStaff()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <form (ngSubmit)="saveEditStaff()">
+          <!-- Category Selector (3-Tier Separation) -->
+          <div class="form-group mb-3">
+            <label class="d-block mb-2 font-weight-bold">ব্যবহারকারী ক্যাটাগরি / টিয়ার <span class="required">*</span></label>
+            <div class="category-toggle-grid">
+              <label class="cat-toggle-card" [class.selected]="editForm.category === 'SYSTEM_ADMIN'">
+                <input type="radio" name="editCat" value="SYSTEM_ADMIN" [(ngModel)]="editForm.category" />
+                <span class="material-symbols-outlined cat-icon text-danger">security</span>
+                <div class="cat-text">
+                  <strong>সিস্টেম প্রশাসন</strong>
+                  <span>সুপার অ্যাডমিন / টেকনিক্যাল</span>
+                </div>
+              </label>
+              <label class="cat-toggle-card" [class.selected]="editForm.category === 'HEAD_OFFICE'">
+                <input type="radio" name="editCat" value="HEAD_OFFICE" [(ngModel)]="editForm.category" />
+                <span class="material-symbols-outlined cat-icon text-primary">corporate_fare</span>
+                <div class="cat-text">
+                  <strong>প্রধান কার্যালয়</strong>
+                  <span>হেড অফিস কর্মকর্তা / অডিটর</span>
+                </div>
+              </label>
+              <label class="cat-toggle-card" [class.selected]="editForm.category === 'BRANCH_STAFF'">
+                <input type="radio" name="editCat" value="BRANCH_STAFF" [(ngModel)]="editForm.category" />
+                <span class="material-symbols-outlined cat-icon text-success">storefront</span>
+                <div class="cat-text">
+                  <strong>শাখা ও মাঠকর্মী</strong>
+                  <span>শাখা ও ফিল্ড কিস্তি কালেকশন</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <!-- Full Name -->
+            <div class="form-group">
+              <label>পূর্ণ নাম <span class="required">*</span></label>
+              <input type="text" class="form-control" [(ngModel)]="editForm.name" name="name" required />
+            </div>
+
+            <!-- Phone -->
+            <div class="form-group">
+              <label>মোবাইল নম্বর <span class="required">*</span></label>
+              <input type="text" class="form-control" [(ngModel)]="editForm.phone" name="phone" required />
+            </div>
+
+            <!-- Email -->
+            <div class="form-group">
+              <label>ইমেইল ঠিকানা</label>
+              <input type="email" class="form-control" [(ngModel)]="editForm.email" name="email" />
+            </div>
+
+            <!-- NID -->
+            <div class="form-group">
+              <label>জাতীয় পরিচয়পত্র নম্বর (NID)</label>
+              <input type="text" class="form-control" [(ngModel)]="editForm.nidNumber" name="nidNumber" />
+            </div>
+
+            <!-- Role (Dynamically loaded from Database) -->
+            <div class="form-group">
+              <label>পদবী / পদমর্যাদা (Role) <span class="required">*</span></label>
+              <select class="form-control" [(ngModel)]="editForm.role" name="role">
+                @for (r of rolesList(); track r.roleId) {
+                  <option [value]="r.code">
+                    {{ lang.isBangla() ? r.nameBn : r.nameEn }} ({{ r.code }})
+                  </option>
+                }
+              </select>
+            </div>
+
+            <!-- Branch Assignment (Only for branch staff) -->
+            <div class="form-group">
+              <label>কর্মস্থল / শাখা <span class="required">*</span></label>
+              @if (editForm.category === 'SYSTEM_ADMIN') {
+                <input type="text" class="form-control bg-light" value="সিস্টেম প্রশাসন (সর্বজনীন)" readonly disabled />
+              } @else if (editForm.category === 'HEAD_OFFICE') {
+                <input type="text" class="form-control bg-light" value="প্রধান কার্যালয় (হেড অফিস)" readonly disabled />
+              } @else {
+                <select class="form-control" [(ngModel)]="editForm.branchId" name="branchId">
+                  @for (b of branches(); track b.branchId) {
+                    <option [value]="b.branchId">{{ b.name }} (শাখা #{{ b.branchId }})</option>
+                  }
+                </select>
+              }
+            </div>
+
+            <!-- Monthly Salary -->
+            <div class="form-group">
+              <label>মাসিক বেতন / সম্মানী (টাকা)</label>
+              <input type="number" class="form-control" [(ngModel)]="editForm.salary" name="salary" />
+            </div>
+
+            <!-- Status -->
+            <div class="form-group">
+              <label>অ্যাকাউন্ট স্ট্যাটাস</label>
+              <select class="form-control" [(ngModel)]="editForm.status" name="status">
+                <option value="ACTIVE">সক্রিয় (Active)</option>
+                <option value="INACTIVE">নিষ্ক্রিয় (Inactive)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Assigned Routes / Centers Multi-Select (Only for Branch Staff) -->
+          @if (editForm.category === 'BRANCH_STAFF') {
+            <div class="form-group mt-3">
+              <label>দায়িত্বপ্রাপ্ত কাজের এলাকা / রুট ও সমিতি নির্বাচন করুন</label>
+              <p class="form-hint">এই কর্মকর্তা কোন কোন সমিতির কিস্তি আদায় ও তদারকি করবেন তা সিলেক্ট করুন:</p>
+
+              <div class="routes-checkbox-grid">
+                @for (center of getAvailableCentersForSelectedBranch(); track center.centerId) {
+                  <label class="route-checkbox-card" [class.selected]="isCenterAssigned(center.centerId)">
+                    <input 
+                      type="checkbox" 
+                      [checked]="isCenterAssigned(center.centerId)" 
+                      (change)="toggleCenterAssignment(center.centerId)" />
+                    <div class="card-content">
+                      <strong>{{ center.name }}</strong>
+                      <div class="sub-text">{{ center.location }} ({{ center.meetingDay }})</div>
+                    </div>
+                  </label>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Edit Reason for Audit -->
+          <div class="form-group mt-3">
+            <label>হালনাগাদ করার কারণ (অডিট হিস্ট্রি নোট)</label>
+            <input 
+              type="text" 
+              class="form-control" 
+              placeholder="যেমন: নতুন রুট দায়িত্ব প্রদান অথবা বেতন সমন্বয়..." 
+              [(ngModel)]="editReason" 
+              name="editReason" />
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeEditStaff()">বাতিল</button>
+        <button class="btn btn-primary" [disabled]="isSavingStaff()" (click)="saveEditStaff()">
+          @if (isSavingStaff()) {
+            <span class="material-symbols-outlined spinning">sync</span>
+            <span>সংরক্ষণ হচ্ছে...</span>
+          } @else {
+            <span class="material-symbols-outlined">save</span>
+            <span>তথ্য সংরক্ষণ করুন</span>
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================== -->
+<!-- 4. DELETE STAFF MODAL -->
+<!-- ========================================== -->
+@if (showDeleteModal() && staffToDelete()) {
+  <div class="modal-backdrop" (click)="closeDeleteStaff()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="text-danger">কর্মী সফট-ডিলিট নিশ্চিতকরণ</h3>
+        <button class="close-btn" (click)="closeDeleteStaff()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p class="mb-3">
+          আপনি কি নিশ্চিত যে কর্মী <strong>#{{ staffToDelete()!.userId }} — {{ staffToDelete()!.name }}</strong> ({{ getRoleTitle(staffToDelete()!.role) }})-কে বাতিল বা ডিলিট করতে চান?
+        </p>
+        <div class="alert alert-warning mb-3">
+          <span class="material-symbols-outlined alert-icon">warning</span>
+          <span>নোট: কর্মীর কোনো তথ্য চিরতরে মুছে যাবে না; এটি অডিট হিস্ট্রি সহ সফট-ডিলিট হিসেবে সংরক্ষিত থাকবে।</span>
+        </div>
+        <div class="form-group">
+          <label>বাতিল করার কারণ উল্লেখ করুন <span class="required">*</span></label>
+          <textarea 
+            class="form-control" 
+            rows="3" 
+            placeholder="যেমন: কর্মী চাকরি ত্যাগ করেছেন অথবা অন্য শাখায় বদলি হয়েছেন..." 
+            [(ngModel)]="deleteReason"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeDeleteStaff()">বাতিল</button>
+        <button class="btn btn-danger" [disabled]="isDeletingStaff()" (click)="confirmDeleteStaff()">
+          @if (isDeletingStaff()) {
+            <span class="material-symbols-outlined spinning">sync</span>
+            <span>ডিলিট হচ্ছে...</span>
+          } @else {
+            <span>হ্যাঁ, সফট-ডিলিট করুন</span>
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================== -->
+<!-- 5. ADD NEW ROLE MODAL -->
+<!-- ========================================== -->
+@if (showAddRoleModal()) {
+  <div class="modal-backdrop" (click)="closeAddRole()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>
+          <span class="material-symbols-outlined title-icon text-primary">add_moderator</span>
+          <span>{{ lang.isBangla() ? 'নতুন পদবী/রোল তৈরি করুন' : 'Create New Role' }}</span>
+        </h3>
+        <button class="close-btn" (click)="closeAddRole()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <form (ngSubmit)="saveNewRole()">
+          <!-- Category Selector -->
+          <div class="form-group mb-3">
+            <label class="d-block mb-2 font-weight-bold">পদবীর টিয়ার / বিভাগ <span class="required">*</span></label>
+            <div class="category-toggle-grid">
+              <label class="cat-toggle-card" [class.selected]="roleForm.category === 'SYSTEM_ADMIN'">
+                <input type="radio" name="addRoleCat" value="SYSTEM_ADMIN" [(ngModel)]="roleForm.category" />
+                <span class="material-symbols-outlined cat-icon text-danger">security</span>
+                <div class="cat-text">
+                  <strong>সিস্টেম প্রশাসন</strong>
+                  <span>সুপার অ্যাডমিন ও টেকনিক্যাল</span>
+                </div>
+              </label>
+              <label class="cat-toggle-card" [class.selected]="roleForm.category === 'HEAD_OFFICE'">
+                <input type="radio" name="addRoleCat" value="HEAD_OFFICE" [(ngModel)]="roleForm.category" />
+                <span class="material-symbols-outlined cat-icon text-primary">corporate_fare</span>
+                <div class="cat-text">
+                  <strong>প্রধান কার্যালয়</strong>
+                  <span>হেড অফিস এক্সিকিউটিভ ও অডিটর</span>
+                </div>
+              </label>
+              <label class="cat-toggle-card" [class.selected]="roleForm.category === 'BRANCH_STAFF'">
+                <input type="radio" name="addRoleCat" value="BRANCH_STAFF" [(ngModel)]="roleForm.category" />
+                <span class="material-symbols-outlined cat-icon text-success">storefront</span>
+                <div class="cat-text">
+                  <strong>শাখা ও মাঠ পর্যায়</strong>
+                  <span>শাখা ব্যবস্থাপক, ক্যাশিয়ার, মাঠকর্মী</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <!-- Role Code -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'রোল কোড (Role Code - ইংরেজিতে)' : 'Role Code (Uppercase)' }} <span class="required">*</span></label>
+              <input 
+                type="text" 
+                class="form-control font-mono" 
+                [(ngModel)]="roleForm.code" 
+                name="roleCode" 
+                required 
+                placeholder="যেমন: LOAN_RECOVERY_OFFICER" />
+              <span class="form-hint">{{ lang.isBangla() ? 'ইউনিক কোড যেমন: ASST_BRANCH_MANAGER বা LOAN_AGENT' : 'Unique uppercase code' }}</span>
+            </div>
+
+            <!-- Status -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'স্ট্যাটাস' : 'Status' }}</label>
+              <select class="form-control" [(ngModel)]="roleForm.status" name="roleStatus">
+                <option value="ACTIVE">{{ lang.t('active') }}</option>
+                <option value="INACTIVE">{{ lang.t('inactive') }}</option>
+              </select>
+            </div>
+
+            <!-- Bangla Name -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'পদবীর নাম (বাংলায়)' : 'Role Title (Bangla)' }} <span class="required">*</span></label>
+              <input 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="roleForm.nameBn" 
+                name="roleNameBn" 
+                required 
+                placeholder="যেমন: ঋণ আদায় কর্মকর্তা" />
+            </div>
+
+            <!-- English Name -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'পদবীর নাম (ইংরেজিতে)' : 'Role Title (English)' }} <span class="required">*</span></label>
+              <input 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="roleForm.nameEn" 
+                name="roleNameEn" 
+                required 
+                placeholder="e.g. Loan Recovery Officer" />
+            </div>
+
+            <!-- Description -->
+            <div class="form-group span-2">
+              <label>{{ lang.isBangla() ? 'কাজের সংক্ষিপ্ত বিবরণ' : 'Role Description' }}</label>
+              <input 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="roleForm.description" 
+                name="roleDescription" 
+                placeholder="যেমন: মাঠে বকেয়া কিস্তি তদারকি ও ঋণ গ্রাহকদের সাথে যোগাযোগ..." />
+            </div>
+          </div>
+
+          <!-- Permissions Selector Grid -->
+          <div class="form-group mt-3">
+            <label>{{ lang.isBangla() ? 'এই পদবীর অনুমোদিত অধিকারসমূহ (Permissions)' : 'Assigned Permissions' }}</label>
+            <p class="form-hint mb-2">এই পদবীর কর্মীরা সিস্টেমে যেসকল কাজ করতে পারবেন সেগুলো টিক দিন:</p>
+
+            <div class="permissions-picker-grid">
+              @for (perm of systemPermissions; track perm.key) {
+                <label class="permission-check-card" [class.selected]="isRolePermissionSelected(perm.key)">
+                  <input 
+                    type="checkbox" 
+                    [checked]="isRolePermissionSelected(perm.key)" 
+                    (change)="toggleRolePermission(perm.key)" />
+                  <div class="perm-card-content">
+                    <strong class="perm-title">{{ lang.isBangla() ? perm.labelBn : perm.labelEn }}</strong>
+                    <span class="perm-code"><code>{{ perm.key }}</code></span>
+                    <p class="perm-desc">{{ perm.descriptionBn }}</p>
+                  </div>
+                </label>
+              }
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeAddRole()">{{ lang.t('cancel') }}</button>
+        <button class="btn btn-primary" [disabled]="isSavingRole()" (click)="saveNewRole()">
+          @if (isSavingRole()) {
+            <span class="material-symbols-outlined spinning">sync</span>
+            <span>{{ lang.isBangla() ? 'তৈরি হচ্ছে...' : 'Saving...' }}</span>
+          } @else {
+            <span class="material-symbols-outlined">save</span>
+            <span>{{ lang.isBangla() ? 'পদবী সংরক্ষণ করুন' : 'Save Role' }}</span>
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================== -->
+<!-- 6. EDIT ROLE MODAL -->
+<!-- ========================================== -->
+@if (showEditRoleModal() && selectedRoleForEdit()) {
+  <div class="modal-backdrop" (click)="closeEditRole()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>
+          <span class="material-symbols-outlined title-icon text-primary">edit_note</span>
+          <span>{{ lang.isBangla() ? 'পদবী তথ্য ও অধিকার সম্পাদনা' : 'Edit Role & Permissions' }} (#{{ selectedRoleForEdit()!.roleId }})</span>
+        </h3>
+        <button class="close-btn" (click)="closeEditRole()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <form (ngSubmit)="saveEditRole()">
+          <!-- Category Selector -->
+          <div class="form-group mb-3">
+            <label class="d-block mb-2 font-weight-bold">পদবীর টিয়ার / বিভাগ <span class="required">*</span></label>
+            <div class="category-toggle-grid">
+              <label class="cat-toggle-card" [class.selected]="roleForm.category === 'SYSTEM_ADMIN'">
+                <input type="radio" name="editRoleCat" value="SYSTEM_ADMIN" [(ngModel)]="roleForm.category" />
+                <span class="material-symbols-outlined cat-icon text-danger">security</span>
+                <div class="cat-text">
+                  <strong>সিস্টেম প্রশাসন</strong>
+                  <span>সুপার অ্যাডমিন / টেকনিক্যাল</span>
+                </div>
+              </label>
+              <label class="cat-toggle-card" [class.selected]="roleForm.category === 'HEAD_OFFICE'">
+                <input type="radio" name="editRoleCat" value="HEAD_OFFICE" [(ngModel)]="roleForm.category" />
+                <span class="material-symbols-outlined cat-icon text-primary">corporate_fare</span>
+                <div class="cat-text">
+                  <strong>প্রধান কার্যালয়</strong>
+                  <span>হেড অফিস এক্সিকিউটিভ</span>
+                </div>
+              </label>
+              <label class="cat-toggle-card" [class.selected]="roleForm.category === 'BRANCH_STAFF'">
+                <input type="radio" name="editRoleCat" value="BRANCH_STAFF" [(ngModel)]="roleForm.category" />
+                <span class="material-symbols-outlined cat-icon text-success">storefront</span>
+                <div class="cat-text">
+                  <strong>শাখা ও মাঠ পর্যায়</strong>
+                  <span>শাখা ও মাঠকর্মী</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <!-- Role Code (Readonly) -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'রোল কোড' : 'Role Code' }}</label>
+              <input 
+                type="text" 
+                class="form-control font-mono bg-light" 
+                [value]="roleForm.code" 
+                readonly 
+                disabled />
+              <span class="form-hint">{{ lang.isBangla() ? 'রোল কোড পরিবর্তনযোগ্য নয়।' : 'Role code cannot be modified.' }}</span>
+            </div>
+
+            <!-- Status -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'স্ট্যাটাস' : 'Status' }}</label>
+              <select class="form-control" [(ngModel)]="roleForm.status" name="roleStatus">
+                <option value="ACTIVE">{{ lang.t('active') }}</option>
+                <option value="INACTIVE">{{ lang.t('inactive') }}</option>
+              </select>
+            </div>
+
+            <!-- Bangla Name -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'পদবীর নাম (বাংলায়)' : 'Role Title (Bangla)' }} <span class="required">*</span></label>
+              <input 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="roleForm.nameBn" 
+                name="roleNameBn" 
+                required />
+            </div>
+
+            <!-- English Name -->
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'পদবীর নাম (ইংরেজিতে)' : 'Role Title (English)' }} <span class="required">*</span></label>
+              <input 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="roleForm.nameEn" 
+                name="roleNameEn" 
+                required />
+            </div>
+
+            <!-- Description -->
+            <div class="form-group span-2">
+              <label>{{ lang.isBangla() ? 'কাজের সংক্ষিপ্ত বিবরণ' : 'Role Description' }}</label>
+              <input 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="roleForm.description" 
+                name="roleDescription" />
+            </div>
+          </div>
+
+          <!-- Permissions Selector Grid -->
+          <div class="form-group mt-3">
+            <label>{{ lang.isBangla() ? 'অনুমোদিত অধিকারসমূহ (Permissions)' : 'Permissions' }}</label>
+            <div class="permissions-picker-grid">
+              @for (perm of systemPermissions; track perm.key) {
+                <label class="permission-check-card" [class.selected]="isRolePermissionSelected(perm.key)">
+                  <input 
+                    type="checkbox" 
+                    [checked]="isRolePermissionSelected(perm.key)" 
+                    (change)="toggleRolePermission(perm.key)" />
+                  <div class="perm-card-content">
+                    <strong class="perm-title">{{ lang.isBangla() ? perm.labelBn : perm.labelEn }}</strong>
+                    <span class="perm-code"><code>{{ perm.key }}</code></span>
+                    <p class="perm-desc">{{ perm.descriptionBn }}</p>
+                  </div>
+                </label>
+              }
+            </div>
+          </div>
+
+          <!-- Audit Reason -->
+          <div class="form-group mt-3">
+            <label>{{ lang.isBangla() ? 'পরিবর্তনের কারণ (অডিট নোট)' : 'Reason for Edit' }}</label>
+            <input 
+              type="text" 
+              class="form-control" 
+              placeholder="যেমন: নতুন পারমিশন যুক্ত করা হলো..." 
+              [(ngModel)]="roleEditReason" 
+              name="roleEditReason" />
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeEditRole()">{{ lang.t('cancel') }}</button>
+        <button class="btn btn-primary" [disabled]="isSavingRole()" (click)="saveEditRole()">
+          @if (isSavingRole()) {
+            <span class="material-symbols-outlined spinning">sync</span>
+            <span>{{ lang.isBangla() ? 'আপডেট হচ্ছে...' : 'Saving...' }}</span>
+          } @else {
+            <span class="material-symbols-outlined">save</span>
+            <span>{{ lang.isBangla() ? 'আপডেট সম্পন্ন করুন' : 'Update Role' }}</span>
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================== -->
+<!-- 7. DELETE ROLE MODAL -->
+<!-- ========================================== -->
+@if (showDeleteRoleModal() && roleToDelete()) {
+  <div class="modal-backdrop" (click)="closeDeleteRole()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="text-danger">{{ lang.isBangla() ? 'পদবী মুছে ফেলা নিশ্চিতকরণ' : 'Confirm Delete Role' }}</h3>
+        <button class="close-btn" (click)="closeDeleteRole()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p class="mb-3">
+          আপনি কি নিশ্চিত যে পদবী <strong>#{{ roleToDelete()!.roleId }} — {{ lang.isBangla() ? roleToDelete()!.nameBn : roleToDelete()!.nameEn }}</strong> (<code>{{ roleToDelete()!.code }}</code>)-কে সফট-ডিলিট করতে চান?
+        </p>
+        <div class="alert alert-warning mb-3">
+          <span class="material-symbols-outlined alert-icon">warning</span>
+          <span>{{ lang.isBangla() ? 'নোট: এটি ডাটাবেজে সফট-ডিলিট হিসেবে সংরক্ষিত থাকবে এবং এই পদবীতে কোনো সক্রিয় কর্মী থাকা যাবে না।' : 'This role will be soft-deleted in database.' }}</span>
+        </div>
+        <div class="form-group">
+          <label>{{ lang.isBangla() ? 'বাতিল করার কারণ উল্লেখ করুন' : 'Reason for Deletion' }} <span class="required">*</span></label>
+          <textarea 
+            class="form-control" 
+            rows="3" 
+            placeholder="যেমন: এই পদবীটি আর প্রতিষ্ঠানে কার্যকর নয়..." 
+            [(ngModel)]="roleDeleteReason"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeDeleteRole()">{{ lang.t('cancel') }}</button>
+        <button class="btn btn-danger" [disabled]="isDeletingRole()" (click)="confirmDeleteRole()">
+          @if (isDeletingRole()) {
+            <span class="material-symbols-outlined spinning">sync</span>
+            <span>{{ lang.isBangla() ? 'ডিলিট হচ্ছে...' : 'Deleting...' }}</span>
+          } @else {
+            <span>{{ lang.isBangla() ? 'হ্যাঁ, সফট-ডিলিট করুন' : 'Yes, Soft Delete' }}</span>
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}

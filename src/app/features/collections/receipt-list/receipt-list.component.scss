@@ -1,0 +1,196 @@
+.page-container {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h2 {
+    font-size: 1.45rem;
+    font-weight: 800;
+  }
+}
+
+.filter-card {
+  padding: 0.875rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+  max-width: 500px;
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 20px;
+  }
+
+  .search-input {
+    padding-left: 40px;
+  }
+}
+
+.count-tag {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.text-right {
+  text-align: right;
+}
+
+.receipt-dialog {
+  max-width: 500px;
+}
+
+.receipt-voucher {
+  border: 2px dashed #cbd5e1;
+  padding: 1.5rem;
+  border-radius: var(--radius-md);
+  background-color: #fafafa;
+
+  .voucher-top {
+    text-align: center;
+    border-bottom: 2px solid #0f766e;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+
+    .org-name {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .branch-line {
+      font-size: 0.8125rem;
+      color: #0f766e;
+      font-weight: 600;
+    }
+
+    .voucher-title {
+      display: inline-block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background-color: #f0fdfa;
+      border: 1px solid #99f6e4;
+      padding: 0.15rem 0.6rem;
+      border-radius: var(--radius-full);
+      margin-top: 0.5rem;
+      color: #0f766e;
+    }
+  }
+
+  .voucher-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    color: #334155;
+    margin-bottom: 1rem;
+    background-color: #fff;
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid #e2e8f0;
+  }
+
+  .voucher-items-table {
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-sm);
+    background-color: #fff;
+    margin-bottom: 2rem;
+
+    .v-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      border-bottom: 1px solid #f1f5f9;
+
+      &.v-header {
+        background-color: #f8fafc;
+        font-weight: 700;
+        color: #475569;
+        font-size: 0.8125rem;
+      }
+
+      &.v-total {
+        background-color: #f0fdfa;
+        font-weight: 800;
+        border-bottom: none;
+        color: #0f766e;
+
+        .total-bold {
+          font-size: 1.15rem;
+        }
+      }
+    }
+  }
+
+  .voucher-signatures {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2rem;
+
+    .sig-box {
+      width: 160px;
+      text-align: center;
+
+      .sig-line {
+        border-top: 1px solid #94a3b8;
+        margin-bottom: 0.25rem;
+      }
+
+      .sig-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+
+      .sig-name {
+        font-size: 0.7rem;
+        color: #0f766e;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+.loading-state, .empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+
+  span {
+    font-size: 44px;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+.border-0 {
+  border: none !important;
+}
+
+.p-0 {
+  padding: 0 !important;
+}

@@ -1,0 +1,237 @@
+<div class="page-container daily-sheet-page">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <div class="title-with-badge">
+        <h2>সমিতির মাঠ কালেকশন শিট (Daily Field Sheet)</h2>
+        <span class="scope-pill" [ngClass]="userScopeInfo().cssClass">
+          <span class="material-symbols-outlined">{{ userScopeInfo().icon }}</span>
+          <span>{{ userScopeInfo().tag }}</span>
+        </span>
+      </div>
+      <p class="sub-text">{{ userScopeInfo().subtitle }}</p>
+    </div>
+
+    <!-- Center/Samity Selector -->
+    <div class="header-right">
+      <div class="center-selector-box">
+        <label>সমিতি / রুট:</label>
+        @if (filteredCenters().length > 0) {
+          <select class="form-control select-samity" [value]="selectedCenterId()" (change)="onCenterChange($event)">
+            @for (center of filteredCenters(); track center.centerId) {
+              <option [value]="center.centerId">
+                {{ center.name }} ({{ center.meetingDay }} - {{ center.location }})
+              </option>
+            }
+          </select>
+        } @else {
+          <span class="no-routes-notice">কোনো অনুমোদিত রুট নেই</span>
+        }
+
+        @if (authService.canApproveLoans()) {
+          <a routerLink="/branches" class="btn btn-sm btn-outline-primary" title="নতুন রুট বা সমিতি তৈরি করুন">
+            <span class="material-symbols-outlined">add_location_alt</span>
+            <span>+ রুট যোগ</span>
+          </a>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Today's Collection Status Bar -->
+  <div class="status-summary-bar">
+    <div class="summary-stat">
+      <div class="stat-label">সমিতির আজকের টার্গেট</div>
+      <div class="stat-val amount-bdt">৳ {{ getTotalExpectedToday() | number }}</div>
+    </div>
+
+    <div class="stat-divider"></div>
+
+    <div class="summary-stat">
+      <div class="stat-label">বাস্তবে আদায় হয়েছে</div>
+      <div class="stat-val amount-bdt text-success">৳ {{ getTotalCollectedToday() | number }}</div>
+    </div>
+
+    <div class="stat-divider"></div>
+
+    <div class="summary-stat">
+      <div class="stat-label">বাকি / ঘাটতি</div>
+      <div class="stat-val amount-bdt text-danger">৳ {{ (getTotalExpectedToday() - getTotalCollectedToday()) | number }}</div>
+    </div>
+
+    <div class="summary-stat right-aligned">
+      <span class="badge badge-active">
+        {{ sheetItems().length }} জন সদস্যের কিস্তি তালিকা
+      </span>
+    </div>
+  </div>
+
+  <!-- Collection Sheet Table Card -->
+  <div class="card table-card">
+    <div class="card-body p-0">
+      @if (loading()) {
+        <div class="loading-state">
+          <span class="material-symbols-outlined spinning">sync</span>
+          <p>সমিতির কালেকশন শিট প্রস্তুত হচ্ছে...</p>
+        </div>
+      } @else if (filteredCenters().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">lock_person</span>
+          <h4>কোনো বরাদ্দকৃত রুট পাওয়া যায়নি</h4>
+          <p class="text-muted">আপনার অ্যাকাউন্টে বর্তমানে কোনো সমিতি বা কালেকশন রুট বরাদ্দ নেই। অন্যান্য রুটের তথ্য গোপন রাখা হয়েছে।</p>
+        </div>
+      } @else if (sheetItems().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">group_off</span>
+          <h4>এই রুটে বর্তমানে কোনো সক্রিয় কিস্তি নেই</h4>
+          <p class="text-muted">নির্বাচিত সমিতিতে বর্তমানে কোনো বকেয়া বা আদায়যোগ্য সক্রিয় ঋণ অ্যাকাউন্ট নেই।</p>
+        </div>
+      } @else {
+        <!-- 100% Fit Table Container with No Horizontal Scroll -->
+        <div class="table-container daily-sheet-container border-0">
+          <table class="data-table daily-sheet-table">
+            <thead>
+              <tr>
+                <th class="col-id">গ্রাহক আইডি</th>
+                <th class="col-name">সদস্যের নাম</th>
+                <th class="col-account">ঋণ হিসাব</th>
+                <th class="col-inst-no">কিস্তি নং</th>
+                <th class="col-date">নির্ধারিত তারিখ</th>
+                <th class="col-inst-amount">কিস্তির টাকা</th>
+                <th class="col-savings">সঞ্চয় জমা</th>
+                <th class="col-total">মোট পাওনা</th>
+                <th class="col-status">আজকের অবস্থা</th>
+                <th class="col-action text-right">কালেকশন অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of sheetItems(); track item.loan.loanId) {
+                <tr [class.collected-row]="item.isCollectedToday">
+                  <td class="col-id">
+                    <span class="id-tag">#{{ item.loan.customerId }}</span>
+                  </td>
+                  <td class="col-name">
+                    <strong class="customer-name" [title]="item.loan.customerName">{{ item.loan.customerName }}</strong>
+                  </td>
+                  <td class="col-account">
+                    <span class="account-tag" [title]="item.loan.loanAccountNo">{{ item.loan.loanAccountNo }}</span>
+                  </td>
+                  <td class="col-inst-no">
+                    <span class="badge" [ngClass]="item.isCollectedToday ? 'badge-paid' : 'badge-secondary font-bold'">
+                      কিস্তি {{ item.nextInstallment.installmentNo }}
+                    </span>
+                  </td>
+                  <td class="col-date">
+                    <span class="date-txt">{{ item.nextInstallment.dueDate }}</span>
+                  </td>
+                  <td class="col-inst-amount amount-bdt">
+                    ৳ {{ (item.nextInstallment.expectedPrincipal + item.nextInstallment.expectedProfit) | number }}
+                  </td>
+                  <td class="col-savings amount-bdt text-success">
+                    +৳ {{ item.nextInstallment.expectedSavings | number }}
+                  </td>
+                  <td class="col-total">
+                    <strong class="amount-bdt text-primary">৳ {{ item.nextInstallment.expectedTotalAmount | number }}</strong>
+                  </td>
+                  <td class="col-status">
+                    @if (item.isCollectedToday) {
+                      <span class="badge badge-paid" title="এই সপ্তাহের কিস্তি আদায় সম্পন্ন">
+                        <span class="material-symbols-outlined icon-mini">check_circle</span>
+                        <span>আদায় সম্পন্ন</span>
+                      </span>
+                    } @else {
+                      <span class="badge badge-pending">অনাদায়ী</span>
+                    }
+                  </td>
+                  <td class="col-action text-right">
+                    @if (item.isCollectedToday) {
+                      <div class="collected-status-wrap">
+                        <div class="paid-badge-mini">
+                          <span class="material-symbols-outlined mini-icon">verified</span>
+                          <span>এই সপ্তাহে আদায় সম্পন্ন</span>
+                        </div>
+                        @if (item.nextPendingInstallmentNo) {
+                          <div class="next-due-hint">
+                            পরবর্তী কিস্তি {{ item.nextPendingInstallmentNo }}: {{ item.daysRemainingForNext }} দিন পর ({{ item.nextEligibleDate }})
+                          </div>
+                        } @else {
+                          <div class="next-due-hint text-success">
+                            সকল কিস্তি পরিশোধিত
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <button class="btn btn-sm btn-success btn-collect-action" (click)="openCollectModal(item)">
+                        <span class="material-symbols-outlined">payments</span>
+                        <span>টাকা গ্রহণ</span>
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+</div>
+
+<!-- Quick Collection Modal -->
+@if (activeItemForCollect()) {
+  <div class="modal-backdrop" (click)="closeCollectModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-success">payments</span>
+          <h3>মাঠপর্যায়ে কিস্তি আদায় নিশ্চিতকরণ</h3>
+        </div>
+        <button class="close-btn" (click)="closeCollectModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="member-header-box mb-3">
+          <div>সদস্য: <strong>{{ activeItemForCollect()!.loan.customerName }}</strong> (#{{ activeItemForCollect()!.loan.customerId }})</div>
+          <div>ঋণ অ্যাকাউন্ট: <strong>{{ activeItemForCollect()!.loan.loanAccountNo }}</strong> (কিস্তি নং {{ activeItemForCollect()!.nextInstallment.installmentNo }})</div>
+          <div>সংগ্রহকারী মাঠকর্মী: <strong>{{ authService.currentUser().name }}</strong></div>
+        </div>
+
+        <div class="form-grid-modal">
+          <div class="form-group">
+            <label>কিস্তির টাকা (আসল + লাভ) <span class="required">*</span></label>
+            <input type="number" class="form-control" [(ngModel)]="collectAmount" name="collectAmount" />
+          </div>
+
+          <div class="form-group">
+            <label>বাধ্যতামূলক সঞ্চয় জমা <span class="required">*</span></label>
+            <input type="number" class="form-control" [(ngModel)]="collectSavings" name="collectSavings" />
+          </div>
+
+          <div class="form-group span-2">
+            <label>টাকা প্রাপ্তির মাধ্যম</label>
+            <select class="form-control" [(ngModel)]="collectMethod" name="collectMethod">
+              <option value="CASH">নগদ গ্রহণ (Cash in Field)</option>
+              <option value="BKASH">বিকাশ (bKash)</option>
+              <option value="NAGAD">নগদ (Nagad)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="total-collection-preview">
+          <span>সর্বমোট আদায় জমা:</span>
+          <span class="total-val">৳ {{ (collectAmount + collectSavings) | number }}</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeCollectModal()">বাতিল</button>
+        <button class="btn btn-success" (click)="confirmCollection()" [disabled]="isProcessing">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>{{ isProcessing ? 'প্রসেসিং হচ্ছে...' : 'কালেকশন ও মানি রিসিট প্রস্তুত' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}

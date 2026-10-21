@@ -1,0 +1,1172 @@
+/* ========================================================
+   eKisti Core Design System & Global Styles
+   Modern, High-Contrast Microfinance Financial Dashboard
+   ======================================================== */
+
+:root {
+  /* Brand Palette - Deep Emerald Teal & Slate */
+  --primary: #0f766e;
+  --primary-hover: #0d655f;
+  --primary-light: #14b8a6;
+  --primary-subtle: #f0fdfa;
+  --primary-border: #99f6e4;
+
+  --secondary: #0f172a;
+  --secondary-light: #1e293b;
+  --secondary-subtle: #f8fafc;
+
+  /* Semantic Feedback */
+  --success: #10b981;
+  --success-bg: #ecfdf5;
+  --success-border: #a7f3d0;
+
+  --warning: #f59e0b;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+
+  --danger: #ef4444;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+
+  --info: #3b82f6;
+  --info-bg: #eff6ff;
+  --info-border: #bfdbfe;
+
+  /* Surfaces & Neutrals */
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --border-color: #e2e8f0;
+  --border-focus: #14b8a6;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-white: #ffffff;
+
+  /* Shadows & Elevations */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* Borders & Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Transition */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+}
+
+/* Base Reset & Typography */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.ekisti-app-body {
+  font-family: 'Hind Siliguri', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Material Symbols Adjustments */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ========================================================
+   Common UI Components & Utilities
+   ======================================================== */
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  font-family: inherit;
+  text-decoration: none;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), #115e59);
+  color: #fff;
+  border-color: var(--primary);
+
+  &:hover {
+    background: linear-gradient(135deg, #115e59, #042f2e);
+  }
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: var(--text-primary);
+  border-color: var(--border-color);
+
+  &:hover {
+    background-color: var(--bg-main);
+    border-color: #cbd5e1;
+  }
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+
+  &:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+  }
+}
+
+.btn-danger {
+  background-color: #fff;
+  color: var(--danger);
+  border-color: var(--danger-border);
+
+  &:hover {
+    background-color: var(--danger-bg);
+  }
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Cards */
+.card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: box-shadow var(--transition-normal);
+
+  &:hover {
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.card-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+
+  h2,
+  h3 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  line-height: 1.2;
+}
+
+.badge-paid,
+.badge-active,
+.badge-success {
+  background-color: var(--success-bg);
+  color: #065f46;
+  border: 1px solid var(--success-border);
+}
+
+.badge-pending,
+.badge-applied,
+.badge-warning {
+  background-color: var(--warning-bg);
+  color: #92400e;
+  border: 1px solid var(--warning-border);
+}
+
+.badge-overdue,
+.badge-danger,
+.badge-defaulted {
+  background-color: var(--danger-bg);
+  color: #991b1b;
+  border: 1px solid var(--danger-border);
+}
+
+.badge-closed,
+.badge-secondary {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.badge-role {
+  background-color: #f0fdfa;
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+}
+
+/* Tables */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+
+  th {
+    background-color: #f8fafc;
+    color: var(--text-secondary);
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    vertical-align: middle;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr:hover {
+    background-color: #f8fafc;
+  }
+}
+
+/* Form Controls */
+.form-group {
+  margin-bottom: 1.25rem;
+
+  label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.375rem;
+
+    .required {
+      color: var(--danger);
+      margin-left: 2px;
+    }
+  }
+
+  .form-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+select.form-control {
+  appearance: auto;
+  cursor: pointer;
+}
+
+/* Currency & Number Highlighters */
+.amount-bdt {
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.01em;
+
+  &::before {
+    content: "৳ ";
+    font-family: 'Hind Siliguri', sans-serif;
+    font-weight: 600;
+  }
+}
+
+/* Modal Overlay & Dialog */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-dialog {
+  background-color: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.25s ease-out;
+}
+
+.modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+
+    &:hover {
+      color: var(--text-primary);
+      background-color: var(--bg-main);
+    }
+  }
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background-color: #f8fafc;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ========================================================
+   GLOBAL PRINT STYLES - CUSTOMER DETAILS & ID CARD
+   ======================================================== */
+.print-official-header,
+.print-signatures-row {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  /* 1. Global Reset for Printing */
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    font-size: 11px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* 2. When Printing Customer Details */
+  body.print-customer-details,
+  body:has(#printableCustomerDetails) {
+
+    /* Hide all surrounding app chrome, sidebars, navbars, and main customer directory table */
+    app-navbar,
+    app-sidebar,
+    .app-navbar,
+    .app-sidebar,
+    .page-container,
+    .filter-card,
+    .app-layout>*:not(.app-main-body),
+    .app-main-body>*:not(.app-content-area),
+    .modal-backdrop>*:not(#printableCustomerDetails) {
+      display: none !important;
+    }
+
+    .app-layout,
+    .app-main-body,
+    .app-content-area {
+      display: block !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+
+    .modal-backdrop {
+      position: static !important;
+      inset: auto !important;
+      background: none !important;
+      backdrop-filter: none !important;
+      display: block !important;
+      width: 100% !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      z-index: auto !important;
+    }
+
+    #printableCustomerDetails {
+      position: static !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+
+      .modal-header,
+      .modal-footer {
+        display: none !important;
+      }
+
+      .modal-body {
+        padding: 0 !important;
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+      }
+
+      /* Official Header for Print */
+      .print-official-header {
+        display: block !important;
+        border-bottom: 2px solid #0f172a !important;
+        padding-bottom: 5px !important;
+        margin-bottom: 8px !important;
+
+        .org-titles {
+          text-align: center !important;
+
+          h2 {
+            margin: 0 !important;
+            font-size: 1.15rem !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+          }
+
+          p {
+            margin: 2px 0 0 0 !important;
+            font-size: 0.75rem !important;
+            color: #475569 !important;
+          }
+        }
+
+        .print-meta-bar {
+          display: flex !important;
+          justify-content: space-between !important;
+          margin-top: 5px !important;
+          font-size: 0.72rem !important;
+          color: #334155 !important;
+          border-top: 1px dashed #cbd5e1 !important;
+          padding-top: 3px !important;
+        }
+      }
+
+      /* Profile Top Strip */
+      .cust-profile-banner {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 4px !important;
+        padding: 5px 8px !important;
+        margin-bottom: 6px !important;
+        page-break-inside: avoid !important;
+
+        .profile-left {
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+
+          .cust-avatar-large {
+            width: 30px !important;
+            height: 30px !important;
+            font-size: 0.9rem !important;
+            border: 1px solid #cbd5e1 !important;
+          }
+
+          .cust-details {
+            h4 {
+              font-size: 0.88rem !important;
+              margin: 0 0 2px 0 !important;
+            }
+
+            .meta-row {
+              gap: 8px !important;
+
+              .meta-item {
+                font-size: 0.68rem !important;
+                color: #334155 !important;
+
+                span {
+                  font-size: 12px !important;
+                }
+              }
+            }
+          }
+        }
+
+        .profile-right {
+          gap: 8px !important;
+
+          .stat-pill {
+            .stat-label {
+              font-size: 0.6rem !important;
+            }
+
+            .stat-value {
+              font-size: 0.82rem !important;
+            }
+
+            .badge {
+              font-size: 0.62rem !important;
+            }
+          }
+        }
+      }
+
+      /* Two Column Info Grid */
+      .details-grid-two {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+        margin-bottom: 6px !important;
+        page-break-inside: avoid !important;
+      }
+
+      .info-card {
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        border-radius: 4px !important;
+        padding: 5px 8px !important;
+        page-break-inside: avoid !important;
+
+        h5 {
+          font-size: 0.75rem !important;
+          margin-bottom: 4px !important;
+          color: #0f172a !important;
+
+          span {
+            font-size: 13px !important;
+          }
+        }
+
+        .info-list {
+          gap: 2px !important;
+          font-size: 0.68rem !important;
+
+          .info-item {
+            padding: 1px 0 !important;
+
+            .lbl {
+              font-size: 0.65rem !important;
+              color: #475569 !important;
+            }
+
+            .val {
+              font-size: 0.68rem !important;
+              color: #0f172a !important;
+            }
+          }
+        }
+
+        .guarantor-mini-box {
+          margin-top: 3px !important;
+          padding: 3px 6px !important;
+          border: 1px dashed #cbd5e1 !important;
+          font-size: 0.65rem !important;
+        }
+      }
+
+      /* Loans Section & Table */
+      .full-width-card {
+        margin-top: 6px !important;
+        page-break-inside: avoid !important;
+
+        .card-header-flex.compact-header {
+          padding-bottom: 3px !important;
+          margin-bottom: 4px !important;
+
+          h5 {
+            font-size: 0.78rem !important;
+          }
+
+          .loan-stats-pills .mini-pill {
+            font-size: 0.62rem !important;
+            padding: 1px 4px !important;
+          }
+        }
+      }
+
+      .loans-table-container {
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 4px !important;
+        overflow: visible !important;
+        width: 100% !important;
+      }
+
+      .loans-table,
+      .loans-table-compact {
+        width: 100% !important;
+        table-layout: fixed !important;
+        border-collapse: collapse !important;
+        page-break-inside: avoid !important;
+
+        th,
+        td {
+          border: 1px solid #cbd5e1 !important;
+          padding: 3px 4px !important;
+          font-size: 0.65rem !important;
+          line-height: 1.2 !important;
+        }
+
+        thead th {
+          background-color: #f1f5f9 !important;
+          color: #0f172a !important;
+          font-weight: 700 !important;
+          font-size: 0.65rem !important;
+        }
+
+        .loan-cell-title {
+          .loan-link {
+            font-size: 0.68rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+            text-decoration: none !important;
+          }
+
+          .loan-sub-purpose {
+            font-size: 0.6rem !important;
+            color: #475569 !important;
+          }
+        }
+
+        .date-status-cell {
+          font-size: 0.62rem !important;
+
+          .sub-status {
+            font-size: 0.58rem !important;
+          }
+        }
+
+        .amt-split-cell {
+          font-size: 0.62rem !important;
+        }
+
+        .inst-cell-progress {
+          .inst-label-row {
+            font-size: 0.6rem !important;
+          }
+
+          .prog-bar-slim {
+            border: 1px solid #cbd5e1 !important;
+            height: 3px !important;
+          }
+        }
+      }
+
+      /* Savings Settlement Compact */
+      .settlement-card-compact {
+        border: 1px solid #cbd5e1 !important;
+        background: #f8fafc !important;
+        padding: 4px 8px !important;
+        margin-top: 5px !important;
+        page-break-inside: avoid !important;
+
+        .settlement-flex-row {
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+        }
+
+        .settlement-left-info {
+          display: flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          font-size: 0.7rem !important;
+
+          .s-icon {
+            font-size: 15px !important;
+          }
+
+          .lbl-s {
+            font-size: 0.7rem !important;
+            color: #334155 !important;
+          }
+
+          .val-s {
+            font-size: 0.85rem !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+          }
+
+          .badge {
+            font-size: 0.6rem !important;
+            padding: 1px 4px !important;
+          }
+        }
+
+        .alert-warning {
+          font-size: 0.62rem !important;
+          padding: 2px 6px !important;
+          margin-top: 3px !important;
+          border: 1px solid #fde68a !important;
+          background: #fffbeb !important;
+        }
+      }
+
+      /* Savings Ledger in Print */
+      .savings-history-card {
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 4px !important;
+        padding: 4px 8px !important;
+        margin-top: 5px !important;
+        page-break-inside: avoid !important;
+
+        .card-header-clean {
+          padding-bottom: 2px !important;
+          margin-bottom: 3px !important;
+          border-bottom: 1px solid #cbd5e1 !important;
+
+          h5 {
+            font-size: 0.72rem !important;
+          }
+
+          .badge {
+            font-size: 0.6rem !important;
+            padding: 1px 4px !important;
+          }
+        }
+
+        .savings-ledger-table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+
+          th,
+          td {
+            border: 1px solid #cbd5e1 !important;
+            padding: 2px 4px !important;
+            font-size: 0.62rem !important;
+            line-height: 1.15 !important;
+          }
+
+          thead th {
+            background-color: #f1f5f9 !important;
+            font-weight: 700 !important;
+          }
+
+          .date-cell {
+            font-size: 0.6rem !important;
+          }
+
+          .reason-cell {
+            max-width: 200px !important;
+          }
+        }
+      }
+
+      /* Hide savings when collapsed in print */
+      .print-savings-hidden,
+      body.print-savings-excluded .print-savings-hidden {
+        display: none !important;
+      }
+
+      .savings-collapsed-banner {
+        display: none !important;
+      }
+
+      /* Signatures Row */
+      .print-signatures-row {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: flex-end !important;
+        margin-top: 1.25rem !important;
+        padding-top: 0.5rem !important;
+        border-top: 1px solid #cbd5e1 !important;
+        page-break-inside: avoid !important;
+
+        .print-sig-col {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          flex: 1 !important;
+
+          .print-sig-line {
+            width: 120px !important;
+            border-bottom: 1px solid #0f172a !important;
+            margin-bottom: 4px !important;
+          }
+
+          .print-sig-title {
+            font-size: 0.65rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+          }
+        }
+      }
+
+      /* Hide interactive buttons in print */
+      .btn-stat-edit,
+      .btn-mini-action,
+      .btn-settle,
+      .settlement-action-col,
+      .settlement-actions-group,
+      .btn-action-icon,
+      .close-btn,
+      .btn-header-print,
+      .modal-header-actions,
+      .no-print {
+        display: none !important;
+      }
+    }
+  }
+
+  /* 3. When Printing ID Card */
+  body.print-id-card {
+
+    app-navbar,
+    app-sidebar,
+    .page-container {
+      display: none !important;
+    }
+
+    .modal-backdrop {
+      position: static !important;
+      background: none !important;
+      display: flex !important;
+      justify-content: center !important;
+      padding: 0 !important;
+    }
+
+    #printableCustomerIdCard {
+      position: static !important;
+      transform: none !important;
+      box-shadow: none !important;
+      margin: 20px auto !important;
+      border: 1px solid #94a3b8 !important;
+    }
+
+    .no-print {
+      display: none !important;
+    }
+  }
+
+  /* 4. When Printing Loan Disbursement Receipt */
+  body:has(#printableLoanDisburseReceipt) {
+
+    app-navbar,
+    app-sidebar,
+    .app-navbar,
+    .app-sidebar,
+    .page-container,
+    .filter-card,
+    .app-layout>*:not(.app-main-body),
+    .app-main-body>*:not(.app-content-area),
+    .modal-backdrop>*:not(#printableLoanDisburseReceipt) {
+      display: none !important;
+    }
+
+    .app-layout,
+    .app-main-body,
+    .app-content-area {
+      display: block !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+
+    .modal-backdrop {
+      position: static !important;
+      inset: auto !important;
+      background: none !important;
+      backdrop-filter: none !important;
+      display: block !important;
+      width: 100% !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      z-index: auto !important;
+    }
+
+    #printableLoanDisburseReceipt {
+      position: static !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      box-shadow: none !important;
+      border: none !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+
+      .modal-header,
+      .modal-footer,
+      .no-print {
+        display: none !important;
+      }
+
+      .modal-body {
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+    }
+  }
+
+  /* 5. When Printing Customer Admission Form or Blank Customer Application Form */
+  body:has(#printableCustomerAdmissionForm),
+  body:has(#printableBlankCustomerForm) {
+    @page {
+      size: A4 portrait;
+      margin: 8mm 10mm;
+    }
+
+    app-navbar,
+    app-sidebar,
+    .app-navbar,
+    .app-sidebar,
+    .page-container,
+    .filter-card,
+    .app-layout>*:not(.app-main-body),
+    .app-main-body>*:not(.app-content-area),
+    .modal-backdrop>*:not(#printableCustomerAdmissionForm):not(#printableBlankCustomerForm) {
+      display: none !important;
+    }
+
+    .app-layout,
+    .app-main-body,
+    .app-content-area {
+      display: block !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+
+    .modal-backdrop {
+      position: static !important;
+      inset: auto !important;
+      background: none !important;
+      backdrop-filter: none !important;
+      display: block !important;
+      width: 100% !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      z-index: auto !important;
+    }
+
+    #printableCustomerAdmissionForm,
+    #printableBlankCustomerForm {
+      position: static !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      box-shadow: none !important;
+      border: none !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+
+      .modal-header,
+      .modal-footer,
+      .form-header-bar,
+      .form-footer-bar,
+      .screen-input,
+      .no-print {
+        display: none !important;
+      }
+
+      .modal-body,
+      .form-scroll-body {
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        display: block !important;
+      }
+
+      .a4-page-sheet,
+      .blank-app-form {
+        border: 1.5px solid #0f766e !important;
+        padding: 5mm 7mm !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        page-break-before: avoid !important;
+        break-before: avoid !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 275mm !important;
+        height: auto !important;
+        min-height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+
+        .f-line.dotted,
+        .s-line.dotted {
+          border-bottom: 1px dotted #64748b !important;
+          color: transparent !important;
+        }
+
+        .screen-input {
+          display: none !important;
+        }
+
+        input,
+        select,
+        textarea {
+          border: none !important;
+          border-bottom: 1px dotted #64748b !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          outline: none !important;
+          color: #0f172a !important;
+          font-weight: 600 !important;
+          -webkit-appearance: none !important;
+          appearance: none !important;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,132 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <h2>ক্যাশিয়ার ভল্ট ও মাঠকর্মীর ক্যাশ ক্লোজিং (Reconciliation)</h2>
+      <p class="sub-text">মাঠকর্মী কর্তৃক সংগৃহীত নগদ টাকা যাচাই ও শাখার ক্যাশ ভল্টে গ্রহণ</p>
+    </div>
+  </div>
+
+  <!-- Vault Status & Reconciliation Summary -->
+  <div class="reconciliation-stats-grid">
+    <div class="stat-card vault-highlight">
+      <div class="stat-icon-wrap primary-icon">
+        <span class="material-symbols-outlined">account_balance</span>
+      </div>
+      <div class="stat-info">
+        <div class="stat-label">শাখা ভল্ট ব্যালেন্স (Vault Cash)</div>
+        <div class="stat-val amount-bdt">{{ branch()?.currentVaultCash | number:'1.2-2' }}</div>
+        <div class="stat-subtext">মিরপুর শাখা • নিরাপদ সংরক্ষিত ক্যাশ</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon-wrap success-icon">
+        <span class="material-symbols-outlined">price_check</span>
+      </div>
+      <div class="stat-info">
+        <div class="stat-label">শাখায় জমা সম্পন্ন ক্যাশ</div>
+        <div class="stat-val amount-bdt text-success">{{ getCompletedHandoverAmount() | number }}</div>
+        <div class="stat-subtext">ক্যাশিয়ার ভেরিফাইড ও ভল্টে জমা</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon-wrap warning-icon">
+        <span class="material-symbols-outlined">pending_actions</span>
+      </div>
+      <div class="stat-info">
+        <div class="stat-label">মাঠকর্মীদের কাছে বাকি ক্যাশ</div>
+        <div class="stat-val amount-bdt text-warning">{{ getPendingHandoverAmount() | number }}</div>
+        <div class="stat-subtext">এখনও শাখায় জমা দেয়নি</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Handover Verification Table -->
+  <div class="card mt-4">
+    <div class="card-header">
+      <div class="header-title">
+        <span class="material-symbols-outlined text-primary">fact_check</span>
+        <h3>মাঠকর্মীদের সংগৃহীত ক্যাশ তালিকা ও জমা গ্রহণ</h3>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      @if (loading()) {
+        <div class="loading-state">
+          <span class="material-symbols-outlined spinning">sync</span>
+          <p>ক্যাশ ক্লোজিং ডেটা লোড হচ্ছে...</p>
+        </div>
+      } @else if (collectionsToReconcile().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined">task_alt</span>
+          <p>কোনো অপেক্ষমাণ ক্যাশ কালেকশন নেই।</p>
+        </div>
+      } @else {
+        <div class="table-container border-0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>রসিদ নং</th>
+                <th>মাঠকর্মী (Field Officer)</th>
+                <th>গ্রাহক</th>
+                <th>সংগৃহীত পরিমাণ</th>
+                <th>আদায়ের মাধ্যম</th>
+                <th>আদায়ের তারিখ ও সময়</th>
+                <th>ভল্টে জমা অবস্থা</th>
+                <th class="text-right">ক্যাশিয়ার অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (rec of collectionsToReconcile(); track rec.receiptId) {
+                <tr>
+                  <td>
+                    <span class="id-tag">#{{ rec.receiptId }}</span>
+                  </td>
+                  <td>
+                    <strong>{{ rec.collectedByName }}</strong>
+                    <div class="sub-text">অফিসার আইডি: #{{ rec.collectedByUserId }}</div>
+                  </td>
+                  <td>
+                    <strong>{{ rec.customerName }}</strong>
+                    <div class="sub-text">হিসাব #LN-{{ rec.loanId }}</div>
+                  </td>
+                  <td>
+                    <strong class="amount-bdt text-success">{{ rec.totalAmountCollected | number }}</strong>
+                    <div class="sub-text">কিস্তি: ৳{{ rec.principalAmountCollected + rec.profitAmountCollected }} + সঞ্চয়: ৳{{ rec.savingsAmountCollected }}</div>
+                  </td>
+                  <td>
+                    <span class="badge" [ngClass]="rec.paymentMethod === 'CASH' ? 'badge-secondary' : 'badge-paid'">
+                      {{ rec.paymentMethod }}
+                    </span>
+                  </td>
+                  <td>{{ rec.collectionDate | date:'medium' }}</td>
+                  <td>
+                    @if (rec.isHandedOverToBranch) {
+                      <span class="badge badge-paid">
+                        <span class="material-symbols-outlined icon-mini">verified</span>
+                        ভল্টে জমা গৃহীত
+                      </span>
+                    } @else {
+                      <span class="badge badge-warning">মাঠকর্মীর কাছে</span>
+                    }
+                  </td>
+                  <td class="text-right">
+                    @if (rec.isHandedOverToBranch) {
+                      <span class="text-muted text-sm">সম্পন্ন</span>
+                    } @else {
+                      <button class="btn btn-sm btn-success" (click)="verifyAndAcceptCash(rec)" [disabled]="verifying()">
+                        <span class="material-symbols-outlined">done_all</span>
+                        <span>ক্যাশ গ্রহণ করুন</span>
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+</div>

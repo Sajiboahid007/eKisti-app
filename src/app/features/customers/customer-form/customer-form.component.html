@@ -1,0 +1,282 @@
+<div class="page-container customer-form-page">
+  <div class="page-header">
+    <div class="header-left">
+      <div class="breadcrumb">
+        <a routerLink="/customers">গ্রাহক তালিকা</a>
+        <span class="material-symbols-outlined separator">chevron_right</span>
+        <span>{{ isEditMode() ? 'গ্রাহক তথ্য সংশোধন (Update)' : 'নতুন গ্রাহক নিবন্ধন (KYC)' }}</span>
+      </div>
+      <h2>{{ isEditMode() ? 'গ্রাহক #' + customerId() + ' এর তথ্য এডিট' : 'নতুন সদস্য / গ্রাহক ফরম' }}</h2>
+    </div>
+    <div class="header-right">
+      <a routerLink="/customers" class="btn btn-secondary">
+        <span class="material-symbols-outlined">arrow_back</span>
+        <span>ফিরে যান</span>
+      </a>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="card p-5 text-center loading-box">
+      <span class="material-symbols-outlined spinning text-primary" style="font-size: 36px;">sync</span>
+      <p class="mt-2 text-muted">গ্রাহকের ডেটা লোড হচ্ছে...</p>
+    </div>
+  } @else {
+    <form (ngSubmit)="onSubmit()" class="form-layout">
+      <!-- Mandatory reason box when editing -->
+      @if (isEditMode()) {
+        <div class="card alert-card-edit mb-3">
+          <div class="card-header bg-warning-subtle">
+            <div class="header-title text-warning">
+              <span class="material-symbols-outlined">edit_note</span>
+              <h3>অডিট হিস্ট্রি: সংশোধনের কারণ (Mandatory for Audit Trail)</h3>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="form-group mb-0">
+              <label>পরিবর্তনের কারণ বা নোট লিখুন <span class="required">*</span></label>
+              <input 
+                type="text" 
+                class="form-control" 
+                placeholder="যেমন: গ্রাহক নতুন মোবাইল নম্বর দিয়েছেন বা স্থায়ী ঠিকানা সংশোধন করা হয়েছে..."
+                [(ngModel)]="updateReason" 
+                name="updateReason" 
+                required />
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- MAIN SECTIONS SIDE BY SIDE GRID -->
+      <div class="form-sections-grid">
+        <!-- LEFT COLUMN: Organization & KYC -->
+        <div class="form-column">
+          <!-- 0. Branch & Samity / Route Assignment -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <div class="header-title">
+                <span class="material-symbols-outlined text-primary">alt_route</span>
+                <h3>শাখা ও সমিতি/রুট নির্ধারণ (Branch & Route)</h3>
+              </div>
+            </div>
+            <div class="card-body form-grid">
+              <div class="form-group">
+                <label>শাখা নির্বাচন করুন <span class="required">*</span></label>
+                <select class="form-control" [ngModel]="customer.branchId" (ngModelChange)="onBranchChange($event)" name="branchId" required>
+                  @for (b of branches(); track b.branchId) {
+                    <option [ngValue]="b.branchId">{{ b.name }} ({{ b.branchCode }})</option>
+                  }
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>সমিতি / কালেকশন রুট <span class="required">*</span></label>
+                <select class="form-control" [ngModel]="customer.centerId" (ngModelChange)="onCenterChange($event)" name="centerId" required>
+                  @for (c of availableCenters(); track c.centerId) {
+                    <option [ngValue]="c.centerId">{{ c.name }} ({{ c.location }})</option>
+                  }
+                  @empty {
+                    <option [ngValue]="null" disabled>{{ lang.isBangla() ? 'এই শাখায় এখনও কোনো রুট নেই' : 'No routes in this branch' }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="form-group span-2">
+                <label>দায়িত্বপ্রাপ্ত মাঠকর্মী (Field Officer)</label>
+                <select class="form-control" [(ngModel)]="customer.assignedFieldOfficerId" name="assignedFO">
+                  @for (s of staffList(); track s.userId) {
+                    <option [ngValue]="s.userId">{{ s.name }} ({{ lang.isBangla() ? s.roleTitleBangla : s.roleTitleEnglish }})</option>
+                  }
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 1. Personal & KYC Info -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <div class="header-title">
+                <span class="material-symbols-outlined text-primary">person</span>
+                <h3>১. ব্যক্তিগত ও পরিচয় সংক্রান্ত তথ্য (KYC)</h3>
+              </div>
+            </div>
+            <div class="card-body form-grid">
+              <div class="form-group span-2">
+                <label>গ্রাহকের পূর্ণ নাম <span class="required">*</span></label>
+                <input type="text" class="form-control" [(ngModel)]="customer.fullName" name="fullName" required placeholder="যেমন: রহিমা বেগম" />
+              </div>
+
+              <div class="form-group">
+                <label>প্রাথমিক মোবাইল নম্বর <span class="required">*</span></label>
+                <input type="tel" class="form-control" [(ngModel)]="customer.phonePrimary" name="phonePrimary" required placeholder="017XXXXXXXX" />
+              </div>
+
+              <div class="form-group">
+                <label>বিকল্প মোবাইল নম্বর</label>
+                <input type="tel" class="form-control" [(ngModel)]="customer.phoneSecondary" name="phoneSecondary" placeholder="018XXXXXXXX" />
+              </div>
+
+              <div class="form-group span-2">
+                <label>জাতীয় পরিচয়পত্র নম্বর (NID) <span class="required">*</span></label>
+                <input type="text" class="form-control" [(ngModel)]="customer.nidNumber" name="nidNumber" required placeholder="১০ বা ১৭ ডিজিটের এনআইডি" />
+              </div>
+
+              <div class="form-group">
+                <label>পিতার নাম</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.fatherName" name="fatherName" placeholder="পিতার নাম লিখুন" />
+              </div>
+
+              <div class="form-group">
+                <label>মাতার নাম</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.motherName" name="motherName" placeholder="মাতার নাম লিখুন" />
+              </div>
+
+              <div class="form-group">
+                <label>স্বামী / স্ত্রীর নাম</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.spouseName" name="spouseName" placeholder="স্বামী বা স্ত্রীর নাম" />
+              </div>
+
+              <div class="form-group">
+                <label>জন্ম তারিখ</label>
+                <input type="date" class="form-control" [(ngModel)]="customer.dateOfBirth" name="dateOfBirth" />
+              </div>
+
+              <div class="form-group span-2">
+                <label>লিঙ্গ</label>
+                <select class="form-control" [(ngModel)]="customer.gender" name="gender">
+                  <option value="FEMALE">মহিলা (Female)</option>
+                  <option value="MALE">পুরুষ (Male)</option>
+                  <option value="OTHER">অন্যান্য</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Address, Occupation, Guarantor & Collateral -->
+        <div class="form-column">
+          <!-- 2. Address & House Details -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <div class="header-title">
+                <span class="material-symbols-outlined text-primary">home_pin</span>
+                <h3>২. বর্তমান ও স্থায়ী ঠিকানা</h3>
+              </div>
+            </div>
+            <div class="card-body form-grid">
+              <div class="form-group span-2">
+                <label>বর্তমান ঠিকানা (বাড়ি, রোড, এলাকা) <span class="required">*</span></label>
+                <input type="text" class="form-control" [(ngModel)]="customer.presentAddress.villageOrStreet" name="villageOrStreet" required placeholder="বাড়ি নং ১৪, লেন ২, পল্লবী" />
+              </div>
+
+              <div class="form-group">
+                <label>থানা / উপজেলা</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.presentAddress.thanaOrUpazila" name="thanaOrUpazila" />
+              </div>
+
+              <div class="form-group">
+                <label>জেলা</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.presentAddress.district" name="district" />
+              </div>
+
+              <div class="form-group span-2">
+                <label>বাসস্থানের ধরন (House Status) <span class="required">*</span></label>
+                <select class="form-control" [(ngModel)]="customer.presentAddress.houseOwnership" name="houseOwnership">
+                  <option value="OWN">নিজস্ব বাড়ি (Own House)</option>
+                  <option value="RENTED">ভাড়া বাড়ি (Rented)</option>
+                  <option value="FAMILY">পারিবারিক বাড়ি (Family)</option>
+                </select>
+              </div>
+
+              <div class="form-group span-2">
+                <label>স্থায়ী ঠিকানা (গ্রাম, ডাকঘর, জেলা)</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.permanentAddress.villageOrStreet" name="permVillage" placeholder="গ্রাম: চরভদ্রাসন, ফরিদপুর" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Occupation & Financial Details -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <div class="header-title">
+                <span class="material-symbols-outlined text-primary">storefront</span>
+                <h3>৩. পেশা ও আয়ের তথ্য</h3>
+              </div>
+            </div>
+            <div class="card-body form-grid">
+              <div class="form-group">
+                <label>মূল পেশা</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.occupation" name="occupation" placeholder="যেমন: মুদি দোকান, দর্জি, ব্যবসা" />
+              </div>
+
+              <div class="form-group">
+                <label>দোকান / ব্যবসার নাম</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.businessName" name="businessName" placeholder="যেমন: রহিমা ভ্যারাইটিজ স্টোর" />
+              </div>
+
+              <div class="form-group span-2">
+                <label>আনুমানিক মাসিক আয় (টাকা)</label>
+                <input type="number" class="form-control" [(ngModel)]="customer.monthlyIncome" name="monthlyIncome" placeholder="25000" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Guarantor & Collateral -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <div class="header-title">
+                <span class="material-symbols-outlined text-primary">security</span>
+                <h3>৪. জামিনদার ও জামানত (চেক ও স্ট্যাম্প)</h3>
+              </div>
+            </div>
+            <div class="card-body form-grid">
+              <div class="form-group">
+                <label>১ম জামিনদারের নাম <span class="required">*</span></label>
+                <input type="text" class="form-control" [(ngModel)]="customer.primaryGuarantor.name" name="gName" required placeholder="জামিনদারের নাম" />
+              </div>
+
+              <div class="form-group">
+                <label>সম্পর্ক</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.primaryGuarantor.relation" name="gRel" placeholder="স্বামী / ভাই / পিতা" />
+              </div>
+
+              <div class="form-group">
+                <label>জামিনদারের মোবাইল</label>
+                <input type="tel" class="form-control" [(ngModel)]="customer.primaryGuarantor.phone" name="gPhone" placeholder="017XXXXXXXX" />
+              </div>
+
+              <div class="form-group">
+                <label>জামিনদারের এনআইডি (NID)</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.primaryGuarantor.nidNumber" name="gNid" placeholder="NID নম্বর" />
+              </div>
+
+              <!-- Cheque Info -->
+              <div class="form-group">
+                <label>সিকিউরিটি ব্যাংক ও চেক নম্বর</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.collateral.chequeNumber" name="chequeNumber" placeholder="যেমন: IBBL-CHQ-889922" />
+              </div>
+
+              <!-- Stamp Info -->
+              <div class="form-group">
+                <label>৩০০ টাকার স্ট্যাম্প নম্বর</label>
+                <input type="text" class="form-control" [(ngModel)]="customer.collateral.stampNumber" name="stampNumber" placeholder="যেমন: ST-300-884129" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit Action Bar -->
+      <div class="action-footer">
+        <a routerLink="/customers" class="btn btn-secondary">
+          <span class="material-symbols-outlined">close</span>
+          <span>বাতিল করুন</span>
+        </a>
+        <button type="submit" class="btn btn-primary" [disabled]="submitting()">
+          <span class="material-symbols-outlined">save</span>
+          <span>{{ submitting() ? 'সংরক্ষণ হচ্ছে...' : (isEditMode() ? 'পরিবর্তন সংরক্ষণ করুন' : 'গ্রাহক নিবন্ধন সম্পন্ন করুন') }}</span>
+        </button>
+      </div>
+    </form>
+  }
+</div>

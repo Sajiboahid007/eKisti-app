@@ -1,0 +1,90 @@
+<header class="app-header">
+  <div class="header-left">
+    <div class="brand">
+      <div class="brand-logo">
+        <span class="material-symbols-outlined logo-icon">account_balance</span>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">{{ lang.t('appName') }}</span>
+        <span class="brand-sub">{{ lang.t('appTagline') }}</span>
+      </div>
+    </div>
+
+    <div class="branch-pill" [ngClass]="{
+      'branch-pill-admin': authService.isSystemAdmin(),
+      'branch-pill-ho': authService.isHeadOfficeUser(),
+      'branch-pill-branch': authService.isBranchStaff()
+    }">
+      <span class="material-symbols-outlined branch-icon">
+        {{ authService.isSystemAdmin() ? 'security' : (authService.isHeadOfficeUser() ? 'corporate_fare' : 'store') }}
+      </span>
+      <span class="branch-name">{{ authService.currentUser().branchName }}</span>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <!-- Language Toggle Button -->
+    <button class="nav-lang-btn" (click)="lang.toggleLanguage()" [title]="lang.isBangla() ? 'Switch to English' : 'বাংলায় দেখুন'">
+      <span class="material-symbols-outlined lang-icon">translate</span>
+      <span class="lang-text">{{ lang.isBangla() ? 'ENG' : 'বাংলা' }}</span>
+    </button>
+
+    <!-- Role Switcher Grouped by 3 Tiers -->
+    <div class="role-switcher">
+      <label for="roleSelect" class="switcher-label">
+        <span class="material-symbols-outlined switch-icon">supervised_user_circle</span>
+        <span>{{ lang.t('switchRole') }}:</span>
+      </label>
+      <select 
+        id="roleSelect"
+        class="role-dropdown"
+        [value]="authService.currentUser().userId"
+        (change)="onUserSelect($event)">
+        <optgroup [label]="lang.isBangla() ? '🛡️ সিস্টেম প্রশাসন (System Admins)' : '🛡️ System Admins'">
+          @for (user of getCategoryUsers('SYSTEM_ADMIN'); track user.userId) {
+            <option [value]="user.userId">
+              {{ user.name }} ({{ lang.isBangla() ? user.roleTitleBangla : user.roleTitleEnglish }})
+            </option>
+          }
+        </optgroup>
+        <optgroup [label]="lang.isBangla() ? '🏢 প্রধান কার্যালয় (Head Office)' : '🏢 Head Office'">
+          @for (user of getCategoryUsers('HEAD_OFFICE'); track user.userId) {
+            <option [value]="user.userId">
+              {{ user.name }} ({{ lang.isBangla() ? user.roleTitleBangla : user.roleTitleEnglish }})
+            </option>
+          }
+        </optgroup>
+        <optgroup [label]="lang.isBangla() ? '🌾 শাখা ও মাঠকর্মী (Branch Staff)' : '🌾 Branch Staff'">
+          @for (user of getCategoryUsers('BRANCH_STAFF'); track user.userId) {
+            <option [value]="user.userId">
+              {{ user.name }} ({{ lang.isBangla() ? user.roleTitleBangla : user.roleTitleEnglish }})
+            </option>
+          }
+        </optgroup>
+      </select>
+    </div>
+
+    <!-- Active User Profile Badge -->
+    <div class="user-profile">
+      <div class="user-avatar" [ngClass]="{
+        'avatar-admin': authService.isSystemAdmin(),
+        'avatar-ho': authService.isHeadOfficeUser(),
+        'avatar-branch': authService.isBranchStaff()
+      }">
+        {{ authService.currentUser().name.charAt(0) }}
+      </div>
+      <div class="user-info">
+        <div class="user-name">{{ authService.currentUser().name }}</div>
+        <div class="user-role-badge">
+          {{ lang.isBangla() ? authService.currentUser().roleTitleBangla : authService.currentUser().roleTitleEnglish }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Logout Button -->
+    <button class="btn btn-sm btn-logout" (click)="logout()" [title]="lang.t('logout')">
+      <span class="material-symbols-outlined">logout</span>
+      <span class="logout-label">{{ lang.t('logout') }}</span>
+    </button>
+  </div>
+</header>
