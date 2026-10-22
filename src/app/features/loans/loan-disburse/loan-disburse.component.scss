@@ -44,6 +44,39 @@
   align-items: start;
 }
 
+.form-card,
+.calculation-card {
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+
+    .header-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+
+      .material-symbols-outlined {
+        font-size: 1.35rem;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+        line-height: 1.25;
+      }
+    }
+  }
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

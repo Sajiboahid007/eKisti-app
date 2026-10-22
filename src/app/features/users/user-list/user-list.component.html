@@ -122,23 +122,18 @@
             <table class="data-table compact-table">
               <thead>
                 <tr>
-                  <th style="width: 80px;">{{ lang.t('userId') }}</th>
                   <th>{{ lang.t('userName') }}</th>
-                  <th>{{ lang.t('userEmail') }}</th>
-                  <th>{{ lang.t('userPhone') }}</th>
+                  <th>{{ lang.isBangla() ? 'যোগাযোগ' : 'Contact' }}</th>
                   <th>{{ lang.t('userRole') }}</th>
                   <th>{{ lang.isBangla() ? 'অধিক্ষেত্র / কর্মক্ষেত্র' : 'Scope / Jurisdiction' }}</th>
-                  <th>{{ lang.t('userSalary') }}</th>
-                  <th style="width: 90px;">{{ lang.t('status') }}</th>
-                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
+                  <th class="text-end">{{ lang.t('userSalary') }}</th>
+                  <th style="width: 120px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
                 </tr>
               </thead>
               <tbody>
                 @for (staff of systemAdmins(); track staff.userId) {
                   <tr>
-                    <td>
-                      <span class="id-tag">#{{ staff.userId }}</span>
-                    </td>
                     <td>
                       <div class="user-name-cell">
                         <div class="user-avatar-mini avatar-admin">
@@ -146,12 +141,18 @@
                         </div>
                         <div class="user-info-text">
                           <strong class="user-title">{{ staff.name }}</strong>
-                          <div class="user-subtext">NID: {{ staff.nidNumber || '19852692518000' + staff.userId }}</div>
+                          @if (staff.nidNumber) {
+                          <div class="user-subtext">NID: {{ staff.nidNumber }}</div>
+                          }
                         </div>
                       </div>
                     </td>
-                    <td class="email-cell">{{ staff.email }}</td>
-                    <td class="phone-cell">{{ staff.phone }}</td>
+                    <td>
+                      <div class="contact-cell">
+                        <span class="phone-cell">{{ staff.phone }}</span>
+                        <span class="email-cell" [title]="staff.email">{{ staff.email }}</span>
+                      </div>
+                    </td>
                     <td>
                       <span class="badge" [ngClass]="getRoleBadgeClass(staff.role)">
                         {{ getRoleTitle(staff.role) }}
@@ -163,20 +164,13 @@
                         {{ staff.branchName || 'সিস্টেম প্রশাসন (সর্বজনীন)' }}
                       </span>
                     </td>
-                    <td class="amount-bdt">৳ {{ staff.salary | number }}</td>
+                    <td class="amount-bdt text-end">৳ {{ staff.salary | number }}</td>
                     <td>
-                      @if (staff.status === 'ACTIVE') {
-                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
-                      } @else {
-                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
-                      }
-                    </td>
-                    <td class="text-center">
-                      <div class="action-buttons-compact">
+                      <div class="status-cell">
                         @if (authService.canManageUsers()) {
-                          <button 
-                            class="btn-toggle-switch" 
-                            [class.active]="staff.status === 'ACTIVE'" 
+                          <button
+                            class="btn-toggle-switch"
+                            [class.active]="staff.status === 'ACTIVE'"
                             (click)="toggleUserStatus(staff)"
                             [title]="staff.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
                             <span class="toggle-track">
@@ -184,7 +178,15 @@
                             </span>
                           </button>
                         }
-
+                        @if (staff.status === 'ACTIVE') {
+                          <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                        } @else {
+                          <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
                         <!-- View Details -->
                         <button 
                           class="btn-action-icon btn-view" 
@@ -278,23 +280,18 @@
             <table class="data-table compact-table">
               <thead>
                 <tr>
-                  <th style="width: 80px;">{{ lang.t('userId') }}</th>
                   <th>{{ lang.t('userName') }}</th>
-                  <th>{{ lang.t('userEmail') }}</th>
-                  <th>{{ lang.t('userPhone') }}</th>
+                  <th>{{ lang.isBangla() ? 'যোগাযোগ' : 'Contact' }}</th>
                   <th>{{ lang.t('userRole') }}</th>
                   <th>{{ lang.isBangla() ? 'কর্মস্থল' : 'Workplace' }}</th>
-                  <th>{{ lang.t('userSalary') }}</th>
-                  <th style="width: 90px;">{{ lang.t('status') }}</th>
-                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
+                  <th class="text-end">{{ lang.t('userSalary') }}</th>
+                  <th style="width: 120px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
                 </tr>
               </thead>
               <tbody>
                 @for (staff of headOfficeStaff(); track staff.userId) {
                   <tr>
-                    <td>
-                      <span class="id-tag">#{{ staff.userId }}</span>
-                    </td>
                     <td>
                       <div class="user-name-cell">
                         <div class="user-avatar-mini avatar-ho">
@@ -302,12 +299,18 @@
                         </div>
                         <div class="user-info-text">
                           <strong class="user-title">{{ staff.name }}</strong>
-                          <div class="user-subtext">NID: {{ staff.nidNumber || '19852692518000' + staff.userId }}</div>
+                          @if (staff.nidNumber) {
+                          <div class="user-subtext">NID: {{ staff.nidNumber }}</div>
+                          }
                         </div>
                       </div>
                     </td>
-                    <td class="email-cell">{{ staff.email }}</td>
-                    <td class="phone-cell">{{ staff.phone }}</td>
+                    <td>
+                      <div class="contact-cell">
+                        <span class="phone-cell">{{ staff.phone }}</span>
+                        <span class="email-cell" [title]="staff.email">{{ staff.email }}</span>
+                      </div>
+                    </td>
                     <td>
                       <span class="badge" [ngClass]="getRoleBadgeClass(staff.role)">
                         {{ getRoleTitle(staff.role) }}
@@ -319,20 +322,13 @@
                         {{ staff.branchName || 'প্রধান কার্যালয় (হেড অফিস)' }}
                       </span>
                     </td>
-                    <td class="amount-bdt">৳ {{ staff.salary | number }}</td>
+                    <td class="amount-bdt text-end">৳ {{ staff.salary | number }}</td>
                     <td>
-                      @if (staff.status === 'ACTIVE') {
-                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
-                      } @else {
-                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
-                      }
-                    </td>
-                    <td class="text-center">
-                      <div class="action-buttons-compact">
+                      <div class="status-cell">
                         @if (authService.canManageUsers()) {
-                          <button 
-                            class="btn-toggle-switch" 
-                            [class.active]="staff.status === 'ACTIVE'" 
+                          <button
+                            class="btn-toggle-switch"
+                            [class.active]="staff.status === 'ACTIVE'"
                             (click)="toggleUserStatus(staff)"
                             [title]="staff.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
                             <span class="toggle-track">
@@ -340,7 +336,15 @@
                             </span>
                           </button>
                         }
-
+                        @if (staff.status === 'ACTIVE') {
+                          <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                        } @else {
+                          <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
                         <!-- View Details -->
                         <button 
                           class="btn-action-icon btn-view" 
@@ -434,24 +438,19 @@
             <table class="data-table compact-table">
               <thead>
                 <tr>
-                  <th style="width: 80px;">{{ lang.t('userId') }}</th>
                   <th>{{ lang.t('userName') }}</th>
-                  <th>{{ lang.t('userEmail') }}</th>
-                  <th>{{ lang.t('userPhone') }}</th>
+                  <th>{{ lang.isBangla() ? 'যোগাযোগ' : 'Contact' }}</th>
                   <th>{{ lang.t('userRole') }}</th>
                   <th>{{ lang.t('userBranch') }}</th>
                   <th>{{ lang.isBangla() ? 'রুট / সমিতি' : 'Assigned Routes' }}</th>
-                  <th>{{ lang.t('userSalary') }}</th>
-                  <th style="width: 90px;">{{ lang.t('status') }}</th>
-                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
+                  <th class="text-end">{{ lang.t('userSalary') }}</th>
+                  <th style="width: 120px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
                 </tr>
               </thead>
               <tbody>
                 @for (staff of branchStaff(); track staff.userId) {
                   <tr>
-                    <td>
-                      <span class="id-tag">#{{ staff.userId }}</span>
-                    </td>
                     <td>
                       <div class="user-name-cell">
                         <div class="user-avatar-mini avatar-branch">
@@ -459,12 +458,18 @@
                         </div>
                         <div class="user-info-text">
                           <strong class="user-title">{{ staff.name }}</strong>
-                          <div class="user-subtext">NID: {{ staff.nidNumber || '19852692518000' + staff.userId }}</div>
+                          @if (staff.nidNumber) {
+                          <div class="user-subtext">NID: {{ staff.nidNumber }}</div>
+                          }
                         </div>
                       </div>
                     </td>
-                    <td class="email-cell">{{ staff.email }}</td>
-                    <td class="phone-cell">{{ staff.phone }}</td>
+                    <td>
+                      <div class="contact-cell">
+                        <span class="phone-cell">{{ staff.phone }}</span>
+                        <span class="email-cell" [title]="staff.email">{{ staff.email }}</span>
+                      </div>
+                    </td>
                     <td>
                       <span class="badge" [ngClass]="getRoleBadgeClass(staff.role)">
                         {{ getRoleTitle(staff.role) }}
@@ -486,21 +491,13 @@
                         <span class="text-muted text-xs">শাখা ভিত্তিক</span>
                       }
                     </td>
-                    <td class="amount-bdt">৳ {{ staff.salary | number }}</td>
+                    <td class="amount-bdt text-end">৳ {{ staff.salary | number }}</td>
                     <td>
-                      @if (staff.status === 'ACTIVE') {
-                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
-                      } @else {
-                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
-                      }
-                    </td>
-                    <td class="text-center">
-                      <div class="action-buttons-compact">
-                        <!-- Active / Inactive Switch -->
+                      <div class="status-cell">
                         @if (authService.canManageUsers()) {
-                          <button 
-                            class="btn-toggle-switch" 
-                            [class.active]="staff.status === 'ACTIVE'" 
+                          <button
+                            class="btn-toggle-switch"
+                            [class.active]="staff.status === 'ACTIVE'"
                             (click)="toggleUserStatus(staff)"
                             [title]="staff.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
                             <span class="toggle-track">
@@ -508,7 +505,15 @@
                             </span>
                           </button>
                         }
-
+                        @if (staff.status === 'ACTIVE') {
+                          <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                        } @else {
+                          <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
                         <!-- View Details: Work Area & Customers -->
                         <button 
                           class="btn-action-icon btn-view" 
@@ -586,28 +591,34 @@
             <table class="data-table compact-table">
               <thead>
                 <tr>
-                  <th style="width: 70px;">{{ lang.isBangla() ? 'আইডি' : 'ID' }}</th>
                   <th>{{ lang.isBangla() ? 'পদবীর নাম ও কোড' : 'Role Title & Code' }}</th>
                   <th>{{ lang.isBangla() ? 'বিভাগ / টিয়ার' : 'Category / Tier' }}</th>
                   <th>{{ lang.isBangla() ? 'বিবরণ' : 'Description' }}</th>
-                  <th style="width: 100px;">{{ lang.isBangla() ? 'ধরন' : 'Type' }}</th>
-                  <th style="width: 120px;">{{ lang.isBangla() ? 'নিযুক্ত কর্মী' : 'Staff Count' }}</th>
+                  <th style="width: 90px;">{{ lang.isBangla() ? 'নিযুক্ত কর্মী' : 'Staff Count' }}</th>
                   <th>{{ lang.isBangla() ? 'অনুমোদিত অধিকার' : 'Permissions' }}</th>
-                  <th style="width: 90px;">{{ lang.t('status') }}</th>
-                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
+                  <th style="width: 120px;">{{ lang.t('status') }}</th>
+                  <th class="text-center" style="width: 80px;">{{ lang.t('action') }}</th>
                 </tr>
               </thead>
               <tbody>
                 @for (role of filteredRoles(); track role.roleId) {
                   <tr>
                     <td>
-                      <span class="id-tag">#{{ role.roleId }}</span>
-                    </td>
-                    <td>
                       <div class="role-title-cell">
                         <strong class="role-name-primary">{{ lang.isBangla() ? role.nameBn : role.nameEn }}</strong>
                         <div class="role-code-badge">
                           <code>{{ role.code }}</code>
+                          @if (role.isSystem) {
+                            <span class="badge badge-system">
+                              <span class="material-symbols-outlined badge-icon-sm">verified</span>
+                              {{ lang.isBangla() ? 'সিস্টেম' : 'System' }}
+                            </span>
+                          } @else {
+                            <span class="badge badge-custom">
+                              <span class="material-symbols-outlined badge-icon-sm">tune</span>
+                              {{ lang.isBangla() ? 'কাস্টম' : 'Custom' }}
+                            </span>
+                          }
                         </div>
                       </div>
                     </td>
@@ -619,21 +630,10 @@
                         {{ getCategoryLabel(role.category) }}
                       </span>
                     </td>
-                    <td class="text-muted text-xs" style="max-width: 220px;">
-                      {{ role.description || (lang.isBangla() ? 'কোনো বিবরণ দেওয়া নেই' : 'No description') }}
-                    </td>
-                    <td>
-                      @if (role.isSystem) {
-                        <span class="badge badge-system">
-                          <span class="material-symbols-outlined badge-icon-sm">verified</span>
-                          {{ lang.isBangla() ? 'সিস্টেম' : 'System' }}
-                        </span>
-                      } @else {
-                        <span class="badge badge-custom">
-                          <span class="material-symbols-outlined badge-icon-sm">tune</span>
-                          {{ lang.isBangla() ? 'কাস্টম' : 'Custom' }}
-                        </span>
-                      }
+                    <td class="text-muted text-xs">
+                      <span class="desc-clamp" [title]="role.description || ''">
+                        {{ role.description || (lang.isBangla() ? 'কোনো বিবরণ দেওয়া নেই' : 'No description') }}
+                      </span>
                     </td>
                     <td>
                       <div class="staff-count-pill" [class.has-staff]="getStaffCountForRole(role.code) > 0">
@@ -652,19 +652,11 @@
                       </div>
                     </td>
                     <td>
-                      @if (role.status === 'ACTIVE') {
-                        <span class="badge badge-paid">{{ lang.t('active') }}</span>
-                      } @else {
-                        <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
-                      }
-                    </td>
-                    <td class="text-center">
-                      <div class="action-buttons-compact">
-                        <!-- Quick Active / Inactive Switch -->
+                      <div class="status-cell">
                         @if (authService.canManageUsers()) {
-                          <button 
-                            class="btn-toggle-switch" 
-                            [class.active]="role.status === 'ACTIVE'" 
+                          <button
+                            class="btn-toggle-switch"
+                            [class.active]="role.status === 'ACTIVE'"
                             (click)="toggleRoleStatus(role)"
                             [title]="role.status === 'ACTIVE' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'">
                             <span class="toggle-track">
@@ -672,7 +664,15 @@
                             </span>
                           </button>
                         }
-
+                        @if (role.status === 'ACTIVE') {
+                          <span class="badge badge-paid">{{ lang.t('active') }}</span>
+                        } @else {
+                          <span class="badge badge-overdue">{{ lang.t('inactive') }}</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="text-center">
+                      <div class="action-buttons-compact">
                         <!-- Edit Role -->
                         @if (authService.canManageUsers()) {
                           <button 
@@ -890,7 +890,6 @@
                 <table class="data-table compact-table">
                   <thead>
                     <tr>
-                      <th style="width: 70px;">আইডি</th>
                       <th>গ্রাহকের নাম ও মোবাইল</th>
                       <th>সমিতি / রুট</th>
                       <th>পিতা / স্বামীর নাম</th>
@@ -901,9 +900,6 @@
                   <tbody>
                     @for (cust of getStaffAssignedCustomers(selectedStaffForDetails()!); track cust.customerId) {
                       <tr>
-                        <td>
-                          <span class="id-tag">#{{ cust.customerId }}</span>
-                        </td>
                         <td>
                           <strong>{{ cust.fullName }}</strong>
                           <div class="text-xs text-muted font-mono">{{ cust.phonePrimary }}</div>
@@ -1039,7 +1035,7 @@
                 </div>
                 <div class="id-row">
                   <span class="id-lbl">এনআইডি:</span>
-                  <span class="id-val font-mono">{{ selectedStaffForCard()!.nidNumber || '19852692518000' + selectedStaffForCard()!.userId }}</span>
+                  <span class="id-val font-mono">{{ selectedStaffForCard()!.nidNumber || '—' }}</span>
                 </div>
                 <div class="id-row">
                   <span class="id-lbl">যোগদান তারিখ:</span>

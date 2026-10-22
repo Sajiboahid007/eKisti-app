@@ -512,6 +512,28 @@ export class KistiDatabaseService {
     }
   }
 
+  // সদস্যের সকল কিস্তি আদায় রসিদ (নতুন থেকে পুরাতন)
+  async getPaymentCollectionsByCustomerId(customerId: number): Promise<PaymentCollection[]> {
+    try {
+      const q = query(
+        collection(this.firestore, 'collections'),
+        where('customerId', '==', customerId)
+      );
+      const snap = await getDocs(q);
+      const list: PaymentCollection[] = [];
+      snap.forEach(d => {
+        const r = d.data() as PaymentCollection;
+        if (!r.isDeleted) {
+          list.push(r);
+        }
+      });
+      return list.sort((a, b) => new Date(b.collectionDate).getTime() - new Date(a.collectionDate).getTime());
+    } catch (err) {
+      console.error('Error fetching payment collections:', err);
+      return [];
+    }
+  }
+
   // ==========================================
   // 5. GENERAL EDIT WITH AUDIT HISTORY (যেকোনো টেবিল এডিট)
   // ==========================================

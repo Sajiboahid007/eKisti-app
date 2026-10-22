@@ -6,10 +6,10 @@
       <p class="sub-text">সকল নিবন্ধিত সদস্য, কাজের এলাকা/সমিতি, KYC ও জামিনদারের তথ্য</p>
     </div>
     <div class="header-right">
-      <button class="btn btn-outline-secondary" (click)="openBlankCustomerForm()"
-        title="খালি সদস্য ভর্তি আবেদন ফরম প্রিন্ট করুন">
-        <span class="material-symbols-outlined">print</span>
-        <span>আবেদন ফরম প্রিন্ট</span>
+      <button type="button" class="btn btn-outline-primary" (click)="showApplicationForm.set(true)"
+        title="গ্রাহক হাতে পূরণ করে অফিসে জমা দেওয়ার জন্য ফাঁকা আবেদন ফরম প্রিন্ট করুন">
+        <span class="material-symbols-outlined">description</span>
+        <span>আবেদন ফরম</span>
       </button>
       <a routerLink="/customers/new" class="btn btn-primary"
         title="নতুন সদস্য নিবন্ধন ফরম (Customer Form)">
@@ -191,7 +191,7 @@
           </div>
         </div>
         <div class="profile-right">
-          <div class="stat-pill" [class.print-savings-hidden]="!savingsExpanded()">
+          <div class="stat-pill print-sec-savings">
             <span class="stat-label">মোট সঞ্চয় জমা</span>
             <div class="savings-pill-row">
               <strong class="stat-value text-success">৳ {{ selectedCustomerForDetails()!.totalSavingsBalance | number
@@ -312,7 +312,7 @@
       <!-- ========================================== -->
       <!-- LOANS SECTION: ALL TAKEN LOANS HISTORY -->
       <!-- ========================================== -->
-      <div class="info-card full-width-card mt-2">
+      <div class="info-card full-width-card mt-2 print-sec-loans">
         <div class="card-header-flex compact-header">
           <div class="title-with-icon">
             <span class="material-symbols-outlined s-glyph">payments</span>
@@ -420,11 +420,167 @@
       </div>
 
       <!-- ========================================== -->
+      <!-- INSTALLMENT PAYMENT HISTORY (কিস্তি পরিশোধের ইতিহাস) -->
+      <!-- ========================================== -->
+      <div class="info-card full-width-card mt-2 payment-history-card print-sec-payments" [class.is-open]="paymentsExpanded()">
+        <div class="ph-header" role="button" tabindex="0" [attr.aria-expanded]="paymentsExpanded()"
+          (click)="togglePaymentsExpanded()" (keydown.enter)="togglePaymentsExpanded()"
+          (keydown.space)="$event.preventDefault(); togglePaymentsExpanded()">
+          <div class="ph-title-group">
+            <span class="ph-icon material-symbols-outlined">payments</span>
+            <div class="ph-text">
+              <h5 class="ph-title">কিস্তি পরিশোধের ইতিহাস</h5>
+              <span class="ph-subtitle">
+                @if (loadingPayments()) {
+                লোড হচ্ছে...
+                } @else if (selectedCustomerPayments().length > 0) {
+                {{ selectedCustomerPayments().length }} টি রসিদ · কে, কখন, কার কাছে পরিশোধ করেছে
+                } @else {
+                এখনো কোনো কিস্তি পরিশোধ হয়নি
+                }
+              </span>
+            </div>
+          </div>
+          <div class="ph-actions">
+            @if (selectedCustomerPayments().length > 0) {
+            <div class="ph-total">
+              <span class="ph-total-label">মোট পরিশোধ</span>
+              <strong class="ph-total-value">৳ {{ getTotalPaidFromReceipts() | number }}</strong>
+            </div>
+            }
+            <span class="ph-toggle no-print">
+              <span>{{ paymentsExpanded() ? 'বন্ধ করুন' : 'বিস্তারিত দেখুন' }}</span>
+              <span class="material-symbols-outlined ph-chevron">expand_more</span>
+            </span>
+          </div>
+        </div>
+
+        @if (paymentsExpanded()) {
+        @if (loadingPayments()) {
+        <div class="py-3 text-center text-muted">
+          <span class="material-symbols-outlined spinning">sync</span>
+          <span class="ms-1">কিস্তি আদায়ের রেকর্ড লোড হচ্ছে...</span>
+        </div>
+        } @else if (selectedCustomerPayments().length === 0) {
+        <div class="py-3 text-center text-muted">
+          <span class="material-symbols-outlined state-icon">receipt_long</span>
+          <p class="mb-0">এই সদস্যের এখনো কোনো কিস্তি পরিশোধের রেকর্ড নেই।</p>
+        </div>
+        } @else {
+        <div class="ph-table-wrap">
+          <table class="ph-table">
+            <thead>
+              <tr>
+                <th class="ph-col-toggle no-print"></th>
+                <th>তারিখ ও সময়</th>
+                <th>রসিদ / ঋণ হিসাব</th>
+                <th class="text-center">কিস্তি</th>
+                <th class="text-end">আদায়কৃত টাকা</th>
+                <th>মাধ্যম</th>
+                <th>আদায়কারী</th>
+                <th>শাখায় জমা</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of selectedCustomerPayments(); track r.receiptId) {
+              <tr class="ph-row" [class.is-open]="isPaymentRowExpanded(r.receiptId)"
+                (click)="togglePaymentRow(r.receiptId)">
+                <td class="ph-col-toggle no-print">
+                  <span class="material-symbols-outlined ph-row-chevron">chevron_right</span>
+                </td>
+                <td>
+                  <div class="ph-primary">{{ r.collectionDate | date:'dd MMM yyyy' }}</div>
+                  <div class="ph-secondary">{{ r.collectionDate | date:'hh:mm a' }}</div>
+                </td>
+                <td>
+                  <div class="ph-primary ph-mono">RCP-{{ r.receiptId }}</div>
+                  <div class="ph-secondary ph-mono">{{ getLoanAccountNo(r.loanId) }}</div>
+                </td>
+                <td class="text-center"><span class="ph-inst">{{ r.installmentNo }}</span></td>
+                <td class="text-end"><span class="ph-amount">৳ {{ r.totalAmountCollected | number }}</span></td>
+                <td>
+                  <span class="ph-method" [ngClass]="'m-' + (r.paymentMethod || 'CASH').toLowerCase()">
+                    {{ r.paymentMethod || 'CASH' }}
+                  </span>
+                </td>
+                <td>
+                  <div class="ph-staff">
+                    <span class="ph-avatar">{{ (r.collectedByName || getFieldOfficerName(r.collectedByUserId)).charAt(0) }}</span>
+                    <div>
+                      <div class="ph-primary">{{ r.collectedByName || getFieldOfficerName(r.collectedByUserId) }}</div>
+                      <div class="ph-secondary">আইডি #{{ r.collectedByUserId }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  @if (r.isHandedOverToBranch) {
+                  <span class="ph-status ok"><span class="ph-dot"></span>জমা হয়েছে</span>
+                  } @else {
+                  <span class="ph-status pending"><span class="ph-dot"></span>মাঠকর্মীর কাছে</span>
+                  }
+                </td>
+              </tr>
+              @if (isPaymentRowExpanded(r.receiptId)) {
+              <tr class="ph-detail-row">
+                <td colspan="8">
+                  <div class="ph-detail">
+                    <div class="ph-breakdown">
+                      <div class="ph-stat"><span>আসল</span><strong>৳ {{ r.principalAmountCollected | number }}</strong></div>
+                      <div class="ph-stat"><span>সার্ভিস চার্জ</span><strong>৳ {{ r.profitAmountCollected | number }}</strong></div>
+                      <div class="ph-stat"><span>সঞ্চয়</span><strong>৳ {{ r.savingsAmountCollected | number }}</strong></div>
+                      <div class="ph-stat"><span>জরিমানা</span><strong>৳ {{ (r.fineAmountCollected || 0) | number }}</strong></div>
+                      <div class="ph-stat total"><span>মোট</span><strong>৳ {{ r.totalAmountCollected | number }}</strong></div>
+                    </div>
+                    @if (r.trxId || r.receiptNumberManual || r.reconciledAt) {
+                    <div class="ph-meta">
+                      @if (r.trxId) {
+                      <span><em>TrxID</em> {{ r.trxId }}</span>
+                      }
+                      @if (r.receiptNumberManual) {
+                      <span><em>ম্যানুয়াল রসিদ</em> {{ r.receiptNumberManual }}</span>
+                      }
+                      @if (r.reconciledAt) {
+                      <span><em>শাখায় জমার সময়</em> {{ r.reconciledAt | date:'dd MMM yyyy, hh:mm a' }}</span>
+                      }
+                    </div>
+                    }
+                    @if (r.history.length) {
+                    <div class="ph-timeline">
+                      <div class="ph-timeline-title">রেকর্ডের ইতিহাস</div>
+                      @for (h of r.history; track $index) {
+                      <div class="ph-timeline-item">
+                        <span class="ph-timeline-time">{{ h.timestamp | date:'dd MMM yyyy, hh:mm a' }}</span>
+                        <span><strong>{{ h.changedByName }}</strong> ({{ h.changedByRole }}) — {{ h.reason }}</span>
+                      </div>
+                      }
+                    </div>
+                    }
+                  </div>
+                </td>
+              </tr>
+              }
+              }
+            </tbody>
+            <tfoot>
+              <tr>
+                <td class="no-print"></td>
+                <td colspan="3">মোট {{ selectedCustomerPayments().length }} টি কিস্তি পরিশোধ</td>
+                <td class="text-end"><span class="ph-amount">৳ {{ getTotalPaidFromReceipts() | number }}</span></td>
+                <td colspan="3"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        }
+        }
+      </div>
+
+      <!-- ========================================== -->
       <!-- SAVINGS MANAGEMENT & ACCOUNT DISCLOSURE -->
       <!-- ========================================== -->
-      <div class="info-card full-width-card mt-2 settlement-card-compact"
+      <div class="info-card full-width-card mt-2 settlement-card-compact print-sec-savings"
         [class.closed-card]="isAccountClosedOrInactive(selectedCustomerForDetails()!)"
-        [class.print-savings-hidden]="!savingsExpanded()">
+>
         <div class="settlement-flex-row">
           <div class="settlement-left-info">
             <span class="material-symbols-outlined text-primary s-icon">account_balance_wallet</span>
@@ -483,95 +639,115 @@
       <!-- SAVINGS DEPOSIT & WITHDRAWAL TRANSACTION HISTORY -->
       <!-- ========================================== -->
       @if (savingsExpanded()) {
-      <div class="info-card full-width-card mt-3 savings-history-card">
-        <div class="card-header-clean d-flex justify-content-between align-items-center">
-          <div class="d-flex align-items-center gap-2">
-            <span class="material-symbols-outlined text-primary">history_edu</span>
-            <h5 class="m-0 font-bold">সঞ্চয় জমা ও উত্তোলনের পূর্ণাঙ্গ ইতিহাস (Savings Ledger)</h5>
-            @if (selectedCustomerSavingsHistory().length > 0) {
-            <span class="badge badge-secondary badge-sm">{{ selectedCustomerSavingsHistory().length }} টি লেনদেন</span>
-            }
-            <span class="badge badge-paid badge-sm no-print">
-              <span class="material-symbols-outlined icon-xxs">check_circle</span>
-              প্রিন্টে আসবে (Expanded)
+      <div class="info-card full-width-card mt-2 payment-history-card is-open savings-history-card print-sec-savings">
+        <div class="ph-header" role="button" tabindex="0" aria-expanded="true"
+          (click)="toggleSavingsExpanded()" (keydown.enter)="toggleSavingsExpanded()"
+          (keydown.space)="$event.preventDefault(); toggleSavingsExpanded()">
+          <div class="ph-title-group">
+            <span class="ph-icon material-symbols-outlined">savings</span>
+            <div class="ph-text">
+              <h5 class="ph-title">সঞ্চয় জমা ও উত্তোলনের ইতিহাস</h5>
+              <span class="ph-subtitle">
+                @if (loadingSavingsHistory()) {
+                লোড হচ্ছে...
+                } @else if (selectedCustomerSavingsHistory().length > 0) {
+                {{ selectedCustomerSavingsHistory().length }} টি লেনদেন · কে, কখন, কত টাকা জমা/উত্তোলন করেছে
+                } @else {
+                এখনো কোনো সঞ্চয় লেনদেন হয়নি
+                }
+              </span>
+            </div>
+          </div>
+          <div class="ph-actions">
+            <div class="ph-total">
+              <span class="ph-total-label">বর্তমান স্থিতি</span>
+              <strong class="ph-total-value">৳ {{ selectedCustomerForDetails()!.totalSavingsBalance | number }}</strong>
+            </div>
+            <button type="button" class="ph-toggle ph-toggle-outline no-print"
+              (click)="$event.stopPropagation(); openEditSavingsModal(selectedCustomerForDetails()!)">
+              <span class="material-symbols-outlined ph-chevron">add</span>
+              <span>জমা / উত্তোলন</span>
+            </button>
+            <span class="ph-toggle no-print">
+              <span>বন্ধ করুন</span>
+              <span class="material-symbols-outlined ph-chevron">expand_more</span>
             </span>
           </div>
-          <div class="d-flex align-items-center gap-2 no-print">
-            <button class="btn btn-xs btn-outline-primary"
-              (click)="openEditSavingsModal(selectedCustomerForDetails()!)">
-              <span class="material-symbols-outlined icon-xs">add_circle</span>
-              <span>জমা / উত্তোলন / সমন্বয়</span>
-            </button>
-          </div>
         </div>
-        <!-- Expanded: Show loading, empty state, or table -->
+
         @if (loadingSavingsHistory()) {
-        <div class="py-3 text-center text-muted">
+        <div class="ph-empty">
           <span class="material-symbols-outlined spinning">sync</span>
-          <span class="ms-1">সঞ্চয় লেনদেনের হিসাব লোড হচ্ছে...</span>
+          <span>সঞ্চয় লেনদেনের হিসাব লোড হচ্ছে...</span>
         </div>
         } @else if (selectedCustomerSavingsHistory().length === 0) {
-        <div class="empty-savings-state py-3 text-center text-muted">
-          <span class="material-symbols-outlined state-icon">receipt_long</span>
-          <p class="mb-0">এই সদস্যের এখনো কোনো সঞ্চয় লেনদেন রেকর্ড করা হয়নি।</p>
+        <div class="ph-empty">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>এই সদস্যের এখনো কোনো সঞ্চয় লেনদেন রেকর্ড করা হয়নি।</span>
         </div>
         } @else {
-        <div class="table-responsive mt-2">
-          <table class="table-compact full-width-table savings-ledger-table">
+        <div class="ph-table-wrap">
+          <table class="ph-table savings-ledger-table">
             <thead>
               <tr>
                 <th>তারিখ ও সময়</th>
-                <th>আইডি</th>
-                <th>লেনদেনের ধরন</th>
-                <th>পরিমাণ</th>
-                <th>পূর্বের স্থিতি</th>
-                <th>নতুন স্থিতি</th>
+                <th>লেনদেন</th>
+                <th class="text-end">পরিমাণ</th>
+                <th class="text-end">পূর্বের স্থিতি</th>
+                <th class="text-end">নতুন স্থিতি</th>
                 <th>মাধ্যম</th>
                 <th>বিবরণ ও কারণ</th>
-                <th>অনুমোদনকারী / কর্মী</th>
+                <th>সম্পাদনকারী</th>
               </tr>
             </thead>
             <tbody>
               @for (tx of selectedCustomerSavingsHistory(); track tx.transactionId) {
               <tr>
-                <td class="date-cell whitespace-nowrap">
-                  <div class="font-bold">{{ tx.transactionDate | date:'dd MMM yyyy' }}</div>
-                  <div class="text-xs text-muted">{{ tx.transactionDate | date:'hh:mm a' }}</div>
+                <td>
+                  <div class="ph-primary">{{ tx.transactionDate | date:'dd MMM yyyy' }}</div>
+                  <div class="ph-secondary">{{ tx.transactionDate | date:'hh:mm a' }}</div>
                 </td>
                 <td>
-                  <span class="id-tag">#{{ tx.transactionId }}</span>
+                  <span class="ph-status" [ngClass]="getSavingsTypeBadgeClass(tx.type)">{{ getSavingsTypeLabel(tx.type) }}</span>
+                  <div class="ph-secondary ph-mono">#{{ tx.transactionId }}</div>
                 </td>
+                <td class="text-end">
+                  <span class="ph-amount" [class.ph-debit]="!tx.isCredit">{{ tx.isCredit ? '+' : '−' }} ৳ {{ tx.amount | number }}</span>
+                </td>
+                <td class="text-end ph-mono ph-muted">৳ {{ tx.previousBalance | number }}</td>
+                <td class="text-end ph-mono ph-primary">৳ {{ tx.newBalance | number }}</td>
                 <td>
-                  <span class="badge badge-sm" [ngClass]="getSavingsTypeBadgeClass(tx.type)">
-                    {{ getSavingsTypeLabel(tx.type) }}
+                  <span class="ph-method" [ngClass]="'m-' + (tx.paymentMethod || 'CASH').toLowerCase()">
+                    {{ tx.paymentMethod || 'CASH' }}
                   </span>
                 </td>
-                <td class="font-bold whitespace-nowrap" [class.text-success]="tx.isCredit"
-                  [class.text-danger]="!tx.isCredit">
-                  {{ tx.isCredit ? '+' : '-' }}৳ {{ tx.amount | number }}
-                </td>
-                <td class="text-muted font-mono whitespace-nowrap">
-                  ৳ {{ tx.previousBalance | number }}
-                </td>
-                <td class="font-bold font-mono whitespace-nowrap" [class.text-success]="tx.newBalance > 0">
-                  ৳ {{ tx.newBalance | number }}
-                </td>
-                <td>
-                  <span class="method-tag">{{ tx.paymentMethod || 'CASH' }}</span>
-                </td>
-                <td class="reason-cell">
-                  <div class="reason-text">{{ tx.reason || 'সঞ্চয় লেনদেন' }}</div>
+                <td class="ph-reason">
+                  <div>{{ tx.reason || 'সঞ্চয় লেনদেন' }}</div>
                   @if (tx.receiptNo) {
-                  <span class="receipt-pill">রসিদ: {{ tx.receiptNo }}</span>
+                  <div class="ph-secondary ph-mono">রসিদ: {{ tx.receiptNo }}</div>
                   }
                 </td>
-                <td class="staff-cell whitespace-nowrap">
-                  <div class="staff-name font-semibold">{{ tx.performedByName || 'স্টাফ' }}</div>
-                  <div class="staff-role text-xs text-muted">{{ tx.performedByRole || '' }}</div>
+                <td>
+                  <div class="ph-staff">
+                    <span class="ph-avatar">{{ (tx.performedByName || 'স্টাফ').charAt(0) }}</span>
+                    <div>
+                      <div class="ph-primary">{{ tx.performedByName || 'স্টাফ' }}</div>
+                      <div class="ph-secondary">{{ tx.performedByRole || '' }}</div>
+                    </div>
+                  </div>
                 </td>
               </tr>
               }
             </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">মোট {{ selectedCustomerSavingsHistory().length }} টি লেনদেন</td>
+                <td colspan="3" class="text-end">বর্তমান স্থিতি:
+                  <span class="ph-amount">৳ {{ selectedCustomerForDetails()!.totalSavingsBalance | number }}</span>
+                </td>
+                <td colspan="3"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         }
@@ -596,34 +772,105 @@
     </div>
 
     <div class="modal-footer no-print py-2">
-      <div class="savings-print-toggle-option d-flex align-items-center gap-2 me-auto">
-        <label class="custom-switch-label cursor-pointer">
-          <input type="checkbox" [checked]="savingsExpanded()" (change)="toggleSavingsExpanded()" />
-          <span class="switch-txt font-semibold text-xs">
-            @if (savingsExpanded()) {
-            <span class="text-success d-inline-flex align-items-center gap-1">
-              <span class="material-symbols-outlined icon-xxs">check_circle</span>
-              সঞ্চয় তথ্যসহ প্রিন্ট হবে (Savings Included)
-            </span>
-            } @else {
-            <span class="text-muted d-inline-flex align-items-center gap-1">
-              <span class="material-symbols-outlined icon-xxs">visibility_off</span>
-              সঞ্চয় ছাড়া ঋণ বিবরণী প্রিন্ট হবে (Except Savings)
-            </span>
-            }
-          </span>
-        </label>
-      </div>
+      <span class="me-auto"></span>
       <button class="btn btn-sm btn-secondary" (click)="closeCustomerDetails()">বন্ধ করুন</button>
       <button class="btn btn-sm btn-outline-secondary" (click)="openIdCard(selectedCustomerForDetails()!)"
         title="সদস্য পাসবুক আইডি কার্ড দেখুন ও প্রিন্ট করুন">
         <span class="material-symbols-outlined">badge</span>
         <span>পাসবুক কার্ড</span>
       </button>
-      <button class="btn btn-sm btn-primary" (click)="printCustomerDetails()"
-        [title]="savingsExpanded() ? 'সঞ্চয়সহ সম্পূর্ণ প্রোফাইল প্রিন্ট করুন' : 'সঞ্চয় তথ্য ছাড়া ঋণ বিবরণী প্রিন্ট করুন'">
+      <button class="btn btn-sm btn-primary" (click)="openPrintOptions()" [disabled]="isCustomerDetailsLoading()"
+        title="কোন কোন অংশ প্রিন্ট হবে তা বেছে নিন">
         <span class="material-symbols-outlined">print</span>
-        <span>{{ savingsExpanded() ? 'প্রিন্ট করুন (সবসহ)' : 'প্রিন্ট করুন (সঞ্চয় ছাড়া)' }}</span>
+        <span>{{ isCustomerDetailsLoading() ? 'লোড হচ্ছে...' : 'প্রিন্ট করুন' }}</span>
+      </button>
+    </div>
+  </div>
+</div>
+}
+
+<!-- ========================================== -->
+<!-- 1b. PRINT OPTIONS MODAL (কোন অংশ প্রিন্ট হবে) -->
+<!-- ========================================== -->
+@if (showPrintOptions() && selectedCustomerForDetails()) {
+<div class="modal-backdrop no-print" (click)="closePrintOptions()">
+  <div class="modal-dialog po-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="header-info">
+        <h3>
+          <span class="material-symbols-outlined title-icon text-primary">print</span>
+          <span>প্রিন্ট অপশন</span>
+        </h3>
+        <p class="sub-text">{{ selectedCustomerForDetails()!.fullName }} — কোন কোন অংশ প্রিন্ট করবেন বেছে নিন</p>
+      </div>
+      <button class="close-btn" (click)="closePrintOptions()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="po-presets">
+        <button type="button" class="po-preset" (click)="setPrintPreset('profile')">
+          <span class="material-symbols-outlined">badge</span>শুধু সদস্যের তথ্য
+        </button>
+        <button type="button" class="po-preset" (click)="setPrintPreset('all')">
+          <span class="material-symbols-outlined">select_all</span>সব অংশ
+        </button>
+      </div>
+
+      <div class="po-list">
+        <div class="po-item is-checked is-locked">
+          <span class="material-symbols-outlined po-check">check_box</span>
+          <span class="po-icon material-symbols-outlined">person</span>
+          <div class="po-text">
+            <strong>সদস্যের তথ্য</strong>
+            <span>ব্যক্তিগত তথ্য, ঠিকানা, সমিতি ও জামিনদার — সব সময় প্রিন্ট হবে</span>
+          </div>
+        </div>
+
+        <button type="button" class="po-item" [class.is-checked]="printOptions().loans" (click)="togglePrintOption('loans')">
+          <span class="material-symbols-outlined po-check">{{ printOptions().loans ? 'check_box' : 'check_box_outline_blank' }}</span>
+          <span class="po-icon material-symbols-outlined">account_balance</span>
+          <div class="po-text">
+            <strong>ঋণ বিবরণী</strong>
+            <span>{{ selectedCustomerLoans().length }} টি ঋণ — আসল, পরিশোধ, বকেয়া ও কিস্তির অগ্রগতি</span>
+          </div>
+        </button>
+
+        <button type="button" class="po-item" [class.is-checked]="printOptions().payments" (click)="togglePrintOption('payments')">
+          <span class="material-symbols-outlined po-check">{{ printOptions().payments ? 'check_box' : 'check_box_outline_blank' }}</span>
+          <span class="po-icon material-symbols-outlined">payments</span>
+          <div class="po-text">
+            <strong>কিস্তি পরিশোধের ইতিহাস</strong>
+            <span>{{ selectedCustomerPayments().length }} টি রসিদ — তারিখ, টাকা ও আদায়কারী</span>
+          </div>
+        </button>
+        @if (printOptions().payments) {
+        <button type="button" class="po-item po-sub" [class.is-checked]="printOptions().paymentDetails" (click)="togglePrintOption('paymentDetails')">
+          <span class="material-symbols-outlined po-check">{{ printOptions().paymentDetails ? 'check_box' : 'check_box_outline_blank' }}</span>
+          <div class="po-text">
+            <strong>প্রতিটি রসিদের বিস্তারিত</strong>
+            <span>আসল, সার্ভিস চার্জ, সঞ্চয়, জরিমানা ও রেকর্ডের ইতিহাস (পাতা বেশি লাগবে)</span>
+          </div>
+        </button>
+        }
+
+        <button type="button" class="po-item" [class.is-checked]="printOptions().savings" (click)="togglePrintOption('savings')">
+          <span class="material-symbols-outlined po-check">{{ printOptions().savings ? 'check_box' : 'check_box_outline_blank' }}</span>
+          <span class="po-icon material-symbols-outlined">savings</span>
+          <div class="po-text">
+            <strong>সঞ্চয় স্থিতি ও সঞ্চয়ের ইতিহাস</strong>
+            <span>{{ selectedCustomerSavingsHistory().length }} টি লেনদেন — জমা, উত্তোলন ও বর্তমান স্থিতি</span>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-secondary" (click)="closePrintOptions()">বাতিল</button>
+      <button class="btn btn-sm btn-primary" (click)="confirmPrint()">
+        <span class="material-symbols-outlined">print</span>
+        <span>প্রিন্ট করুন</span>
       </button>
     </div>
   </div>
@@ -1021,16 +1268,10 @@
 </div>
 }
 
-<!-- ============================================================ -->
-<!-- DIRECT PRINT 1-PAGE BLANK APPLICATION FORM                   -->
-<!-- ============================================================ -->
-@if (isDirectPrintingBlank()) {
-<div class="print-only-blank-container" id="printableBlankCustomerForm">
-  <app-customer-register-form
-    [isBlankForm]="true"
-    [defaultBranchId]="blankFormSelectedBranchId()"
-    [initialBranches]="branches()"
-    [initialCenters]="centers()">
-  </app-customer-register-form>
-</div>
+<!-- ========================================== -->
+<!-- BLANK MEMBER ADMISSION APPLICATION FORM -->
+<!-- ========================================== -->
+@if (showApplicationForm()) {
+<app-customer-application-form [branches]="branches()" [centers]="centers()"
+  (closed)="showApplicationForm.set(false)"></app-customer-application-form>
 }

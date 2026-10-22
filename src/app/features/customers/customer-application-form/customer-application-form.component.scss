@@ -1,0 +1,332 @@
+// সদস্য ভর্তি আবেদন ফরম — A4 (210mm x 297mm), ২ পৃষ্ঠা
+$ink: #0f172a;
+$line: #475569;
+$accent: #0f766e;
+
+.af-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  background: #e2e8f0;
+}
+
+// ---------- Toolbar ----------
+.af-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--bg-card, #fff);
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  box-shadow: var(--shadow-sm);
+}
+.af-toolbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  > .material-symbols-outlined {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md, 10px);
+    background: var(--primary-subtle, #f0fdfa);
+    color: var(--primary, $accent);
+  }
+  div { display: flex; flex-direction: column; }
+  strong { font-size: 0.95rem; color: var(--text-primary, $ink); }
+  span { font-size: 0.75rem; color: var(--text-secondary, #475569); }
+}
+.af-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.af-select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.af-close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  &:hover { background: var(--danger-bg, #fef2f2); color: var(--danger, #ef4444); }
+}
+
+.af-scroll { flex: 1; overflow: auto; padding: 24px 16px 48px; }
+
+// ---------- A4 sheet ----------
+.af-page {
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto 24px;
+  padding: 10mm 12mm 16mm;
+  box-sizing: border-box;
+  background: #fff;
+  color: $ink;
+  font-family: 'Hind Siliguri', 'Inter', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.35;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 0.15);
+}
+
+.af-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid $accent;
+}
+.af-logo {
+  display: grid;
+  place-items: center;
+  width: 16mm;
+  height: 16mm;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: $accent;
+  color: #fff;
+  font-size: 22pt;
+  font-weight: 700;
+}
+.af-org {
+  flex: 1;
+  text-align: center;
+  h1 { margin: 0; font-size: 16pt; font-weight: 700; color: $accent; }
+  p { margin: 0; font-size: 8.5pt; color: #475569; }
+}
+.af-title {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 16px;
+  border: 1.5px solid $ink;
+  border-radius: 4px;
+  font-size: 12pt;
+  font-weight: 700;
+  small { font-size: 8pt; font-weight: 500; }
+}
+.af-photo {
+  display: grid;
+  place-items: center;
+  width: 30mm;
+  height: 36mm;
+  flex-shrink: 0;
+  border: 1px dashed $line;
+  font-size: 8pt;
+  text-align: center;
+  color: #64748b;
+  &.af-photo-sm { width: 20mm; height: 24mm; }
+}
+
+.af-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px 14px;
+  margin: 8px 0 4px;
+  padding: 6px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  .af-field { margin: 0; }
+}
+
+.af-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 6px;
+  padding: 4px 8px;
+  background: $accent;
+  color: #fff;
+  font-size: 10.5pt;
+  font-weight: 700;
+  border-radius: 3px;
+  span {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    color: $accent;
+    font-size: 9pt;
+  }
+}
+.af-subhead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 6px 0 2px;
+  font-weight: 700;
+  font-size: 9.5pt;
+  color: $accent;
+}
+
+// Label + dotted writing line
+.af-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 7px 0;
+  min-height: 20px;
+  label { flex-shrink: 0; font-weight: 600; white-space: nowrap; }
+  label:not(:empty)::after { content: ':'; }
+}
+.af-line {
+  flex: 1;
+  min-width: 20mm;
+  min-height: 16px;
+  padding: 0 4px;
+  border-bottom: 1px dotted $line;
+  font-weight: 600;
+}
+.af-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 18px;
+}
+
+// Character boxes (NID, mobile, date)
+.af-boxes {
+  display: inline-flex;
+  align-items: center;
+  i {
+    display: inline-block;
+    width: 5.2mm;
+    height: 6mm;
+    border: 1px solid $line;
+    & + i { border-left: 0; }
+  }
+  b { padding: 0 3px; font-weight: 400; }
+}
+
+// Checkboxes
+.af-checks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  > span { display: inline-flex; align-items: center; gap: 5px; }
+  &.af-inline { font-weight: 500; color: $ink; }
+}
+.af-cb {
+  display: inline-block;
+  width: 3.6mm;
+  height: 3.6mm;
+  border: 1px solid $ink;
+  border-radius: 1px;
+}
+
+// Guarantor boxes
+.af-guarantors { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.af-box {
+  padding: 6px 10px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  .af-field { margin: 6px 0; }
+}
+.af-box-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  strong { color: $accent; }
+}
+
+.af-checklist {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 18px;
+  > span { display: inline-flex; align-items: center; gap: 6px; }
+}
+
+.af-declaration {
+  margin: 0;
+  text-align: justify;
+  font-size: 9.5pt;
+}
+
+// Signatures
+.af-signatures {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 10px;
+  &.af-signatures-3 { margin-top: 26px; .af-sign { flex: 1; } }
+}
+.af-sign {
+  min-width: 55mm;
+  margin-top: 22px;
+  padding-top: 3px;
+  border-top: 1px solid $ink;
+  text-align: center;
+  font-size: 8.5pt;
+}
+.af-thumb {
+  display: grid;
+  place-items: center;
+  width: 26mm;
+  height: 26mm;
+  border: 1px solid $line;
+  border-radius: 4px;
+  font-size: 7.5pt;
+  text-align: center;
+  color: #64748b;
+}
+
+.af-office {
+  margin-top: 14px;
+  padding: 6px 10px 8px;
+  border: 1.5px dashed $ink;
+  border-radius: 4px;
+  background: #f8fafc;
+}
+.af-office-title {
+  margin: -6px -10px 4px;
+  padding: 3px 10px;
+  background: $ink;
+  color: #fff;
+  font-size: 9pt;
+  font-weight: 700;
+  text-align: center;
+}
+
+.af-foot {
+  position: absolute;
+  left: 12mm;
+  right: 12mm;
+  bottom: 6mm;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 3px;
+  border-top: 1px solid #cbd5e1;
+  font-size: 7.5pt;
+  color: #64748b;
+}
+
+// ---------- Print ----------
+@media print {
+  .af-overlay { position: static; display: block; background: #fff; }
+  .af-scroll { overflow: visible; padding: 0; }
+  .af-page {
+    width: auto;
+    min-height: 277mm;
+    margin: 0;
+    padding: 0 0 10mm;
+    box-shadow: none;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .sheet-page-1 { page-break-after: always; break-after: page; }
+  .af-foot { left: 0; right: 0; bottom: 0; }
+}

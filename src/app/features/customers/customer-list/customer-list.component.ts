@@ -3,17 +3,25 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Firestore, collection, getDocs, doc, setDoc } from '@angular/fire/firestore';
-import { Customer, EditHistoryEntry, Branch, CenterOrSamity, UserStaff, Loan, LoanStatus, SavingsTransaction } from '../../../core/models/database.models';
+import { Customer, EditHistoryEntry, Branch, CenterOrSamity, UserStaff, Loan, LoanStatus, SavingsTransaction, PaymentCollection } from '../../../core/models/database.models';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
-import { CustomerRegisterFormComponent } from '../customer-register-form/customer-register-form.component';
+import { CustomerApplicationFormComponent } from '../customer-application-form/customer-application-form.component';
+
+// সদস্য বিবরণী প্রিন্টে কোন কোন অংশ থাকবে (সদস্যের তথ্য সব সময় থাকে)
+export interface CustomerPrintOptions {
+  loans: boolean;           // ঋণ বিবরণী
+  payments: boolean;        // কিস্তি পরিশোধের ইতিহাস
+  paymentDetails: boolean;  // প্রতিটি রসিদের বিস্তারিত বিভাজন
+  savings: boolean;         // সঞ্চয় স্থিতি ও সঞ্চয়ের ইতিহাস
+}
 
 @Component({
   selector: 'app-customer-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, CustomerRegisterFormComponent],
+  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, CustomerApplicationFormComponent],
   templateUrl: './customer-list.component.html',
   styleUrl: './customer-list.component.scss'
 })
@@ -27,6 +35,9 @@ export class CustomerListComponent implements OnInit {
   readonly customers = signal<Customer[]>([]);
   readonly branches = signal<Branch[]>([]);
   readonly centers = signal<CenterOrSamity[]>([]);
+
+  // ফাঁকা সদস্য ভর্তি আবেদন ফরম (প্রিন্ট করে গ্রাহককে দেওয়ার জন্য)
+  readonly showApplicationForm = signal<boolean>(false);
   readonly staffList = signal<UserStaff[]>([]);
   readonly loading = signal<boolean>(true);
 
@@ -47,6 +58,15 @@ export class CustomerListComponent implements OnInit {
   readonly selectedCustomerSavingsHistory = signal<SavingsTransaction[]>([]);
   readonly loadingSavingsHistory = signal<boolean>(false);
   readonly savingsExpanded = signal<boolean>(false);
+  // কিস্তি পরিশোধের ইতিহাস (Installment payment history)
+  readonly selectedCustomerPayments = signal<PaymentCollection[]>([]);
+  readonly loadingPayments = signal<boolean>(false);
+  readonly paymentsExpanded = signal<boolean>(false);
+  readonly expandedPaymentIds = signal<Set<number>>(new Set());
+
+  // Print options modal state
+  readonly showPrintOptions = signal<boolean>(false);
+  readonly printOptions = signal<CustomerPrintOptions>({ loans: true, payments: true, paymentDetails: false, savings: true });
 
   // ID Card modal state
   showIdCardModal = signal<boolean>(false);
@@ -74,14 +94,6 @@ export class CustomerListComponent implements OnInit {
   savingsEditAmount: number = 0;
   savingsEditReason: string = 'সঞ্চয় স্থিতি সমন্বয় / সংশোধন';
   savingsSubmitting = signal<boolean>(false);
-
-  // Customer Creation Form Modal (Official Member Admission Form)
-  showCustomerCreateModal = signal<boolean>(false);
-
-  // Blank Form Printable State
-  showBlankFormModal = signal<boolean>(false);
-  isDirectPrintingBlank = signal<boolean>(false);
-  blankFormSelectedBranchId = signal<number>(1);
 
   async ngOnInit() {
     await this.loadAllData();
@@ -167,15 +179,59 @@ export class CustomerListComponent implements OnInit {
   async openCustomerDetails(customer: Customer) {
     this.selectedCustomerForDetails.set(customer);
     this.savingsExpanded.set(false); // Collapsed / hidden by default when customer info is opened
+    this.paymentsExpanded.set(false);
+    this.expandedPaymentIds.set(new Set());
     this.showDetailsModal.set(true);
     await Promise.all([
       this.loadCustomerLoans(customer.customerId),
-      this.loadCustomerSavingsHistory(customer.customerId)
+      this.loadCustomerSavingsHistory(customer.customerId),
+      this.loadCustomerPayments(customer.customerId)
     ]);
   }
 
   toggleSavingsExpanded() {
     this.savingsExpanded.update(v => !v);
+  }
+
+  togglePaymentsExpanded() {
+    this.paymentsExpanded.update(v => !v);
+  }
+
+  togglePaymentRow(receiptId: number) {
+    this.expandedPaymentIds.update(set => {
+      const next = new Set(set);
+      if (next.has(receiptId)) {
+        next.delete(receiptId);
+      } else {
+        next.add(receiptId);
+      }
+      return next;
+    });
+  }
+
+  isPaymentRowExpanded(receiptId: number): boolean {
+    return this.expandedPaymentIds().has(receiptId);
+  }
+
+  getTotalPaidFromReceipts(): number {
+    return this.selectedCustomerPayments().reduce((sum, r) => sum + (r.totalAmountCollected || 0), 0);
+  }
+
+  getLoanAccountNo(loanId: number): string {
+    return this.selectedCustomerLoans().find(l => l.loanId === loanId)?.loanAccountNo || `LN-${loanId}`;
+  }
+
+  async loadCustomerPayments(customerId: number) {
+    this.loadingPayments.set(true);
+    try {
+      const list = await this.kistiService.getPaymentCollectionsByCustomerId(customerId);
+      this.selectedCustomerPayments.set(list);
+    } catch (err) {
+      console.error('Error loading customer payment history:', err);
+      this.selectedCustomerPayments.set([]);
+    } finally {
+      this.loadingPayments.set(false);
+    }
   }
 
   async loadCustomerLoans(customerId: number) {
@@ -239,6 +295,9 @@ export class CustomerListComponent implements OnInit {
     this.selectedCustomerLoans.set([]);
     this.selectedCustomerSavingsHistory.set([]);
     this.savingsExpanded.set(false);
+    this.selectedCustomerPayments.set([]);
+    this.paymentsExpanded.set(false);
+    this.expandedPaymentIds.set(new Set());
   }
 
   openIdCard(customer: Customer) {
@@ -265,75 +324,74 @@ export class CustomerListComponent implements OnInit {
     return today.toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  printCustomerDetails() {
-    document.body.classList.add('print-customer-details');
+  openPrintOptions() {
+    this.showPrintOptions.set(true);
+  }
+
+  closePrintOptions() {
+    this.showPrintOptions.set(false);
+  }
+
+  togglePrintOption(key: keyof CustomerPrintOptions) {
+    this.printOptions.update(o => ({ ...o, [key]: !o[key] }));
+  }
+
+  setPrintPreset(preset: 'profile' | 'all') {
+    const on = preset === 'all';
+    this.printOptions.set({ loans: on, payments: on, paymentDetails: on, savings: on });
+  }
+
+  confirmPrint() {
+    const options = this.printOptions();
+    this.showPrintOptions.set(false);
+    this.printCustomerDetails(options);
+  }
+
+  // নির্বাচিত অংশগুলো খুলে প্রিন্ট করে, তারপর স্ক্রিনের আগের অবস্থা ফিরিয়ে আনে
+  printCustomerDetails(options: CustomerPrintOptions = { loans: true, payments: true, paymentDetails: true, savings: true }) {
+    const prevSavingsExpanded = this.savingsExpanded();
+    const prevPaymentsExpanded = this.paymentsExpanded();
+    const prevExpandedRows = this.expandedPaymentIds();
+
+    this.savingsExpanded.set(options.savings);
+    this.paymentsExpanded.set(options.payments);
+    this.expandedPaymentIds.set(options.payments && options.paymentDetails
+      ? new Set(this.selectedCustomerPayments().map(r => r.receiptId))
+      : new Set());
+
+    const hideClasses = [
+      !options.loans && 'print-hide-loans',
+      !options.payments && 'print-hide-payments',
+      !options.savings && 'print-hide-savings'
+    ].filter((c): c is string => !!c);
+
+    document.body.classList.add('print-customer-details', ...hideClasses);
     document.body.classList.remove('print-id-card');
 
-    if (this.savingsExpanded()) {
-      document.body.classList.add('print-savings-included');
-      document.body.classList.remove('print-savings-excluded');
-    } else {
-      document.body.classList.add('print-savings-excluded');
-      document.body.classList.remove('print-savings-included');
-    }
-
     const cleanup = () => {
-      document.body.classList.remove('print-customer-details');
-      document.body.classList.remove('print-savings-included');
-      document.body.classList.remove('print-savings-excluded');
+      document.body.classList.remove('print-customer-details', ...hideClasses);
+      this.savingsExpanded.set(prevSavingsExpanded);
+      this.paymentsExpanded.set(prevPaymentsExpanded);
+      this.expandedPaymentIds.set(prevExpandedRows);
       window.removeEventListener('afterprint', cleanup);
     };
     window.addEventListener('afterprint', cleanup);
 
+    // Let Angular render the selected sections (and close the options modal) before opening the print dialog
     setTimeout(() => {
       window.print();
-    }, 50);
+    }, 150);
+  }
+
+  isCustomerDetailsLoading(): boolean {
+    return this.loadingLoans() || this.loadingSavingsHistory() || this.loadingPayments();
   }
 
   printFullCustomerProfile() {
     this.printCustomerDetails();
   }
 
-  // ==========================================
-  // CUSTOMER CREATION & OFFICIAL ADMISSION FORM
-  // ==========================================
-  get selectedBlankBranch(): Branch | undefined {
-    return this.branches().find(b => b.branchId === Number(this.blankFormSelectedBranchId()));
-  }
 
-  openCustomerCreateModal() {
-    this.router.navigate(['/customers/new']);
-  }
-
-  openBlankCustomerForm(branchId?: number) {
-    this.printBlankCustomerForm(branchId);
-  }
-
-  closeBlankCustomerForm() {
-    this.showBlankFormModal.set(false);
-    this.isDirectPrintingBlank.set(false);
-  }
-
-  printBlankCustomerForm(branchId?: number) {
-    if (branchId) {
-      this.blankFormSelectedBranchId.set(branchId);
-    } else if (this.branches().length > 0) {
-      this.blankFormSelectedBranchId.set(this.branches()[0].branchId);
-    }
-
-    // Direct save to local machine: Set PDF file title and trigger print without modal
-    const origTitle = document.title;
-    document.title = 'eKisti-সদস্য-ভর্তি-খালি-আবেদন-ফরম';
-    this.isDirectPrintingBlank.set(true);
-
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => {
-        this.isDirectPrintingBlank.set(false);
-        document.title = origTitle;
-      }, 500);
-    }, 100);
-  }
 
   // Loan summary calculation helpers
   getCompletedLoansCount(loans: Loan[]): number {

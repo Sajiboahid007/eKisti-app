@@ -145,7 +145,7 @@
         <table class="table compact-table">
           <thead>
             <tr>
-              <th style="width: 120px;">{{ lang.isBangla() ? 'আইডি ও কোড' : 'ID & Code' }}</th>
+              <th style="width: 100px;">{{ lang.isBangla() ? 'কোড' : 'Code' }}</th>
               <th>{{ lang.isBangla() ? 'সমিতির নাম ও শাখা' : 'Samity & Branch' }}</th>
               <th>{{ lang.isBangla() ? 'গ্রাম ও এলাকা' : 'Village / Location' }}</th>
               <th>{{ lang.isBangla() ? 'মাঠকর্মী ও সময়' : 'Field Officer & Time' }}</th>
@@ -158,10 +158,7 @@
             @for (center of filteredCenters(); track center.centerId) {
               <tr [class.row-inactive]="(center.status || 'ACTIVE') === 'INACTIVE'">
                 <td>
-                  <div class="id-code-stack">
-                    <span class="id-badge">#{{ center.centerId }}</span>
-                    <span class="code-pill">{{ center.centerCode }}</span>
-                  </div>
+                  <span class="code-pill">{{ center.centerCode }}</span>
                 </td>
                 <td>
                   <div class="primary-text font-bold">{{ center.name }}</div>
@@ -239,7 +236,7 @@
         <table class="table compact-table">
           <thead>
             <tr>
-              <th style="width: 120px;">{{ lang.isBangla() ? 'আইডি ও কোড' : 'ID & Code' }}</th>
+              <th style="width: 100px;">{{ lang.isBangla() ? 'কোড' : 'Code' }}</th>
               <th>{{ lang.isBangla() ? 'শাখার নাম' : 'Branch Name' }}</th>
               <th>{{ lang.isBangla() ? 'অঞ্চল ও ঠিকানা' : 'Region & Address' }}</th>
               <th>{{ lang.isBangla() ? 'ব্যবস্থাপক ও ফোন' : 'Manager & Phone' }}</th>
@@ -252,10 +249,7 @@
             @for (branch of filteredBranches(); track branch.branchId) {
               <tr [class.row-inactive]="(branch.status || 'ACTIVE') === 'INACTIVE'">
                 <td>
-                  <div class="id-code-stack">
-                    <span class="id-badge branch-id">#{{ branch.branchId }}</span>
-                    <span class="code-pill">{{ branch.branchCode }}</span>
-                  </div>
+                  <span class="code-pill">{{ branch.branchCode }}</span>
                 </td>
                 <td>
                   <div class="primary-text font-bold">

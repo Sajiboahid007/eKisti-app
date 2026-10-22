@@ -1,0 +1,237 @@
+<div class="af-overlay">
+  <!-- Toolbar (screen only) -->
+  <div class="af-toolbar no-print">
+    <div class="af-toolbar-title">
+      <span class="material-symbols-outlined">description</span>
+      <div>
+        <strong>সদস্য ভর্তি আবেদন ফরম</strong>
+        <span>ফাঁকা ফরম প্রিন্ট করে গ্রাহককে দিন — পূরণ করে শাখা অফিসে জমা দেবেন</span>
+      </div>
+    </div>
+    <div class="af-toolbar-actions">
+      <select class="af-select" [ngModel]="selectedBranchId()" (ngModelChange)="onBranchChange($event)"
+        title="ফরমে শাখার নাম ছাপাতে চাইলে নির্বাচন করুন">
+        <option [ngValue]="0">শাখা: ফাঁকা রাখুন</option>
+        @for (b of branches(); track b.branchId) {
+        <option [ngValue]="b.branchId">{{ b.name }}</option>
+        }
+      </select>
+      <select class="af-select" [ngModel]="selectedCenterId()" (ngModelChange)="selectedCenterId.set(+$event)"
+        [disabled]="!selectedBranchId()" title="ফরমে সমিতির নাম ছাপাতে চাইলে নির্বাচন করুন">
+        <option [ngValue]="0">সমিতি: ফাঁকা রাখুন</option>
+        @for (c of availableCenters(); track c.centerId) {
+        <option [ngValue]="c.centerId">{{ c.name }}</option>
+        }
+      </select>
+      <button type="button" class="btn btn-primary btn-sm" (click)="print()">
+        <span class="material-symbols-outlined">print</span>
+        <span>প্রিন্ট করুন</span>
+      </button>
+      <button type="button" class="af-close" (click)="close()" title="বন্ধ করুন">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="af-scroll">
+    <div id="printableBlankCustomerForm">
+
+      <!-- ================= PAGE 1 ================= -->
+      <section class="af-page sheet-page-1">
+        <header class="af-head">
+          <div class="af-logo">ই</div>
+          <div class="af-org">
+            <h1>ই-কিস্তি মাইক্রোফাইন্যান্স লিমিটেড</h1>
+            <p>eKisti Microfinance Ltd. — স্মার্ট লোকাল লোন ও কিস্তি ব্যবস্থাপনা</p>
+            <div class="af-title">সদস্য ভর্তি আবেদন ফরম <small>(Member Admission Application)</small></div>
+          </div>
+          <div class="af-photo">আবেদনকারীর<br />পাসপোর্ট সাইজ<br />ছবি</div>
+        </header>
+
+        <div class="af-meta">
+          <div class="af-field"><label>ফরম নং</label><span class="af-line"></span></div>
+          <div class="af-field"><label>আবেদনের তারিখ</label><span class="af-line"></span></div>
+          <div class="af-field"><label>শাখা</label><span class="af-line">{{ branchName() }}</span></div>
+          <div class="af-field"><label>সমিতি / রুট</label><span class="af-line">{{ centerName() }}</span></div>
+        </div>
+
+        <!-- ১. ব্যক্তিগত তথ্য -->
+        <h2 class="af-section"><span>১</span>ব্যক্তিগত ও পরিচয় সংক্রান্ত তথ্য (KYC)</h2>
+        <div class="af-field"><label>আবেদনকারীর পূর্ণ নাম (বাংলায়)</label><span class="af-line"></span></div>
+        <div class="af-field"><label>নাম (ইংরেজি বড় অক্ষরে)</label><span class="af-line"></span></div>
+        <div class="af-grid-2">
+          <div class="af-field"><label>পিতার নাম</label><span class="af-line"></span></div>
+          <div class="af-field"><label>মাতার নাম</label><span class="af-line"></span></div>
+        </div>
+        <div class="af-field"><label>স্বামী / স্ত্রীর নাম</label><span class="af-line"></span></div>
+        <div class="af-grid-2">
+          <div class="af-field">
+            <label>জন্ম তারিখ</label>
+            <span class="af-boxes">
+              <i></i><i></i><b>/</b><i></i><i></i><b>/</b><i></i><i></i><i></i><i></i>
+            </span>
+          </div>
+          <div class="af-field">
+            <label>লিঙ্গ</label>
+            <span class="af-checks">
+              <span><i class="af-cb"></i>মহিলা</span>
+              <span><i class="af-cb"></i>পুরুষ</span>
+              <span><i class="af-cb"></i>অন্যান্য</span>
+            </span>
+          </div>
+        </div>
+        <div class="af-field">
+          <label>জাতীয় পরিচয়পত্র (NID) নং</label>
+          <span class="af-boxes">@for (x of nidBoxes; track $index) {<i></i>}</span>
+        </div>
+        <div class="af-field"><label>জন্ম নিবন্ধন নং (NID না থাকলে)</label><span class="af-line"></span></div>
+        <div class="af-grid-2">
+          <div class="af-field">
+            <label>মোবাইল (প্রাথমিক)</label>
+            <span class="af-boxes">@for (x of phoneBoxes; track $index) {<i></i>}</span>
+          </div>
+          <div class="af-field">
+            <label>মোবাইল (বিকল্প)</label>
+            <span class="af-boxes">@for (x of phoneBoxes; track $index) {<i></i>}</span>
+          </div>
+        </div>
+
+        <!-- ২. ঠিকানা -->
+        <h2 class="af-section"><span>২</span>বর্তমান ও স্থায়ী ঠিকানা</h2>
+        <div class="af-subhead">বর্তমান ঠিকানা</div>
+        <div class="af-grid-2">
+          <div class="af-field"><label>গ্রাম / বাড়ি / রাস্তা</label><span class="af-line"></span></div>
+          <div class="af-field"><label>ডাকঘর</label><span class="af-line"></span></div>
+          <div class="af-field"><label>থানা / উপজেলা</label><span class="af-line"></span></div>
+          <div class="af-field"><label>জেলা</label><span class="af-line"></span></div>
+        </div>
+        <div class="af-field">
+          <label>বাসস্থানের ধরন</label>
+          <span class="af-checks">
+            <span><i class="af-cb"></i>নিজস্ব বাড়ি</span>
+            <span><i class="af-cb"></i>ভাড়া বাড়ি</span>
+            <span><i class="af-cb"></i>পারিবারিক বাড়ি</span>
+          </span>
+        </div>
+        <div class="af-subhead">
+          স্থায়ী ঠিকানা
+          <span class="af-checks af-inline"><span><i class="af-cb"></i>বর্তমান ঠিকানার অনুরূপ</span></span>
+        </div>
+        <div class="af-grid-2">
+          <div class="af-field"><label>গ্রাম / বাড়ি / রাস্তা</label><span class="af-line"></span></div>
+          <div class="af-field"><label>ডাকঘর</label><span class="af-line"></span></div>
+          <div class="af-field"><label>থানা / উপজেলা</label><span class="af-line"></span></div>
+          <div class="af-field"><label>জেলা</label><span class="af-line"></span></div>
+        </div>
+
+        <!-- ৩. পেশা ও আয় -->
+        <h2 class="af-section"><span>৩</span>পেশা ও আয়ের তথ্য</h2>
+        <div class="af-grid-2">
+          <div class="af-field"><label>মূল পেশা</label><span class="af-line"></span></div>
+          <div class="af-field"><label>দোকান / ব্যবসার নাম</label><span class="af-line"></span></div>
+          <div class="af-field"><label>ব্যবসার ঠিকানা</label><span class="af-line"></span></div>
+          <div class="af-field"><label>আনুমানিক মাসিক আয় (৳)</label><span class="af-line"></span></div>
+        </div>
+
+        <footer class="af-foot">
+          <span>পৃষ্ঠা ১ / ২</span>
+          <span>ফরমটি স্পষ্ট অক্ষরে পূরণ করুন। ভুল বা অসত্য তথ্যের জন্য আবেদন বাতিল হতে পারে।</span>
+        </footer>
+      </section>
+
+      <!-- ================= PAGE 2 ================= -->
+      <section class="af-page sheet-page-2">
+        <!-- ৪. জামিনদার -->
+        <h2 class="af-section"><span>৪</span>জামিনদারের তথ্য</h2>
+        <div class="af-guarantors">
+          @for (g of ['১ম জামিনদার', '২য় জামিনদার']; track g) {
+          <div class="af-box">
+            <div class="af-box-head">
+              <strong>{{ g }}</strong>
+              <div class="af-photo af-photo-sm">ছবি</div>
+            </div>
+            <div class="af-field"><label>নাম</label><span class="af-line"></span></div>
+            <div class="af-field"><label>আবেদনকারীর সাথে সম্পর্ক</label><span class="af-line"></span></div>
+            <div class="af-field"><label>মোবাইল</label><span class="af-line"></span></div>
+            <div class="af-field"><label>NID নং</label><span class="af-line"></span></div>
+            <div class="af-field"><label>পেশা</label><span class="af-line"></span></div>
+            <div class="af-field"><label>ঠিকানা</label><span class="af-line"></span></div>
+            <div class="af-field"><label></label><span class="af-line"></span></div>
+            <div class="af-sign">জামিনদারের স্বাক্ষর ও তারিখ</div>
+          </div>
+          }
+        </div>
+
+        <!-- ৫. জামানত -->
+        <h2 class="af-section"><span>৫</span>জামানত / সিকিউরিটি</h2>
+        <div class="af-field af-field-head"><span class="af-checks"><span><i class="af-cb"></i>ব্যাংক চেক জমা</span></span></div>
+        <div class="af-grid-2">
+          <div class="af-field"><label>ব্যাংকের নাম</label><span class="af-line"></span></div>
+          <div class="af-field"><label>শাখা</label><span class="af-line"></span></div>
+          <div class="af-field"><label>হিসাব নং</label><span class="af-line"></span></div>
+          <div class="af-field"><label>চেক নং</label><span class="af-line"></span></div>
+        </div>
+        <div class="af-grid-2">
+          <div class="af-field">
+            <span class="af-checks"><span><i class="af-cb"></i>৩০০ টাকার স্ট্যাম্প</span></span>
+            <label>নং</label><span class="af-line"></span>
+          </div>
+          <div class="af-field"><label>অন্যান্য বন্ধক (দলিল ইত্যাদি)</label><span class="af-line"></span></div>
+        </div>
+
+        <!-- ৬. সংযুক্তি -->
+        <h2 class="af-section"><span>৬</span>সংযুক্ত কাগজপত্র (টিক দিন)</h2>
+        <div class="af-checklist">
+          <span><i class="af-cb"></i>আবেদনকারীর ২ কপি পাসপোর্ট সাইজ ছবি</span>
+          <span><i class="af-cb"></i>আবেদনকারীর NID / জন্ম নিবন্ধনের ফটোকপি</span>
+          <span><i class="af-cb"></i>জামিনদারের ছবি ও NID ফটোকপি</span>
+          <span><i class="af-cb"></i>স্বাক্ষরিত ব্যাংক চেক</span>
+          <span><i class="af-cb"></i>৩০০ টাকার নন-জুডিশিয়াল স্ট্যাম্প</span>
+          <span><i class="af-cb"></i>ট্রেড লাইসেন্স / ব্যবসার প্রমাণ (যদি থাকে)</span>
+        </div>
+
+        <!-- ৭. অঙ্গীকারনামা -->
+        <h2 class="af-section"><span>৭</span>আবেদনকারীর অঙ্গীকারনামা</h2>
+        <p class="af-declaration">
+          আমি এই মর্মে অঙ্গীকার করছি যে, উপরে প্রদত্ত সকল তথ্য সত্য ও নির্ভুল। আমি ই-কিস্তি মাইক্রোফাইন্যান্স
+          লিমিটেডের সমিতির সদস্য হিসেবে সংস্থার সকল নিয়মকানুন মেনে চলব, নিয়মিত সাপ্তাহিক সভায় উপস্থিত থাকব,
+          নির্ধারিত সঞ্চয় জমা দেব এবং গৃহীত ঋণের কিস্তি যথাসময়ে পরিশোধ করব। কোনো তথ্য অসত্য প্রমাণিত হলে
+          সংস্থা আমার সদস্যপদ বাতিলসহ আইনগত ব্যবস্থা গ্রহণ করতে পারবে।
+        </p>
+        <div class="af-signatures">
+          <div class="af-thumb">বাম হাতের<br />বৃদ্ধাঙ্গুলের ছাপ</div>
+          <div class="af-sign">আবেদনকারীর স্বাক্ষর ও তারিখ</div>
+        </div>
+
+        <!-- অফিস কর্তৃক পূরণীয় -->
+        <div class="af-office">
+          <div class="af-office-title">শুধুমাত্র অফিস কর্তৃক পূরণীয়</div>
+          <div class="af-grid-2">
+            <div class="af-field"><label>সদস্য আইডি / কোড</label><span class="af-line"></span></div>
+            <div class="af-field"><label>ভর্তির তারিখ</label><span class="af-line"></span></div>
+            <div class="af-field"><label>দায়িত্বপ্রাপ্ত মাঠকর্মী</label><span class="af-line"></span></div>
+            <div class="af-field"><label>মাঠ যাচাইয়ের তারিখ</label><span class="af-line"></span></div>
+          </div>
+          <div class="af-field">
+            <label>সিদ্ধান্ত</label>
+            <span class="af-checks">
+              <span><i class="af-cb"></i>অনুমোদিত</span>
+              <span><i class="af-cb"></i>বাতিল</span>
+              <span><i class="af-cb"></i>পুনঃযাচাই প্রয়োজন</span>
+            </span>
+          </div>
+          <div class="af-signatures af-signatures-3">
+            <div class="af-sign">মাঠকর্মীর স্বাক্ষর</div>
+            <div class="af-sign">হিসাবরক্ষক / ক্যাশিয়ার</div>
+            <div class="af-sign">শাখা ব্যবস্থাপকের স্বাক্ষর ও সীল</div>
+          </div>
+        </div>
+
+        <footer class="af-foot">
+          <span>পৃষ্ঠা ২ / ২</span>
+          <span>পূরণকৃত ফরম প্রয়োজনীয় কাগজপত্রসহ সংশ্লিষ্ট শাখা অফিসে জমা দিন।</span>
+        </footer>
+      </section>
+    </div>
+  </div>
+</div>

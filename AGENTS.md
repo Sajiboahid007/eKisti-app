@@ -120,8 +120,7 @@ c:/unversity/eKisti-app/
             ├── dashboard/         # Executive KPIs, collection targets, loan balances, samity breakdown
             ├── customers/         # Member onboarding, directory, passbook, and printable admission form
             │   ├── customer-list/         # Searchable/filterable customer directory with print triggers
-            │   ├── customer-form/         # Edit customer KYC, address, guarantors, collateral
-            │   └── customer-register-form/# Comprehensive admission form (both blank print & digital input)
+            │   └── customer-form/         # Create & edit customer KYC, address, guarantors, collateral
             ├── loans/             # Loan lifecycle management
             │   ├── loan-list/     # Portfolio view filterable by status (Active, Overdue, Closed)
             │   ├── loan-disburse/ # Loan creation calculator, interest rules, first due date, disburse voucher
@@ -316,15 +315,9 @@ Routes are defined in [src/app/app.routes.ts](file:///c:/unversity/eKisti-app/sr
 1. **[CustomerListComponent](file:///c:/unversity/eKisti-app/src/app/features/customers/customer-list/customer-list.component.ts):**
    - Renders data table with search by Name, Phone, Customer Code, and NID.
    - Filters by branch and samity.
-   - **Direct Print Actions:** Triggers `directPrintBlankForm()` or modal admission form without navigation disruption.
    - View Passbook / Customer Details Modal with loan breakdown and savings history.
-2. **[CustomerRegisterFormComponent](file:///c:/unversity/eKisti-app/src/app/features/customers/customer-register-form/customer-register-form.component.ts):**
-   - **Dual-Purpose Design:** Works both as an interactive registration screen AND an official 2-Page A4 Printable Admission Form (`#printableCustomerAdmissionForm` / `#printableBlankCustomerForm`).
-   - Supports input `@Input() isBlankForm: boolean = false`.
-   - Page 1: Member personal details, family, present/permanent address, occupation.
-   - Page 2: Primary guarantor, secondary guarantor, security collateral (cheque/stamp), declaration & official signature boxes.
-3. **[CustomerFormComponent](file:///c:/unversity/eKisti-app/src/app/features/customers/customer-form/customer-form.component.ts):**
-   - Form for editing existing members, demanding an audit reason for any update.
+2. **[CustomerFormComponent](file:///c:/unversity/eKisti-app/src/app/features/customers/customer-form/customer-form.component.ts):**
+   - Comprehensive form for creating new members and editing existing members with KYC, guarantors, collateral, and audit reasons.
 
 ### Loans Feature
 1. **[LoanListComponent](file:///c:/unversity/eKisti-app/src/app/features/loans/loan-list/loan-list.component.ts):**

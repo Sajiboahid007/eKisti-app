@@ -244,29 +244,6 @@
 }
 
 /* Badges & Compact Cells */
-.id-code-stack {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: nowrap;
-}
-
-.id-badge {
-  display: inline-block;
-  padding: 0.15rem 0.4rem;
-  background-color: #e0f2fe;
-  color: #0369a1;
-  font-weight: 700;
-  font-size: 0.75rem;
-  border-radius: var(--radius-sm);
-  font-family: monospace;
-
-  &.branch-id {
-    background-color: #fef3c7;
-    color: #b45309;
-  }
-}
-
 .code-pill {
   font-size: 0.7rem;
   font-weight: 700;
