@@ -7,6 +7,7 @@ import { Loan, InstallmentSchedule, CenterOrSamity, Branch } from '../../../core
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService, ActiveUserSession } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 export interface DailySheetItem {
   loan: Loan;
@@ -22,7 +23,7 @@ export interface DailySheetItem {
 @Component({
   selector: 'app-daily-sheet',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, SkeletonComponent],
   templateUrl: './daily-sheet.component.html',
   styleUrl: './daily-sheet.component.scss'
 })
@@ -33,6 +34,13 @@ export class DailySheetComponent implements OnInit {
   readonly lang = inject(LanguageService);
 
   readonly allBranches = signal<Branch[]>([]);
+
+  // এরিয়া ম্যানেজারের নির্ধারিত শাখাগুলোর নাম (কমা দিয়ে)
+  getAssignedBranchNames(): string {
+    const ids = this.authService.accessibleBranchIds() || [];
+    const names = this.allBranches().filter(b => ids.includes(b.branchId)).map(b => b.name);
+    return names.length > 0 ? names.join(', ') : 'কোনো শাখা নির্ধারিত নেই';
+  }
   readonly allCenters = signal<CenterOrSamity[]>([]);
   readonly filteredCenters = signal<CenterOrSamity[]>([]);
   readonly selectedCenterId = signal<number>(101);
@@ -67,7 +75,7 @@ export class DailySheetComponent implements OnInit {
     } else if (user.role === 'AREA_MANAGER') {
       return {
         title: 'এরিয়া কালেকশন বিবরণী',
-        subtitle: `এরিয়া: ${user.areaName || 'মিরপুর জোন'} (এরিয়াভুক্ত শাখার রুট ও ঋণ)`,
+        subtitle: `এরিয়াভুক্ত শাখা: ${this.getAssignedBranchNames()} (শাখাগুলোর রুট ও ঋণ)`,
         tag: 'এরিয়া ম্যানেজার ভিউ',
         icon: 'map',
         cssClass: 'scope-am'
@@ -122,11 +130,9 @@ export class DailySheetComponent implements OnInit {
     if (user.role === 'SUPER_ADMIN' || user.role === 'MANAGING_DIRECTOR') {
       // Super admin sees all routes
       permitted = centers;
-    } else if (user.role === 'AREA_MANAGER' || user.role === 'REGIONAL_MANAGER') {
-      // Area manager sees routes in their area branches
-      const areaBranches = branches.filter(b => b.areaName === user.areaName || b.branchId === user.branchId);
-      const branchIds = areaBranches.map(b => b.branchId);
-      permitted = centers.filter(c => branchIds.includes(c.branchId) || c.branchId === user.branchId);
+    } else if (this.authService.isAreaScoped()) {
+      // Area manager sees routes of their assigned branches only
+      permitted = centers.filter(c => this.authService.canAccessBranch(c.branchId));
     } else if (user.role === 'BRANCH_MANAGER' || user.role === 'CASHIER') {
       // Branch manager sees routes belonging to their branch
       permitted = centers.filter(c => c.branchId === user.branchId);
@@ -184,6 +190,8 @@ export class DailySheetComponent implements OnInit {
         );
       } else if (currentUser.role === 'BRANCH_MANAGER' || currentUser.role === 'CASHIER') {
         activeLoans = activeLoans.filter(l => l.branchId === currentUser.branchId);
+      } else if (this.authService.isAreaScoped()) {
+        activeLoans = activeLoans.filter(l => this.authService.canAccessBranch(l.branchId));
       }
 
       const items: DailySheetItem[] = [];

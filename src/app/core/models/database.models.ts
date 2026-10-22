@@ -138,6 +138,7 @@ export interface UserStaff extends SoftDeletable {
   branchId: number;               // 0 for System Admin & Head Office, 1..N for Field Branches
   branchName?: string;            // "প্রধান কার্যালয় (হেড অফিস)" বা "মিরপুর শাখা"
   assignedCenterIds: number[];    // Array of Center IDs assigned to this FO (only branch staff)
+  assignedBranchIds?: number[];   // এরিয়া/রিজিওনাল ম্যানেজারের তদারকিভুক্ত শাখাসমূহ (only AREA_MANAGER / REGIONAL_MANAGER)
   nidNumber: string;
   salary: number;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';

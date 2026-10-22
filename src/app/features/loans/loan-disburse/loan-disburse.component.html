@@ -18,6 +18,9 @@
     </div>
   </div>
 
+  @if (loading()) {
+    <app-skeleton variant="form" [rows]="8" label="গ্রাহক ও ঋণ প্রোডাক্ট লোড হচ্ছে..." />
+  } @else {
   <div class="disburse-grid">
     <!-- Form Side -->
     <div class="card form-card">
@@ -332,6 +335,7 @@
       </div>
     </div>
   </div>
+  }
 </div>
 
 <!-- ============================================================ -->

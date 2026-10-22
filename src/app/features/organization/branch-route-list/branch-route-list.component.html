@@ -10,10 +10,12 @@
 
     <div class="header-right">
       @if (activeTab() === 'branches') {
+        @if (canCreateOrRemoveBranch()) {
         <button class="btn btn-primary btn-sm" (click)="openCreateBranchModal()">
           <span class="material-symbols-outlined">add_business</span>
           <span>{{ lang.isBangla() ? '+ নতুন শাখা' : '+ New Branch' }}</span>
         </button>
+        }
       } @else {
         <button class="btn btn-primary btn-sm" (click)="openCreateRouteModal()">
           <span class="material-symbols-outlined">add_location_alt</span>
@@ -130,10 +132,7 @@
 
   <!-- Loading State -->
   @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>{{ lang.isBangla() ? 'ডাটাবেজ থেকে লোড হচ্ছে...' : 'Loading from database...' }}</p>
-    </div>
+    <div class="card"><app-skeleton variant="table" [rows]="6" [columns]="6" [label]="lang.isBangla() ? 'ডাটাবেজ থেকে লোড হচ্ছে...' : 'Loading from database...'" /></div>
   }
 
   <!-- ========================================== -->
@@ -291,6 +290,7 @@
                     class="status-toggle-btn"
                     [class.btn-active]="(branch.status || 'ACTIVE') === 'ACTIVE'"
                     [class.btn-inactive]="(branch.status || 'ACTIVE') === 'INACTIVE'"
+                    [disabled]="!canCreateOrRemoveBranch()"
                     (click)="toggleBranchStatus(branch)"
                     [title]="lang.isBangla() ? 'ক্লিক করে সক্রিয়/নিষ্ক্রিয় করুন' : 'Click to toggle Active/Inactive'">
                     <span class="dot"></span>
@@ -302,9 +302,11 @@
                     <button class="action-btn edit" (click)="openEditBranchModal(branch)" [title]="lang.isBangla() ? 'এডিট করুন' : 'Edit'">
                       <span class="material-symbols-outlined">edit</span>
                     </button>
+                    @if (canCreateOrRemoveBranch()) {
                     <button class="action-btn delete" (click)="openDeleteDialog('branch', branch.branchId, branch.name)" [title]="lang.isBangla() ? 'মুছে ফেলুন' : 'Delete'">
                       <span class="material-symbols-outlined">delete</span>
                     </button>
+                    }
                   </div>
                 </td>
               </tr>
@@ -313,10 +315,14 @@
                 <td colspan="7" class="empty-cell">
                   <div class="empty-state">
                     <span class="material-symbols-outlined empty-icon">apartment</span>
-                    <p>{{ lang.isBangla() ? 'কোনো শাখা নেই' : 'No branches found' }}</p>
+                    <p>{{ authService.isAreaScoped()
+                      ? (lang.isBangla() ? 'আপনার জন্য কোনো শাখা নির্ধারিত নেই — অ্যাডমিনের সাথে যোগাযোগ করুন' : 'No branches assigned to you — contact an admin')
+                      : (lang.isBangla() ? 'কোনো শাখা নেই' : 'No branches found') }}</p>
+                    @if (canCreateOrRemoveBranch()) {
                     <button class="btn btn-sm btn-primary mt-1" (click)="openCreateBranchModal()">
                       {{ lang.isBangla() ? '+ নতুন শাখা তৈরি' : '+ Create Branch' }}
                     </button>
+                    }
                   </div>
                 </td>
               </tr>

@@ -108,10 +108,7 @@
     <div class="card">
       <div class="card-body p-0">
         @if (loading()) {
-          <div class="loading-state">
-            <span class="material-symbols-outlined spinning">sync</span>
-            <p>{{ lang.isBangla() ? 'অ্যাডমিন তথ্য লোড হচ্ছে...' : 'Loading admin data...' }}</p>
-          </div>
+          <app-skeleton variant="table" [rows]="5" [columns]="6" [label]="lang.isBangla() ? 'অ্যাডমিন তথ্য লোড হচ্ছে...' : 'Loading admin data...'" />
         } @else if (systemAdmins().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined">shield</span>
@@ -266,10 +263,7 @@
     <div class="card">
       <div class="card-body p-0">
         @if (loading()) {
-          <div class="loading-state">
-            <span class="material-symbols-outlined spinning">sync</span>
-            <p>{{ lang.isBangla() ? 'হেড অফিস ডেটা লোড হচ্ছে...' : 'Loading Head Office data...' }}</p>
-          </div>
+          <app-skeleton variant="table" [rows]="5" [columns]="6" [label]="lang.isBangla() ? 'হেড অফিস ডেটা লোড হচ্ছে...' : 'Loading Head Office data...'" />
         } @else if (headOfficeStaff().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined">corporate_fare</span>
@@ -317,10 +311,21 @@
                       </span>
                     </td>
                     <td>
-                      <span class="badge badge-cat-ho">
-                        <span class="material-symbols-outlined badge-icon-sm">corporate_fare</span>
-                        {{ staff.branchName || 'প্রধান কার্যালয় (হেড অফিস)' }}
-                      </span>
+                      @if (isAreaScopedRole(staff.role)) {
+                        @if (getStaffAssignedBranches(staff).length > 0) {
+                          <span class="branch-pill" [title]="getStaffAssignedBranchNames(staff)">
+                            <span class="material-symbols-outlined branch-icon">store</span>
+                            {{ getStaffAssignedBranches(staff).length === 1 ? getStaffAssignedBranches(staff)[0].name : getStaffAssignedBranches(staff).length + ' টি শাখা' }}
+                          </span>
+                        } @else {
+                          <span class="badge badge-overdue">শাখা নির্ধারিত নেই</span>
+                        }
+                      } @else {
+                        <span class="badge badge-cat-ho">
+                          <span class="material-symbols-outlined badge-icon-sm">corporate_fare</span>
+                          {{ staff.branchName || 'প্রধান কার্যালয় (হেড অফিস)' }}
+                        </span>
+                      }
                     </td>
                     <td class="amount-bdt text-end">৳ {{ staff.salary | number }}</td>
                     <td>
@@ -424,10 +429,7 @@
     <div class="card">
       <div class="card-body p-0">
         @if (loading()) {
-          <div class="loading-state">
-            <span class="material-symbols-outlined spinning">sync</span>
-            <p>{{ lang.isBangla() ? 'শাখা কর্মী ডেটা লোড হচ্ছে...' : 'Loading branch staff data...' }}</p>
-          </div>
+          <app-skeleton variant="table" [rows]="5" [columns]="6" [label]="lang.isBangla() ? 'শাখা কর্মী ডেটা লোড হচ্ছে...' : 'Loading branch staff data...'" />
         } @else if (branchStaff().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined">group_off</span>
@@ -1101,7 +1103,7 @@
           <div class="form-group mb-3">
             <label class="d-block mb-2 font-weight-bold">ব্যবহারকারী ক্যাটাগরি / টিয়ার <span class="required">*</span></label>
             <div class="category-toggle-grid">
-              <label class="cat-toggle-card" [class.selected]="editForm.category === 'SYSTEM_ADMIN'">
+              <label class="cat-toggle-card" [class.selected]="editForm.category === 'SYSTEM_ADMIN'" (click)="onEditCategoryChange('SYSTEM_ADMIN')">
                 <input type="radio" name="editCat" value="SYSTEM_ADMIN" [(ngModel)]="editForm.category" />
                 <span class="material-symbols-outlined cat-icon text-danger">security</span>
                 <div class="cat-text">
@@ -1109,7 +1111,7 @@
                   <span>সুপার অ্যাডমিন / টেকনিক্যাল</span>
                 </div>
               </label>
-              <label class="cat-toggle-card" [class.selected]="editForm.category === 'HEAD_OFFICE'">
+              <label class="cat-toggle-card" [class.selected]="editForm.category === 'HEAD_OFFICE'" (click)="onEditCategoryChange('HEAD_OFFICE')">
                 <input type="radio" name="editCat" value="HEAD_OFFICE" [(ngModel)]="editForm.category" />
                 <span class="material-symbols-outlined cat-icon text-primary">corporate_fare</span>
                 <div class="cat-text">
@@ -1117,7 +1119,7 @@
                   <span>হেড অফিস কর্মকর্তা / অডিটর</span>
                 </div>
               </label>
-              <label class="cat-toggle-card" [class.selected]="editForm.category === 'BRANCH_STAFF'">
+              <label class="cat-toggle-card" [class.selected]="editForm.category === 'BRANCH_STAFF'" (click)="onEditCategoryChange('BRANCH_STAFF')">
                 <input type="radio" name="editCat" value="BRANCH_STAFF" [(ngModel)]="editForm.category" />
                 <span class="material-symbols-outlined cat-icon text-success">storefront</span>
                 <div class="cat-text">
@@ -1157,7 +1159,7 @@
             <div class="form-group">
               <label>পদবী / পদমর্যাদা (Role) <span class="required">*</span></label>
               <select class="form-control" [(ngModel)]="editForm.role" name="role">
-                @for (r of rolesList(); track r.roleId) {
+                @for (r of filteredEditRolesByCategory(); track r.roleId) {
                   <option [value]="r.code">
                     {{ lang.isBangla() ? r.nameBn : r.nameEn }} ({{ r.code }})
                   </option>
@@ -1196,6 +1198,30 @@
               </select>
             </div>
           </div>
+
+          <!-- এরিয়াভুক্ত শাখা নির্বাচন (Area / Regional Manager) -->
+          @if (isEditAreaRole) {
+            <div class="form-group mt-3">
+              <label>এরিয়াভুক্ত শাখা নির্বাচন করুন <span class="required">*</span></label>
+              <p class="form-hint">এই কর্মকর্তা শুধু নির্বাচিত শাখাগুলোর সদস্য, ঋণ, রুট ও কিস্তি আদায় দেখতে ও তদারকি করতে পারবেন।</p>
+              <div class="branch-scope-actions">
+                <span>{{ editForm.assignedBranchIds.length }} / {{ branches().length }} টি শাখা নির্বাচিত</span>
+                <button type="button" class="btn-link-xs" (click)="editForm.assignedBranchIds = branches().map(b => b.branchId)">সব নির্বাচন</button>
+                <button type="button" class="btn-link-xs" (click)="editForm.assignedBranchIds = []">মুছে ফেলুন</button>
+              </div>
+              <div class="branch-scope-grid">
+                @for (b of branches(); track b.branchId) {
+                  <label class="branch-scope-card" [class.selected]="editForm.assignedBranchIds.includes(b.branchId)">
+                    <input type="checkbox" [checked]="editForm.assignedBranchIds.includes(b.branchId)" (change)="toggleEditBranchAssignment(b.branchId)" />
+                    <div>
+                      <strong>{{ b.name }}</strong>
+                      <span>{{ b.branchCode }}{{ b.areaName ? ' · ' + b.areaName : '' }}</span>
+                    </div>
+                  </label>
+                }
+              </div>
+            </div>
+          }
 
           <!-- Assigned Routes / Centers Multi-Select (Only for Branch Staff) -->
           @if (editForm.category === 'BRANCH_STAFF') {

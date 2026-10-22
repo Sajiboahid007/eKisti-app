@@ -7,11 +7,12 @@ import { Loan, InstallmentSchedule } from '../../../core/models/database.models'
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-loan-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent],
+  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, SkeletonComponent],
   templateUrl: './loan-detail.component.html',
   styleUrl: './loan-detail.component.scss'
 })

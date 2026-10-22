@@ -1,0 +1,125 @@
+<div class="sk-wrap" role="status" aria-busy="true" [attr.aria-label]="label">
+  @switch (variant) {
+    @case ('table') {
+      <div class="sk-table">
+        <div class="sk-tr sk-thead" [style.grid-template-columns]="'repeat(' + columns + ', 1fr)'">
+          @for (c of range(columns); track c) {
+            <div class="skeleton sk-line" [style.width]="cellWidth(0, c)"></div>
+          }
+        </div>
+        @for (r of range(rows); track r) {
+          <div class="sk-tr" [style.grid-template-columns]="'repeat(' + columns + ', 1fr)'">
+            @for (c of range(columns); track c) {
+              @if (c === 0) {
+                <div class="sk-cell-avatar">
+                  <div class="skeleton sk-avatar"></div>
+                  <div class="sk-stack">
+                    <div class="skeleton sk-line" [style.width]="cellWidth(r + 1, c)"></div>
+                    <div class="skeleton sk-line sm" style="width: 45%"></div>
+                  </div>
+                </div>
+              } @else {
+                <div class="skeleton sk-line" [style.width]="cellWidth(r + 1, c)"></div>
+              }
+            }
+          </div>
+        }
+      </div>
+    }
+
+    @case ('cards') {
+      <div class="sk-card-grid">
+        @for (i of range(cards); track i) {
+          <div class="sk-card">
+            <div class="skeleton sk-icon"></div>
+            <div class="sk-stack">
+              <div class="skeleton sk-line" style="width: 60%"></div>
+              <div class="skeleton sk-line lg" style="width: 80%"></div>
+              <div class="skeleton sk-line sm" style="width: 40%"></div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    @case ('detail') {
+      <div class="sk-detail">
+        <div class="sk-detail-header">
+          <div class="sk-stack">
+            <div class="skeleton sk-line sm" style="width: 25%"></div>
+            <div class="skeleton sk-line xl" style="width: 45%"></div>
+            <div class="skeleton sk-line" style="width: 35%"></div>
+          </div>
+          <div class="skeleton sk-button"></div>
+        </div>
+        <div class="sk-card-grid">
+          @for (i of range(cards); track i) {
+            <div class="sk-card">
+              <div class="skeleton sk-icon"></div>
+              <div class="sk-stack">
+                <div class="skeleton sk-line" style="width: 60%"></div>
+                <div class="skeleton sk-line lg" style="width: 80%"></div>
+              </div>
+            </div>
+          }
+        </div>
+        <div class="sk-panel">
+          <div class="sk-table">
+            <div class="sk-tr sk-thead" [style.grid-template-columns]="'repeat(' + columns + ', 1fr)'">
+              @for (c of range(columns); track c) {
+                <div class="skeleton sk-line" [style.width]="cellWidth(0, c)"></div>
+              }
+            </div>
+            @for (r of range(rows); track r) {
+              <div class="sk-tr" [style.grid-template-columns]="'repeat(' + columns + ', 1fr)'">
+                @for (c of range(columns); track c) {
+                  <div class="skeleton sk-line" [style.width]="cellWidth(r + 1, c)"></div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    @case ('form') {
+      <div class="sk-panel sk-form">
+        <div class="sk-form-title">
+          <div class="skeleton sk-icon sm"></div>
+          <div class="skeleton sk-line lg" style="width: 30%"></div>
+        </div>
+        <div class="sk-form-grid">
+          @for (i of range(rows); track i) {
+            <div class="sk-field">
+              <div class="skeleton sk-line sm" [style.width]="cellWidth(i, 1)"></div>
+              <div class="skeleton sk-input"></div>
+            </div>
+          }
+        </div>
+        <div class="sk-form-actions">
+          <div class="skeleton sk-button"></div>
+        </div>
+      </div>
+    }
+
+    @case ('list') {
+      <div class="sk-list">
+        @for (r of range(rows); track r) {
+          <div class="sk-list-row">
+            <div class="skeleton sk-avatar"></div>
+            <div class="sk-stack">
+              <div class="skeleton sk-line" [style.width]="cellWidth(r, 0)"></div>
+              <div class="skeleton sk-line sm" [style.width]="cellWidth(r, 3)"></div>
+            </div>
+            <div class="skeleton sk-line" style="width: 70px"></div>
+          </div>
+        }
+      </div>
+    }
+
+    @case ('field') {
+      <div class="skeleton sk-input"></div>
+    }
+  }
+  <span class="sk-sr-only">{{ label }}</span>
+</div>

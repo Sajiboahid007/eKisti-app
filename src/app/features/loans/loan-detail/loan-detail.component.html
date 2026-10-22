@@ -1,9 +1,6 @@
 <div class="page-container">
   @if (loading()) {
-    <div class="loading-state">
-      <span class="material-symbols-outlined spinning">sync</span>
-      <p>ঋণ ও কিস্তির হিসাব লোড হচ্ছে...</p>
-    </div>
+    <app-skeleton variant="detail" [cards]="4" [rows]="10" [columns]="6" label="ঋণ ও কিস্তির হিসাব লোড হচ্ছে..." />
   } @else if (!loan()) {
     <div class="empty-state">
       <span class="material-symbols-outlined">error</span>

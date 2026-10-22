@@ -6,11 +6,12 @@ import { Branch, CenterOrSamity, UserStaff } from '../../../core/models/database
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-branch-route-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, SkeletonComponent],
   templateUrl: './branch-route-list.component.html',
   styleUrl: './branch-route-list.component.scss'
 })
@@ -82,6 +83,9 @@ export class BranchRouteListComponent implements OnInit {
     return this.authService.availableUsers().filter(u => u.role === 'BRANCH_MANAGER' || u.role === 'SUPER_ADMIN' || u.role === 'AREA_MANAGER');
   });
 
+  // এরিয়া ম্যানেজার শাখা তৈরি, মুছে ফেলা বা সক্রিয়/নিষ্ক্রিয় করতে পারবেন না (শুধু তথ্য হালনাগাদ ও রুট ব্যবস্থাপনা)
+  readonly canCreateOrRemoveBranch = computed(() => !this.authService.isAreaScoped());
+
   async ngOnInit() {
     await this.loadAll();
   }
@@ -93,8 +97,9 @@ export class BranchRouteListComponent implements OnInit {
         this.kistiService.getBranches(),
         this.kistiService.getCenters()
       ]);
-      this.branches.set(branchData);
-      this.centers.set(centerData);
+      // এরিয়া ম্যানেজার শুধু নিজের তদারকিভুক্ত শাখা ও সেগুলোর রুট দেখবেন
+      this.branches.set(branchData.filter(b => this.authService.canAccessBranch(b.branchId)));
+      this.centers.set(centerData.filter(c => this.authService.canAccessBranch(c.branchId)));
 
       if (branchData.length > 0 && !this.routeForm.branchId) {
         this.routeForm.branchId = branchData[0].branchId;
@@ -153,6 +158,7 @@ export class BranchRouteListComponent implements OnInit {
   // ==========================================
 
   openCreateBranchModal() {
+    if (!this.canCreateOrRemoveBranch()) return;
     this.branchModalMode.set('CREATE');
     this.selectedBranchForEdit.set(null);
     this.editReason = '';
@@ -255,6 +261,7 @@ export class BranchRouteListComponent implements OnInit {
   }
 
   async toggleBranchStatus(branch: Branch) {
+    if (!this.canCreateOrRemoveBranch()) return;
     const newStatus = (branch.status || 'ACTIVE') === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     const currentUser = {
       userId: this.authService.currentUser().userId,
@@ -424,6 +431,7 @@ export class BranchRouteListComponent implements OnInit {
 
     try {
       if (item.type === 'branch') {
+        if (!this.canCreateOrRemoveBranch()) return;
         await this.kistiService.softDeleteBranch(
           item.id,
           currentUser,

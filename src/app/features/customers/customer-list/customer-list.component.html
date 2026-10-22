@@ -35,10 +35,7 @@
   <div class="card">
     <div class="card-body p-0">
       @if (loading()) {
-      <div class="loading-state">
-        <span class="material-symbols-outlined spinning">sync</span>
-        <p>গ্রাহকের ডেটা লোড হচ্ছে...</p>
-      </div>
+      <app-skeleton variant="table" [rows]="8" [columns]="6" label="গ্রাহকের ডেটা লোড হচ্ছে..." />
       } @else if (filteredCustomers().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined">person_search</span>
@@ -336,10 +333,7 @@
         </div>
 
         @if (loadingLoans()) {
-        <div class="loading-state py-3">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <p>ঋণের তথ্য লোড হচ্ছে...</p>
-        </div>
+        <app-skeleton variant="list" [rows]="2" label="ঋণের তথ্য লোড হচ্ছে..." />
         } @else if (selectedCustomerLoans().length === 0) {
         <div class="empty-state-mini py-2">
           <span class="material-symbols-outlined">receipt_long</span>
@@ -457,10 +451,7 @@
 
         @if (paymentsExpanded()) {
         @if (loadingPayments()) {
-        <div class="py-3 text-center text-muted">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <span class="ms-1">কিস্তি আদায়ের রেকর্ড লোড হচ্ছে...</span>
-        </div>
+        <app-skeleton variant="list" [rows]="3" label="কিস্তি আদায়ের রেকর্ড লোড হচ্ছে..." />
         } @else if (selectedCustomerPayments().length === 0) {
         <div class="py-3 text-center text-muted">
           <span class="material-symbols-outlined state-icon">receipt_long</span>
@@ -676,10 +667,7 @@
         </div>
 
         @if (loadingSavingsHistory()) {
-        <div class="ph-empty">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <span>সঞ্চয় লেনদেনের হিসাব লোড হচ্ছে...</span>
-        </div>
+        <app-skeleton variant="list" [rows]="3" label="সঞ্চয় লেনদেনের হিসাব লোড হচ্ছে..." />
         } @else if (selectedCustomerSavingsHistory().length === 0) {
         <div class="ph-empty">
           <span class="material-symbols-outlined">receipt_long</span>

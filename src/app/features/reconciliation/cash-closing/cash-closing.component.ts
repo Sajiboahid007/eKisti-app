@@ -5,11 +5,12 @@ import { Firestore, collection, getDocs, doc, getDoc, updateDoc } from '@angular
 import { PaymentCollection, Branch } from '../../../core/models/database.models';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-cash-closing',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SkeletonComponent],
   templateUrl: './cash-closing.component.html',
   styleUrl: './cash-closing.component.scss'
 })

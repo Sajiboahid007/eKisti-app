@@ -3,14 +3,15 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UserStaff, StaffRole, Branch, CenterOrSamity, Customer, Role, SYSTEM_PERMISSIONS, PermissionDefinition, UserCategory } from '../../../core/models/database.models';
-import { AuthStateService } from '../../../core/services/auth-state.service';
+import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-user-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, SkeletonComponent],
   templateUrl: './user-list.component.html',
   styleUrl: './user-list.component.scss'
 })
@@ -87,6 +88,7 @@ export class UserListComponent implements OnInit {
     role: 'FIELD_OFFICER' as StaffRole,
     branchId: 1,
     assignedCenterIds: [] as number[],
+    assignedBranchIds: [] as number[],
     salary: 25000,
     status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE'
   };
@@ -452,7 +454,19 @@ export class UserListComponent implements OnInit {
     return this.branches().find(b => b.branchId === branchId);
   }
 
+  isAreaScopedRole(role: StaffRole): boolean {
+    return AREA_SCOPED_ROLES.includes(role);
+  }
+
+  getStaffAssignedBranchNames(staff: UserStaff): string {
+    return this.getStaffAssignedBranches(staff).map(b => b.name).join(', ');
+  }
+
   getStaffAssignedCenters(staff: UserStaff): CenterOrSamity[] {
+    if (AREA_SCOPED_ROLES.includes(staff.role)) {
+      const branchIds = staff.assignedBranchIds || [];
+      return this.centers().filter(c => branchIds.includes(c.branchId));
+    }
     const assignedIds = staff.assignedCenterIds || [];
     return this.centers().filter(c => 
       assignedIds.includes(c.centerId) || c.fieldOfficerUserId === staff.userId
@@ -524,6 +538,7 @@ export class UserListComponent implements OnInit {
       role: staff.role,
       branchId: staff.branchId,
       assignedCenterIds: [...(staff.assignedCenterIds || [])],
+      assignedBranchIds: [...(staff.assignedBranchIds || [])],
       salary: staff.salary || 25000,
       status: (staff.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE') as 'ACTIVE' | 'INACTIVE'
     };
@@ -549,8 +564,49 @@ export class UserListComponent implements OnInit {
     }
   }
 
+  get isEditAreaRole(): boolean {
+    return AREA_SCOPED_ROLES.includes(this.editForm.role);
+  }
+
+  toggleEditBranchAssignment(branchId: number) {
+    const ids = this.editForm.assignedBranchIds;
+    this.editForm.assignedBranchIds = ids.includes(branchId) ? ids.filter(id => id !== branchId) : [...ids, branchId];
+  }
+
+  // এরিয়া ম্যানেজারের নির্ধারিত শাখাগুলো
+  getStaffAssignedBranches(staff: UserStaff): Branch[] {
+    const ids = staff.assignedBranchIds || [];
+    return this.branches().filter(b => ids.includes(b.branchId));
+  }
+
   getAvailableCentersForSelectedBranch(): CenterOrSamity[] {
     return this.centers().filter(c => c.branchId === this.editForm.branchId);
+  }
+
+  onEditCategoryChange(cat: UserCategory) {
+    this.editForm.category = cat;
+    if (cat === 'SYSTEM_ADMIN' || cat === 'HEAD_OFFICE') {
+      this.editForm.branchId = 0;
+    } else {
+      this.editForm.branchId = this.branches().length > 0 ? this.branches()[0].branchId : 1;
+    }
+    const available = this.filteredEditRolesByCategory();
+    if (available.length > 0 && !available.some(r => r.code === this.editForm.role)) {
+      this.editForm.role = available[0].code as StaffRole;
+    }
+  }
+
+  filteredEditRolesByCategory(): Role[] {
+    return this.rolesList().filter(r => {
+      if (r.category) return r.category === this.editForm.category;
+      if (this.editForm.category === 'SYSTEM_ADMIN') {
+        return ['SUPER_ADMIN', 'ADMIN'].includes(r.code);
+      } else if (this.editForm.category === 'HEAD_OFFICE') {
+        return ['MANAGING_DIRECTOR', 'AREA_MANAGER', 'REGIONAL_MANAGER', 'CENTRAL_AUDITOR', 'AUDITOR'].includes(r.code);
+      } else {
+        return !['SUPER_ADMIN', 'ADMIN', 'MANAGING_DIRECTOR', 'AREA_MANAGER', 'REGIONAL_MANAGER', 'CENTRAL_AUDITOR', 'AUDITOR'].includes(r.code);
+      }
+    });
   }
 
   async saveEditStaff() {
@@ -559,6 +615,11 @@ export class UserListComponent implements OnInit {
 
     if (!this.editForm.name.trim() || !this.editForm.phone.trim()) {
       alert(this.lang.isBangla() ? 'অনুগ্রহ করে কর্মীর নাম ও ফোন নম্বর লিখুন' : 'Please provide staff name and phone');
+      return;
+    }
+
+    if (this.isEditAreaRole && this.editForm.assignedBranchIds.length === 0) {
+      alert(this.lang.isBangla() ? 'এরিয়া ম্যানেজারের জন্য অন্তত একটি শাখা নির্বাচন করুন' : 'Select at least one branch for the area manager');
       return;
     }
 
@@ -583,6 +644,7 @@ export class UserListComponent implements OnInit {
         branchId,
         branchName,
         assignedCenterIds: isSystemOrHO ? [] : [...this.editForm.assignedCenterIds],
+        assignedBranchIds: this.isEditAreaRole ? [...this.editForm.assignedBranchIds] : [],
         salary: Number(this.editForm.salary),
         status: this.editForm.status
       };
@@ -602,6 +664,15 @@ export class UserListComponent implements OnInit {
         return item;
       }));
       this.authService.syncUsersFromDb(this.staffList(), this.rolesList());
+
+      // If the currently active logged-in user was updated, immediately update currentUser in navbar & session
+      if (Number(staff.userId) === Number(currentUser.userId)) {
+        const updatedSession = this.authService.availableUsers().find(u => Number(u.userId) === Number(staff.userId));
+        if (updatedSession) {
+          this.authService.currentUser.set(updatedSession);
+          localStorage.setItem('ekisti_user_session', JSON.stringify(updatedSession));
+        }
+      }
 
       this.closeEditStaff();
       alert(this.lang.isBangla() ? `কর্মী #${staff.userId} এর তথ্য সফলভাবে আপডেট হয়েছে` : `Staff #${staff.userId} updated successfully`);

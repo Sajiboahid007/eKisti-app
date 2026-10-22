@@ -16,20 +16,26 @@ export interface ActiveUserSession {
   branchName: string;
   areaName?: string;
   assignedCenterIds: number[];
+  assignedBranchIds?: number[];   // এরিয়া/রিজিওনাল ম্যানেজারের শাখাসমূহ
   phone: string;
 }
+
+// এরিয়া ভিত্তিক তদারকি: নির্ধারিত শাখাগুলোর সব তথ্য দেখতে পারেন
+export const AREA_SCOPED_ROLES: StaffRole[] = ['AREA_MANAGER', 'REGIONAL_MANAGER'];
+// সারাদেশের সব শাখা দেখতে পারেন
+export const NATIONWIDE_ROLES: StaffRole[] = ['SUPER_ADMIN', 'ADMIN', 'MANAGING_DIRECTOR', 'CENTRAL_AUDITOR', 'AUDITOR'];
 
 export const PRESET_STAFF_USERS: ActiveUserSession[] = [
   // 1. SYSTEM ADMINS (সুপার অ্যাডমিন ও সিস্টেম প্রশাসন)
   {
     userId: 1,
-    name: 'আব্দুল কাদের',
-    nameEn: 'Abdul Quader',
+    name: 'Sajib Oahid',
+    nameEn: 'Sajib Oahid',
     email: 'admin@ekisti.com',
     role: 'SUPER_ADMIN',
     category: 'SYSTEM_ADMIN',
-    roleTitleBangla: 'সুপার অ্যাডমিন (Root Admin)',
-    roleTitleEnglish: 'Super Admin / System Owner',
+    roleTitleBangla: 'সুপার অ্যাডমিন / প্রধান কার্যালয়',
+    roleTitleEnglish: 'Super Admin / Managing Director',
     branchId: 0,
     branchName: 'সিস্টেম প্রশাসন (সর্বজনীন)',
     areaName: 'সারাদেশ (সকল শাখা)',
@@ -66,6 +72,7 @@ export const PRESET_STAFF_USERS: ActiveUserSession[] = [
     branchName: 'প্রধান কার্যালয় (হেড অফিস)',
     areaName: 'মিরপুর ও ঢাকা উত্তর জোন',
     assignedCenterIds: [],
+    assignedBranchIds: [1],
     phone: '01711224455'
   },
   {
@@ -167,8 +174,7 @@ export class AuthStateService {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.userId) {
-          const presetMatch = PRESET_STAFF_USERS.find(u => u.userId === parsed.userId);
-          this.currentUser.set(presetMatch || parsed);
+          this.currentUser.set(parsed);
           this.isAuthenticated.set(true);
         } else {
           this.isAuthenticated.set(false);
@@ -238,6 +244,31 @@ export class AuthStateService {
   readonly canCollectKisti = computed(() => ['FIELD_OFFICER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER'].includes(this.currentUser().role));
   readonly canVerifyCash = computed(() => ['CASHIER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
 
+  // ==========================================
+  // BRANCH ACCESS SCOPE (কে কোন শাখার তথ্য দেখতে ও হালনাগাদ করতে পারবেন)
+  // ==========================================
+  readonly isAreaScoped = computed(() => AREA_SCOPED_ROLES.includes(this.currentUser().role));
+  readonly hasNationwideAccess = computed(() =>
+    NATIONWIDE_ROLES.includes(this.currentUser().role) || this.currentUser().category === 'SYSTEM_ADMIN'
+  );
+
+  /**
+   * Branch IDs the current user may see. `null` = all branches.
+   * Area/Regional managers get only their assigned branches (empty list = no access until assigned);
+   * branch staff get their own branch.
+   */
+  readonly accessibleBranchIds = computed<number[] | null>(() => {
+    const user = this.currentUser();
+    if (this.hasNationwideAccess()) return null;
+    if (this.isAreaScoped()) return user.assignedBranchIds || [];
+    return user.branchId > 0 ? [user.branchId] : [];
+  });
+
+  canAccessBranch(branchId: number): boolean {
+    const ids = this.accessibleBranchIds();
+    return ids === null || ids.includes(Number(branchId));
+  }
+
   /**
    * Syncs active staff directory from database (Firestore) with roles
    */
@@ -272,12 +303,12 @@ export class AuthStateService {
         } else if (category === 'HEAD_OFFICE') {
           branchName = 'প্রধান কার্যালয় (হেড অফিস)';
         } else {
-          branchName = s.branchId === 1 ? 'মিরপুর শাখা' : `শাখা #${s.branchId}`;
+          branchName = s.branchId === 1 ? 'মিরপুর শাখা' : ` শাখা #${s.branchId}`;
         }
       }
 
       return {
-        userId: s.userId,
+        userId: Number(s.userId),
         name: s.name,
         nameEn: s.name,
         email: s.email,
@@ -285,19 +316,31 @@ export class AuthStateService {
         category,
         roleTitleBangla,
         roleTitleEnglish,
-        branchId: category === 'SYSTEM_ADMIN' || category === 'HEAD_OFFICE' ? 0 : s.branchId,
+        branchId: category === 'SYSTEM_ADMIN' || category === 'HEAD_OFFICE' ? 0 : Number(s.branchId),
         branchName,
         areaName: category === 'SYSTEM_ADMIN' ? 'সারাদেশ (সকল শাখা)' : category === 'HEAD_OFFICE' ? 'প্রধান কার্যালয়' : 'মিরপুর জোন',
         assignedCenterIds: s.assignedCenterIds || [],
+        assignedBranchIds: s.assignedBranchIds || [],
         phone: s.phone
       };
     });
 
     if (mapped.length > 0) {
       this.availableUsers.set(mapped);
+
+      // Keep PRESET_STAFF_USERS in-sync in-memory
+      mapped.forEach(m => {
+        const pIdx = PRESET_STAFF_USERS.findIndex(p => Number(p.userId) === Number(m.userId));
+        if (pIdx >= 0) {
+          PRESET_STAFF_USERS[pIdx] = m;
+        } else {
+          PRESET_STAFF_USERS.push(m);
+        }
+      });
+
       // Sync currentUser if currently logged in
       const current = this.currentUser();
-      const updated = mapped.find(u => u.userId === current.userId);
+      const updated = mapped.find(u => Number(u.userId) === Number(current.userId));
       if (updated) {
         this.currentUser.set(updated);
         localStorage.setItem('ekisti_user_session', JSON.stringify(updated));
@@ -332,7 +375,7 @@ export class AuthStateService {
     }
 
     const session: ActiveUserSession = {
-      userId: staff.userId,
+      userId: Number(staff.userId),
       name: staff.name,
       nameEn: staff.name,
       email: staff.email,
@@ -340,15 +383,16 @@ export class AuthStateService {
       category,
       roleTitleBangla: role?.nameBn || this.getRoleTitleBanglaFallback(staff.role),
       roleTitleEnglish: role?.nameEn || staff.role,
-      branchId: category === 'SYSTEM_ADMIN' || category === 'HEAD_OFFICE' ? 0 : staff.branchId,
+      branchId: category === 'SYSTEM_ADMIN' || category === 'HEAD_OFFICE' ? 0 : Number(staff.branchId),
       branchName,
       areaName: category === 'SYSTEM_ADMIN' ? 'সারাদেশ (সকল শাখা)' : category === 'HEAD_OFFICE' ? 'প্রধান কার্যালয়' : 'মিরপুর জোন',
       assignedCenterIds: staff.assignedCenterIds || [],
+      assignedBranchIds: staff.assignedBranchIds || [],
       phone: staff.phone
     };
 
     const currentList = this.availableUsers();
-    const idx = currentList.findIndex(u => u.userId === session.userId);
+    const idx = currentList.findIndex(u => Number(u.userId) === Number(session.userId));
     if (idx >= 0) {
       const updated = [...currentList];
       updated[idx] = session;
@@ -357,12 +401,18 @@ export class AuthStateService {
       this.availableUsers.set([...currentList, session]);
     }
 
-    // Also update PRESET_STAFF_USERS array in-memory for backwards compatibility
-    const presetIdx = PRESET_STAFF_USERS.findIndex(u => u.userId === session.userId);
+    // Also update PRESET_STAFF_USERS array in-memory
+    const presetIdx = PRESET_STAFF_USERS.findIndex(u => Number(u.userId) === Number(session.userId));
     if (presetIdx >= 0) {
       PRESET_STAFF_USERS[presetIdx] = session;
     } else {
       PRESET_STAFF_USERS.push(session);
+    }
+
+    // If active user is updated, update currentUser immediately
+    if (Number(this.currentUser().userId) === Number(session.userId)) {
+      this.currentUser.set(session);
+      localStorage.setItem('ekisti_user_session', JSON.stringify(session));
     }
   }
 
@@ -414,12 +464,23 @@ export class AuthStateService {
   }
 
   /**
-   * Switch user from dropdown
+   * Switch user from dropdown and refresh/route view accordingly
    */
   switchUser(userId: number) {
-    const user = this.availableUsers().find(u => u.userId === userId);
+    const user = this.availableUsers().find(u => Number(u.userId) === Number(userId));
     if (user) {
       this.setUserSession(user);
+
+      // Re-route if user lacks permissions for current page
+      const currentUrl = this.router.url;
+      if (currentUrl.startsWith('/users') && !['SUPER_ADMIN', 'ADMIN'].includes(user.role)) {
+        this.router.navigate(['/dashboard']);
+      } else {
+        // Trigger a clean route reload so all active component data re-queries for the switched user
+        this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
+          this.router.navigate([currentUrl]);
+        });
+      }
     }
   }
 

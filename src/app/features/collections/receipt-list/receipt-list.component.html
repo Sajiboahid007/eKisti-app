@@ -25,10 +25,7 @@
   <div class="card">
     <div class="card-body p-0">
       @if (loading()) {
-        <div class="loading-state">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <p>রসিদ তালিকা লোড হচ্ছে...</p>
-        </div>
+        <app-skeleton variant="table" [rows]="8" [columns]="6" label="রসিদ তালিকা লোড হচ্ছে..." />
       } @else if (filteredReceipts().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined">receipt</span>

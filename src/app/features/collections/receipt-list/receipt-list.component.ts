@@ -5,11 +5,12 @@ import { Firestore, collection, getDocs, query, orderBy } from '@angular/fire/fi
 import { PaymentCollection } from '../../../core/models/database.models';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-receipt-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SkeletonComponent],
   templateUrl: './receipt-list.component.html',
   styleUrl: './receipt-list.component.scss'
 })

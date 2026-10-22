@@ -9,6 +9,7 @@ import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
 import { CustomerApplicationFormComponent } from '../customer-application-form/customer-application-form.component';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 // সদস্য বিবরণী প্রিন্টে কোন কোন অংশ থাকবে (সদস্যের তথ্য সব সময় থাকে)
 export interface CustomerPrintOptions {
@@ -21,7 +22,7 @@ export interface CustomerPrintOptions {
 @Component({
   selector: 'app-customer-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, CustomerApplicationFormComponent],
+  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, CustomerApplicationFormComponent, SkeletonComponent],
   templateUrl: './customer-list.component.html',
   styleUrl: './customer-list.component.scss'
 })
@@ -139,10 +140,9 @@ export class CustomerListComponent implements OnInit {
       );
     } else if (user.role === 'BRANCH_MANAGER' || user.role === 'CASHIER') {
       list = list.filter(c => c.branchId === user.branchId);
-    } else if (user.role === 'AREA_MANAGER' || user.role === 'REGIONAL_MANAGER') {
-      const areaBranches = this.branches().filter(b => b.areaName === user.areaName || b.branchId === user.branchId);
-      const branchIds = areaBranches.map(b => b.branchId);
-      list = list.filter(c => branchIds.includes(c.branchId) || c.branchId === user.branchId);
+    } else if (this.authService.isAreaScoped()) {
+      // এরিয়া ম্যানেজার: শুধু নির্ধারিত শাখার সদস্য
+      list = list.filter(c => this.authService.canAccessBranch(c.branchId));
     }
 
     const q = this.searchQuery.trim().toLowerCase();

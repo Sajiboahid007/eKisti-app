@@ -4,99 +4,499 @@
     <div class="banner-text">
       <h1>{{ lang.isBangla() ? 'স্বাগতম, ' : 'Welcome, ' }}{{ authService.currentUser().name }}</h1>
       <p class="banner-sub">
-        {{ lang.isBangla() ? authService.currentUser().roleTitleBangla : authService.currentUser().roleTitleEnglish }} — {{ authService.currentUser().branchName }}
-        @if (authService.isFieldOfficer()) {
-          <span> • {{ lang.isBangla() ? 'আজকের নির্ধারিত রুট: শাপলা মহিলা সমিতি (রুট ১০১)' : 'Today Route: Shapla Samity (Route 101)' }}</span>
-        }
+        {{ lang.isBangla() ? authService.currentUser().roleTitleBangla : authService.currentUser().roleTitleEnglish }} — {{ scopeLabel() }}
       </p>
+      @if (authService.isFieldOfficer() && !loading()) {
+        <p class="banner-route">
+          <span class="material-symbols-outlined icon-mini">route</span>
+          @if (todaySamities().length > 0) {
+            {{ lang.isBangla() ? 'আজকের সমিতি: ' : 'Today: ' }}
+            @for (s of todaySamities(); track s.center.centerId; let last = $last) {
+              <strong>{{ s.center.name }}</strong> ({{ s.center.meetingTime }}, {{ s.center.totalMembers }} {{ lang.isBangla() ? 'জন' : 'members' }}){{ last ? '' : ' • ' }}
+            }
+          } @else {
+            {{ lang.isBangla() ? 'আজ কোনো সমিতির মিটিং নির্ধারিত নেই' : 'No samity meeting scheduled today' }}
+          }
+        </p>
+      }
+      <div class="banner-meta">
+        <span class="status-chip" [class.offline]="!isOnline()">
+          <span class="material-symbols-outlined icon-mini">{{ isOnline() ? 'cloud_done' : 'cloud_off' }}</span>
+          @if (isOnline()) {
+            {{ lang.isBangla() ? 'অনলাইন' : 'Online' }}
+          } @else {
+            {{ lang.isBangla() ? 'অফলাইন মোড (লোকাল ক্যাশ)' : 'Offline Mode (Local Cache)' }}
+          }
+        </span>
+        @if (lastUpdated()) {
+          <span class="updated-at">{{ lang.isBangla() ? 'হালনাগাদ: ' : 'Updated: ' }}{{ lastUpdated() | date:'shortTime' }}</span>
+        }
+      </div>
     </div>
 
     <div class="banner-actions">
-      @if (authService.canCollectKisti()) {
-        <a routerLink="/collections/daily" class="btn btn-primary">
-          <span class="material-symbols-outlined">payments</span>
-          <span>{{ lang.isBangla() ? 'কিস্তি সংগ্রহ শুরু করুন' : 'Start Kisti Collection' }}</span>
-        </a>
+      @if (canSwitchBranch()) {
+        <select class="branch-switcher" [value]="selectedBranchId()" (change)="onBranchChange($any($event.target).value)"
+          [attr.aria-label]="lang.isBangla() ? 'শাখা নির্বাচন' : 'Select branch'">
+          <option value="0">{{ lang.isBangla() ? 'সকল শাখা' : 'All Branches' }}</option>
+          @for (b of switchableBranches(); track b.branchId) {
+            <option [value]="b.branchId">{{ b.name }}</option>
+          }
+        </select>
       }
-      <a routerLink="/loans/disburse" class="btn btn-secondary">
-        <span class="material-symbols-outlined">add_circle</span>
-        <span>{{ lang.isBangla() ? 'নতুন ঋণ বিতরণ' : 'Disburse Loan' }}</span>
-      </a>
-      <a routerLink="/customers/new" class="btn btn-secondary">
-        <span class="material-symbols-outlined">person_add</span>
-        <span>{{ lang.isBangla() ? 'নতুন গ্রাহক KYC' : 'New Customer KYC' }}</span>
-      </a>
-      @if (authService.canManageUsers()) {
-        <a routerLink="/users/new" class="btn btn-secondary">
-          <span class="material-symbols-outlined">manage_accounts</span>
-          <span>{{ lang.isBangla() ? 'নতুন ইউজার তৈরি' : 'Create User' }}</span>
-        </a>
+      <button class="btn btn-secondary" (click)="loadDashboardData()" [disabled]="loading()">
+        <span class="material-symbols-outlined">refresh</span>
+        <span>{{ lang.isBangla() ? 'রিফ্রেশ' : 'Refresh' }}</span>
+      </button>
+      @if (authService.canVerifyCash() || authService.canApproveLoans()) {
+        <button class="btn btn-secondary" (click)="showPrintSummary.set(true)" [disabled]="loading()">
+          <span class="material-symbols-outlined">print</span>
+          <span>{{ lang.isBangla() ? 'দৈনিক সামারি' : 'Daily Summary' }}</span>
+        </button>
       }
     </div>
   </div>
 
+  <!-- Quick Action Hub -->
+  <div class="quick-hub">
+    @if (authService.canCollectKisti()) {
+      <a routerLink="/collections/daily" class="hub-item hub-primary">
+        <span class="material-symbols-outlined">payments</span>
+        <span>{{ lang.isBangla() ? 'কিস্তি সংগ্রহ শুরু করুন' : 'Start Kisti Collection' }}</span>
+      </a>
+    }
+    @if (authService.canDisburseLoan()) {
+      <a routerLink="/loans/disburse" class="hub-item">
+        <span class="material-symbols-outlined">add_circle</span>
+        <span>{{ lang.isBangla() ? 'নতুন ঋণ বিতরণ' : 'Disburse Loan' }}</span>
+      </a>
+    }
+    <a routerLink="/customers/new" class="hub-item">
+      <span class="material-symbols-outlined">person_add</span>
+      <span>{{ lang.isBangla() ? 'নতুন গ্রাহক KYC' : 'New Customer KYC' }}</span>
+    </a>
+    @if (authService.canApproveLoans() && pendingApprovalsCount() > 0) {
+      <a routerLink="/loans" class="hub-item">
+        <span class="material-symbols-outlined">fact_check</span>
+        <span>{{ lang.isBangla() ? 'অনুমোদনের অপেক্ষায় ঋণ' : 'Loans awaiting approval' }}</span>
+        <span class="hub-badge">{{ pendingApprovalsCount() }}</span>
+      </a>
+    }
+    @if (authService.canVerifyCash()) {
+      <a routerLink="/reconciliation" class="hub-item">
+        <span class="material-symbols-outlined">account_balance</span>
+        <span>{{ lang.isBangla() ? 'ক্যাশ ক্লোজিং' : 'Cash Closing' }}</span>
+        @if (handoverQueue().length > 0) {
+          <span class="hub-badge warn">{{ handoverQueue().length }}</span>
+        }
+      </a>
+    }
+    @if (authService.canManageUsers()) {
+      <a routerLink="/users/new" class="hub-item">
+        <span class="material-symbols-outlined">manage_accounts</span>
+        <span>{{ lang.isBangla() ? 'নতুন ইউজার তৈরি' : 'Create User' }}</span>
+      </a>
+    }
+  </div>
+
   <!-- KPI Summary Cards Grid -->
-  <div class="kpi-grid">
-    <!-- Today Collection Card -->
-    <div class="kpi-card highlight-kpi">
-      <div class="kpi-icon-wrap primary-icon">
-        <span class="material-symbols-outlined">point_of_sale</span>
+  @if (loading()) {
+    <div class="kpi-grid">
+      @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+        <div class="kpi-card skeleton-card">
+          <div class="skeleton sk-icon"></div>
+          <div class="sk-lines">
+            <div class="skeleton sk-line w-60"></div>
+            <div class="skeleton sk-line lg w-80"></div>
+            <div class="skeleton sk-line w-40"></div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="kpi-grid">
+      <!-- 1. Today Collection + Recovery Rate -->
+      <div class="kpi-card highlight-kpi">
+        <div class="recovery-ring" [class]="'tone-' + recoveryTone()"
+          [attr.aria-label]="(lang.isBangla() ? 'আদায় কার্যকারিতা ' : 'Collection efficiency ') + (recoveryRate() === null ? 'N/A' : (recoveryRate()! | number:'1.0-1') + '%')">
+          <svg viewBox="0 0 80 80" aria-hidden="true">
+            <circle class="ring-track" cx="40" cy="40" [attr.r]="ringRadius" />
+            <circle class="ring-value" cx="40" cy="40" [attr.r]="ringRadius"
+              [attr.stroke-dasharray]="ringCircumference" [attr.stroke-dashoffset]="ringOffset(recoveryRate())" />
+          </svg>
+          <span class="ring-label">{{ recoveryRate() === null ? '—' : (recoveryRate()! | number:'1.0-0') + '%' }}</span>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">{{ lang.t('todayCollection') }}</div>
+          <div class="kpi-value amount-bdt">{{ todayCollectedAmount() | number:'1.2-2' }}</div>
+          <div class="kpi-subtext">
+            {{ lang.t('target') }}: <span class="amount-bdt">{{ todayExpectedTarget() | number:'1.0-0' }}</span>
+          </div>
+        </div>
       </div>
-      <div class="kpi-info">
-        <div class="kpi-label">{{ lang.t('todayCollection') }}</div>
-        <div class="kpi-value amount-bdt">{{ todayCollectedAmount() | number:'1.2-2' }}</div>
-        <div class="kpi-subtext">
-          {{ lang.t('target') }}: <span class="amount-bdt">{{ todayExpectedTarget() | number:'1.0-0' }}</span>
+
+      <!-- 2. Outstanding -->
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap info-icon">
+          <span class="material-symbols-outlined">account_balance_wallet</span>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">{{ lang.t('outstandingLoans') }}</div>
+          <div class="kpi-value amount-bdt">{{ totalOutstanding() | number:'1.2-2' }}</div>
+          <div class="kpi-subtext">
+            {{ lang.isBangla() ? 'সক্রিয় ঋণ:' : 'Active Loans:' }} <strong>{{ activeLoansCount() }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. PAR % -->
+      <div class="kpi-card" [class.danger-alert]="parPercent() >= 5">
+        <div class="kpi-icon-wrap danger-icon">
+          <span class="material-symbols-outlined">warning</span>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">{{ lang.isBangla() ? 'ঝুঁকিপূর্ণ পোর্টফোলিও (PAR)' : 'Portfolio at Risk (PAR)' }}</div>
+          <div class="kpi-value">{{ parPercent() | number:'1.1-1' }}%</div>
+          <div class="kpi-subtext">
+            @if (overdueAmount() === 0) {
+              <span class="text-success">{{ lang.t('noOverdue') }}</span>
+            } @else {
+              <span class="text-danger">{{ lang.isBangla() ? 'বকেয়া:' : 'Overdue:' }} <span class="amount-bdt">{{ overdueAmount() | number:'1.0-0' }}</span></span>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Savings -->
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap primary-icon">
+          <span class="material-symbols-outlined">savings</span>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">{{ lang.isBangla() ? 'মোট সঞ্চয় আমানত' : 'Total Savings Balance' }}</div>
+          <div class="kpi-value amount-bdt">{{ totalSavingsBalance() | number:'1.2-2' }}</div>
+          <div class="kpi-subtext">
+            {{ lang.isBangla() ? 'আজকের সঞ্চয় জমা:' : 'Saved today:' }} <span class="amount-bdt">{{ todaySavingsCollected() | number:'1.0-0' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Field Cash -->
+      <div class="kpi-card" [class.warn-alert]="fieldCash() > 0">
+        <div class="kpi-icon-wrap warning-icon">
+          <span class="material-symbols-outlined">directions_walk</span>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">{{ lang.isBangla() ? 'মাঠে থাকা ক্যাশ' : 'Cash in Field' }}</div>
+          <div class="kpi-value amount-bdt">{{ fieldCash() | number:'1.2-2' }}</div>
+          <div class="kpi-subtext">
+            {{ lang.isBangla() ? 'শাখায় জমা বাকি:' : 'Pending handover:' }} <strong>{{ handoverQueue().length }}</strong> {{ lang.isBangla() ? 'জন মাঠকর্মী' : 'officers' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Vault Cash -->
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap success-icon">
+          <span class="material-symbols-outlined">lock</span>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">{{ lang.t('vaultCash') }}</div>
+          <div class="kpi-value amount-bdt">{{ totalVaultCash() | number:'1.2-2' }}</div>
+          <div class="kpi-subtext text-success">
+            <span class="material-symbols-outlined icon-mini">verified</span> {{ lang.t('verifiedCashier') }}
+          </div>
         </div>
       </div>
     </div>
+  }
 
-    <!-- Active Loans Outstanding -->
-    <div class="kpi-card">
-      <div class="kpi-icon-wrap info-icon">
-        <span class="material-symbols-outlined">account_balance_wallet</span>
-      </div>
-      <div class="kpi-info">
-        <div class="kpi-label">{{ lang.t('outstandingLoans') }}</div>
-        <div class="kpi-value amount-bdt">{{ totalOutstanding() | number:'1.2-2' }}</div>
-        <div class="kpi-subtext">
-          {{ lang.isBangla() ? 'সক্রিয় ঋণ:' : 'Active Loans:' }} <strong>{{ activeLoansCount() }}</strong>
+  <!-- Role-based widgets -->
+  @if (!loading()) {
+    <div class="dashboard-content-grid">
+      <!-- Field officer: today's samities with progress -->
+      @if (authService.isFieldOfficer()) {
+        <div class="card">
+          <div class="card-header">
+            <div class="header-title">
+              <span class="material-symbols-outlined text-primary">groups</span>
+              <h3>{{ lang.isBangla() ? 'আজকের সমিতি ও আদায় অগ্রগতি' : "Today's Samities & Progress" }}</h3>
+            </div>
+          </div>
+          <div class="card-body">
+            @if (todaySamities().length === 0) {
+              <div class="empty-state compact">
+                <span class="material-symbols-outlined">event_busy</span>
+                <p>{{ lang.isBangla() ? 'আজ কোনো সমিতির মিটিং নেই।' : 'No samity meeting today.' }}</p>
+              </div>
+            } @else {
+              <ul class="progress-list">
+                @for (s of todaySamities(); track s.center.centerId) {
+                  <li>
+                    <div class="progress-head">
+                      <div>
+                        <strong>{{ s.center.name }}</strong>
+                        <div class="sub-text">{{ s.center.meetingTime }} • {{ s.center.location }} • {{ s.center.totalMembers }} {{ lang.isBangla() ? 'জন সদস্য' : 'members' }}</div>
+                      </div>
+                      <span class="progress-figure"><span class="amount-bdt">{{ s.collected | number:'1.0-0' }}</span> / {{ s.target | number:'1.0-0' }}</span>
+                    </div>
+                    <div class="progress-track"><div class="progress-fill" [class]="'tone-' + progressTone(s.percent)" [style.width.%]="s.percent"></div></div>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
         </div>
-      </div>
-    </div>
+      }
 
-    <!-- Vault Cash -->
-    <div class="kpi-card">
-      <div class="kpi-icon-wrap success-icon">
-        <span class="material-symbols-outlined">savings</span>
-      </div>
-      <div class="kpi-info">
-        <div class="kpi-label">{{ lang.t('vaultCash') }}</div>
-        <div class="kpi-value amount-bdt">{{ totalVaultCash() | number:'1.2-2' }}</div>
-        <div class="kpi-subtext text-success">
-          <span class="material-symbols-outlined icon-mini">verified</span> {{ lang.t('verifiedCashier') }}
+      <!-- Branch manager / supervisors: FO leaderboard -->
+      @if (!authService.isFieldOfficer() && (authService.canApproveLoans() || authService.hasNationwideAccess() || authService.isAreaScoped())) {
+        <div class="card">
+          <div class="card-header">
+            <div class="header-title">
+              <span class="material-symbols-outlined text-primary">leaderboard</span>
+              <h3>{{ lang.isBangla() ? 'মাঠকর্মী পারফরম্যান্স (আজ)' : 'Field Officer Performance (Today)' }}</h3>
+            </div>
+          </div>
+          <div class="card-body">
+            @if (officerLeaderboard().length === 0) {
+              <div class="empty-state compact">
+                <span class="material-symbols-outlined">event_available</span>
+                <p>{{ lang.isBangla() ? 'আজ কোনো কিস্তি নির্ধারিত নেই।' : 'No installments due today.' }}</p>
+              </div>
+            } @else {
+              <ul class="progress-list">
+                @for (o of officerLeaderboard(); track o.userId; let i = $index) {
+                  <li>
+                    <div class="progress-head">
+                      <div><span class="rank">{{ i + 1 }}</span> <strong>{{ o.name }}</strong></div>
+                      <span class="progress-figure">{{ o.percent | number:'1.0-0' }}% · <span class="amount-bdt">{{ o.collected | number:'1.0-0' }}</span> / {{ o.target | number:'1.0-0' }}</span>
+                    </div>
+                    <div class="progress-track"><div class="progress-fill" [class]="'tone-' + progressTone(o.percent)" [style.width.%]="o.percent"></div></div>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
         </div>
-      </div>
-    </div>
+      }
 
-    <!-- Overdue Warning Card -->
-    <div class="kpi-card" [class.danger-alert]="overdueAmount() > 0">
-      <div class="kpi-icon-wrap danger-icon">
-        <span class="material-symbols-outlined">warning</span>
-      </div>
-      <div class="kpi-info">
-        <div class="kpi-label">{{ lang.t('overdueLoans') }}</div>
-        <div class="kpi-value amount-bdt">{{ overdueAmount() | number:'1.2-2' }}</div>
-        <div class="kpi-subtext">
-          @if (overdueAmount() === 0) {
-            <span class="text-success">{{ lang.t('noOverdue') }}</span>
+      <!-- Cashier: handover queue -->
+      @if (authService.canVerifyCash()) {
+        <div class="card">
+          <div class="card-header">
+            <div class="header-title">
+              <span class="material-symbols-outlined text-warning">move_to_inbox</span>
+              <h3>{{ lang.isBangla() ? 'ক্যাশ সমর্পণ কিউ' : 'Field Cash Handover Queue' }}</h3>
+            </div>
+            <a routerLink="/reconciliation" class="btn btn-sm btn-secondary">{{ lang.isBangla() ? 'ক্লোজিং করুন' : 'Reconcile' }}</a>
+          </div>
+          <div class="card-body p-0">
+            @if (handoverQueue().length === 0) {
+              <div class="empty-state compact">
+                <span class="material-symbols-outlined">task_alt</span>
+                <p>{{ lang.isBangla() ? 'সব মাঠকর্মী টাকা জমা দিয়েছেন।' : 'All field cash has been handed over.' }}</p>
+              </div>
+            } @else {
+              <div class="table-container border-0">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>{{ lang.isBangla() ? 'মাঠকর্মী' : 'Field Officer' }}</th>
+                      <th>{{ lang.isBangla() ? 'রসিদ' : 'Receipts' }}</th>
+                      <th>{{ lang.isBangla() ? 'জমা বাকি' : 'Pending' }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (q of handoverQueue(); track q.userId) {
+                      <tr>
+                        <td><strong>{{ q.name }}</strong></td>
+                        <td>{{ q.receiptsCount }}</td>
+                        <td class="amount-bdt text-warning">{{ q.amount | number:'1.0-0' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Overdue follow-up (all roles) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="header-title">
+            <span class="material-symbols-outlined text-danger">notification_important</span>
+            <h3>{{ lang.isBangla() ? 'শীর্ষ বকেয়া গ্রাহক' : 'Top Overdue Customers' }}</h3>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          @if (topDefaulters().length === 0) {
+            <div class="empty-state compact">
+              <span class="material-symbols-outlined">verified</span>
+              <p>{{ lang.t('noOverdue') }}</p>
+            </div>
           } @else {
-            <span class="text-danger">{{ lang.t('urgentFollowup') }}</span>
+            <div class="table-container border-0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>{{ lang.isBangla() ? 'গ্রাহক' : 'Customer' }}</th>
+                    <th>{{ lang.isBangla() ? 'বকেয়া' : 'Overdue' }}</th>
+                    <th>{{ lang.isBangla() ? 'জামিনদার' : 'Guarantor' }}</th>
+                    <th>{{ lang.isBangla() ? 'যোগাযোগ' : 'Contact' }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of topDefaulters(); track d.loan.loanId) {
+                    <tr>
+                      <td>
+                        <a [routerLink]="['/loans/detail', d.loan.loanId]"><strong>{{ d.loan.customerName }}</strong></a>
+                        <div class="sub-text">{{ d.loan.loanAccountNo }} • {{ d.loan.missedInstallmentsCount || 0 }} {{ lang.isBangla() ? 'কিস্তি বাদ' : 'missed' }}</div>
+                      </td>
+                      <td class="amount-bdt text-danger">{{ d.loan.overdueAmount | number:'1.0-0' }}</td>
+                      <td>
+                        {{ d.guarantorName || '—' }}
+                        @if (d.guarantorPhone) {
+                          <div class="sub-text"><a [href]="'tel:' + d.guarantorPhone">{{ d.guarantorPhone }}</a></div>
+                        }
+                      </td>
+                      <td class="contact-actions">
+                        @if (d.phone) {
+                          <a class="icon-btn" [href]="'tel:' + d.phone" [attr.aria-label]="(lang.isBangla() ? 'কল করুন ' : 'Call ') + d.loan.customerName">
+                            <span class="material-symbols-outlined">call</span>
+                          </a>
+                          <a class="icon-btn" [href]="smsLink(d)" [attr.aria-label]="(lang.isBangla() ? 'এসএমএস ' : 'SMS ') + d.loan.customerName">
+                            <span class="material-symbols-outlined">sms</span>
+                          </a>
+                        } @else {
+                          <span class="sub-text">—</span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           }
         </div>
       </div>
     </div>
-  </div>
+  }
+
+  <!-- Charts -->
+  @if (loading()) {
+    <div class="dashboard-content-grid">
+      <div class="card skeleton-chart"><div class="skeleton sk-block"></div></div>
+      <div class="card skeleton-chart"><div class="skeleton sk-block"></div></div>
+    </div>
+  } @else {
+    <div class="dashboard-content-grid">
+      <!-- 7-day collection vs disbursement -->
+      <div class="card">
+        <div class="card-header">
+          <div class="header-title">
+            <span class="material-symbols-outlined text-primary">bar_chart</span>
+            <h3>{{ lang.isBangla() ? 'গত ৭ দিনের আদায় বনাম বিতরণ' : 'Collection vs Disbursement (7 days)' }}</h3>
+          </div>
+          <button class="btn btn-sm btn-secondary" (click)="showTrendTable.set(!showTrendTable())">
+            {{ showTrendTable() ? (lang.isBangla() ? 'চার্ট' : 'Chart') : (lang.isBangla() ? 'টেবিল' : 'Table') }}
+          </button>
+        </div>
+        <div class="card-body">
+          <div class="chart-legend">
+            <span class="legend-item"><span class="swatch swatch-collected"></span>{{ lang.isBangla() ? 'আদায়' : 'Collected' }} · <span class="amount-bdt">{{ trendTotals().collected | number:'1.0-0' }}</span></span>
+            <span class="legend-item"><span class="swatch swatch-disbursed"></span>{{ lang.isBangla() ? 'বিতরণ' : 'Disbursed' }} · <span class="amount-bdt">{{ trendTotals().disbursed | number:'1.0-0' }}</span></span>
+          </div>
+
+          @if (showTrendTable()) {
+            <div class="table-container border-0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>{{ lang.isBangla() ? 'তারিখ' : 'Date' }}</th>
+                    <th>{{ lang.isBangla() ? 'আদায়' : 'Collected' }}</th>
+                    <th>{{ lang.isBangla() ? 'বিতরণ' : 'Disbursed' }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of trend(); track p.dateKey) {
+                    <tr>
+                      <td>{{ p.label }} <span class="sub-text">{{ p.dateKey }}</span></td>
+                      <td class="amount-bdt">{{ p.collected | number:'1.0-0' }}</td>
+                      <td class="amount-bdt">{{ p.disbursed | number:'1.0-0' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="bar-chart" role="img"
+              [attr.aria-label]="lang.isBangla() ? 'গত ৭ দিনের আদায় ও বিতরণের বার চার্ট' : 'Bar chart of collections and disbursements over the last 7 days'">
+              <div class="y-axis">
+                <span class="amount-bdt">{{ trendMax() | number:'1.0-0' }}</span>
+                <span class="amount-bdt">{{ trendMax() / 2 | number:'1.0-0' }}</span>
+                <span>0</span>
+              </div>
+              <div class="plot">
+                <div class="gridline" style="bottom: 50%"></div>
+                <div class="gridline" style="bottom: 100%"></div>
+                @for (p of trend(); track p.dateKey; let i = $index) {
+                  <div class="bar-group" (mouseenter)="hoveredTrendIndex.set(i)" (mouseleave)="hoveredTrendIndex.set(null)"
+                    (focus)="hoveredTrendIndex.set(i)" (blur)="hoveredTrendIndex.set(null)" tabindex="0"
+                    [class.is-hovered]="hoveredTrendIndex() === i">
+                    <div class="bars">
+                      <div class="bar bar-collected" [style.height.%]="barHeight(p.collected)"></div>
+                      <div class="bar bar-disbursed" [style.height.%]="barHeight(p.disbursed)"></div>
+                    </div>
+                    <span class="x-label" [class.today]="p.dateKey === todayKey()">{{ p.label }}</span>
+                    @if (hoveredTrendIndex() === i) {
+                      <div class="chart-tooltip" [class.align-right]="i >= trend().length - 2">
+                        <div class="tt-title">{{ p.dateKey }}</div>
+                        <div class="tt-row"><span class="swatch swatch-collected"></span>{{ lang.isBangla() ? 'আদায়' : 'Collected' }} <strong class="amount-bdt">{{ p.collected | number:'1.0-0' }}</strong></div>
+                        <div class="tt-row"><span class="swatch swatch-disbursed"></span>{{ lang.isBangla() ? 'বিতরণ' : 'Disbursed' }} <strong class="amount-bdt">{{ p.disbursed | number:'1.0-0' }}</strong></div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Product mix -->
+      <div class="card">
+        <div class="card-header">
+          <div class="header-title">
+            <span class="material-symbols-outlined text-primary">donut_large</span>
+            <h3>{{ lang.isBangla() ? 'ঋণ পণ্যভিত্তিক পোর্টফোলিও' : 'Portfolio by Loan Product' }}</h3>
+          </div>
+        </div>
+        <div class="card-body">
+          @if (productMix().length === 0) {
+            <div class="empty-state compact">
+              <span class="material-symbols-outlined">inventory_2</span>
+              <p>{{ lang.isBangla() ? 'কোনো চলমান ঋণ নেই।' : 'No active loans.' }}</p>
+            </div>
+          } @else {
+            <ul class="share-list">
+              @for (p of productMix(); track p.productId) {
+                <li [title]="p.name + ': ' + (p.outstanding | number:'1.0-0') + ' (' + (p.percent | number:'1.0-1') + '%)'">
+                  <div class="progress-head">
+                    <span>{{ p.name }}</span>
+                    <span class="progress-figure">{{ p.percent | number:'1.0-1' }}% · <span class="amount-bdt">{{ p.outstanding | number:'1.0-0' }}</span></span>
+                  </div>
+                  <div class="progress-track"><div class="progress-fill share-fill" [style.width.%]="p.percent"></div></div>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+    </div>
+  }
 
   <!-- Content Split Grid -->
   <div class="dashboard-content-grid">
@@ -110,7 +510,11 @@
         <a routerLink="/loans" class="btn btn-sm btn-secondary">{{ lang.t('allView') }}</a>
       </div>
       <div class="card-body p-0">
-        @if (recentLoans().length === 0) {
+        @if (loading()) {
+          <div class="sk-rows">
+            @for (i of [1, 2, 3, 4]; track i) { <div class="skeleton sk-row"></div> }
+          </div>
+        } @else if (recentLoans().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined">hourglass_empty</span>
             <p>{{ lang.isBangla() ? 'কোনো ঋণ রেকর্ড পাওয়া যায়নি।' : 'No active loans found.' }}</p>
@@ -132,7 +536,7 @@
                 @for (loan of recentLoans(); track loan.loanId) {
                   <tr>
                     <td>
-                      <span class="id-tag">#{{ loan.loanId }}</span>
+                      <a [routerLink]="['/loans/detail', loan.loanId]" class="id-tag">#{{ loan.loanId }}</a>
                     </td>
                     <td>
                       <strong>{{ loan.customerName }}</strong>
@@ -146,7 +550,13 @@
                       </span>
                     </td>
                     <td>
-                      <span class="badge badge-active">{{ lang.isBangla() ? 'বিতরণকৃত' : 'Disbursed' }}</span>
+                      @switch (loan.status) {
+                        @case ('OVERDUE') { <span class="badge badge-warning">{{ lang.isBangla() ? 'বকেয়া' : 'Overdue' }}</span> }
+                        @case ('CLOSED') { <span class="badge badge-paid">{{ lang.isBangla() ? 'পরিশোধিত' : 'Closed' }}</span> }
+                        @case ('DEFAULTED') { <span class="badge badge-danger">{{ lang.isBangla() ? 'খেলাপি' : 'Defaulted' }}</span> }
+                        @case ('DISBURSED') { <span class="badge badge-active">{{ lang.isBangla() ? 'বিতরণকৃত' : 'Disbursed' }}</span> }
+                        @default { <span class="badge badge-secondary">{{ loan.status }}</span> }
+                      }
                     </td>
                   </tr>
                 }
@@ -167,10 +577,14 @@
         <a routerLink="/collections/receipts" class="btn btn-sm btn-secondary">{{ lang.t('allView') }}</a>
       </div>
       <div class="card-body p-0">
-        @if (recentCollections().length === 0) {
+        @if (loading()) {
+          <div class="sk-rows">
+            @for (i of [1, 2, 3, 4]; track i) { <div class="skeleton sk-row"></div> }
+          </div>
+        } @else if (recentCollections().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined">receipt_long</span>
-            <p>{{ lang.isBangla() ? 'কোনো সাম্প্রতিক আদায় রেকর্ড নেই।' : 'No recent receipts found.' }}</p>
+            <p>{{ lang.isBangla() ? 'গত ৭ দিনে কোনো আদায় রেকর্ড নেই।' : 'No receipts in the last 7 days.' }}</p>
           </div>
         } @else {
           <div class="table-container border-0">
@@ -213,3 +627,91 @@
     </div>
   </div>
 </div>
+
+<!-- ============================================================ -->
+<!-- দৈনিক এক্সিকিউটিভ সামারি প্রিন্ট (A4) -->
+<!-- ============================================================ -->
+@if (showPrintSummary()) {
+  <div class="modal-backdrop" (click)="showPrintSummary.set(false)">
+    <div class="modal-dialog summary-modal-dialog" id="printableDashboardSummary" (click)="$event.stopPropagation()">
+      <div class="modal-header no-print">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">summarize</span>
+          <h3>দৈনিক এক্সিকিউটিভ সামারি (Daily Executive Summary)</h3>
+        </div>
+        <button class="close-btn" (click)="showPrintSummary.set(false)">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="summary-sheet">
+          <div class="summary-top">
+            <div>
+              <h2>ই-কিস্তি (eKisti)</h2>
+              <div class="summary-sub">দৈনিক আদায় ও ক্যাশ ক্লোজিং বিবরণী</div>
+            </div>
+            <div class="summary-meta">
+              <div><strong>শাখা:</strong> {{ scopeLabel() }}</div>
+              <div><strong>তারিখ:</strong> {{ todayKey() }}</div>
+              <div><strong>প্রিন্টের সময়:</strong> {{ lastUpdated() | date:'shortTime' }}</div>
+              <div><strong>প্রস্তুতকারী:</strong> {{ authService.currentUser().name }}</div>
+            </div>
+          </div>
+
+          <table class="summary-table">
+            <tbody>
+              <tr><th>আজকের নির্ধারিত টার্গেট</th><td>{{ todayExpectedTarget() | number:'1.2-2' }} ৳</td></tr>
+              <tr><th>আজকের কিস্তি আদায় (আসল + লাভ)</th><td>{{ todayKistiCollected() | number:'1.2-2' }} ৳</td></tr>
+              <tr><th>আজকের সঞ্চয় জমা</th><td>{{ todaySavingsCollected() | number:'1.2-2' }} ৳</td></tr>
+              <tr><th>মোট আদায়</th><td><strong>{{ todayCollectedAmount() | number:'1.2-2' }} ৳</strong></td></tr>
+              <tr><th>আদায় কার্যকারিতা</th><td>{{ recoveryRate() === null ? '—' : (recoveryRate()! | number:'1.1-1') + '%' }}</td></tr>
+              <tr><th>আজকের নতুন ঋণ বিতরণ</th><td>{{ todayDisbursedLoans().length }} টি · {{ trend()[trend().length - 1].disbursed | number:'1.2-2' }} ৳</td></tr>
+              <tr><th>মাঠে থাকা ক্যাশ (জমা বাকি)</th><td>{{ fieldCash() | number:'1.2-2' }} ৳</td></tr>
+              <tr><th>ভল্ট ক্যাশ সমাপনী স্থিতি</th><td><strong>{{ totalVaultCash() | number:'1.2-2' }} ৳</strong></td></tr>
+              <tr><th>মোট চলমান ঋণ বাকি / PAR</th><td>{{ totalOutstanding() | number:'1.2-2' }} ৳ / {{ parPercent() | number:'1.1-1' }}%</td></tr>
+            </tbody>
+          </table>
+
+          @if (officerLeaderboard().length > 0) {
+            <h4>মাঠকর্মী ভিত্তিক আদায়</h4>
+            <table class="summary-table bordered">
+              <thead><tr><th>মাঠকর্মী</th><th>টার্গেট</th><th>আদায়</th><th>%</th></tr></thead>
+              <tbody>
+                @for (o of officerLeaderboard(); track o.userId) {
+                  <tr><td>{{ o.name }}</td><td>{{ o.target | number:'1.0-0' }}</td><td>{{ o.collected | number:'1.0-0' }}</td><td>{{ o.percent | number:'1.0-0' }}%</td></tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          @if (todayDisbursedLoans().length > 0) {
+            <h4>আজকের বিতরণকৃত ঋণ</h4>
+            <table class="summary-table bordered">
+              <thead><tr><th>ঋণ হিসাব</th><th>গ্রাহক</th><th>আসল</th></tr></thead>
+              <tbody>
+                @for (l of todayDisbursedLoans(); track l.loanId) {
+                  <tr><td>{{ l.loanAccountNo }}</td><td>{{ l.customerName }}</td><td>{{ l.principalAmount | number:'1.0-0' }}</td></tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <div class="signature-row">
+            <div class="sig">মাঠকর্মীর স্বাক্ষর</div>
+            <div class="sig">ক্যাশিয়ার / হিসাবরক্ষক</div>
+            <div class="sig">শাখা ব্যবস্থাপক</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer no-print">
+        <button class="btn btn-secondary" (click)="showPrintSummary.set(false)">{{ lang.isBangla() ? 'বন্ধ করুন' : 'Close' }}</button>
+        <button class="btn btn-primary" (click)="printSummary()">
+          <span class="material-symbols-outlined">print</span>
+          <span>{{ lang.isBangla() ? 'প্রিন্ট করুন' : 'Print' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}

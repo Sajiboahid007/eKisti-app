@@ -6,11 +6,12 @@ import { Loan, Branch, CenterOrSamity } from '../../../core/models/database.mode
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-loan-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent],
+  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, SkeletonComponent],
   templateUrl: './loan-list.component.html',
   styleUrl: './loan-list.component.scss'
 })
@@ -20,6 +21,13 @@ export class LoanListComponent implements OnInit {
 
   readonly loans = signal<Loan[]>([]);
   readonly branches = signal<Branch[]>([]);
+
+  // এরিয়া ম্যানেজারের নির্ধারিত শাখাগুলোর নাম (কমা দিয়ে)
+  getAssignedBranchNames(): string {
+    const ids = this.authService.accessibleBranchIds() || [];
+    const names = this.branches().filter(b => ids.includes(b.branchId)).map(b => b.name);
+    return names.length > 0 ? names.join(', ') : 'কোনো শাখা নির্ধারিত নেই';
+  }
   readonly centers = signal<CenterOrSamity[]>([]);
   readonly loading = signal<boolean>(true);
 
@@ -53,7 +61,7 @@ export class LoanListComponent implements OnInit {
     } else if (user.role === 'AREA_MANAGER' || user.role === 'REGIONAL_MANAGER') {
       return {
         title: 'এরিয়া ঋণ পোর্টফোলিও',
-        subtitle: `এরিয়া: ${user.areaName || 'মিরপুর জোন'} (এরিয়াভুক্ত শাখার সকল ঋণ)`,
+        subtitle: `এরিয়াভুক্ত শাখা: ${this.getAssignedBranchNames()} (শাখাগুলোর সকল ঋণ)`,
         tag: 'এরিয়া ম্যানেজার ভিউ',
         icon: 'map',
         cssClass: 'scope-am'
@@ -98,11 +106,9 @@ export class LoanListComponent implements OnInit {
     if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'MANAGING_DIRECTOR' || user.role === 'CENTRAL_AUDITOR') {
       // Super Admin and Admin can visible every loan nationwide
       return all;
-    } else if (user.role === 'AREA_MANAGER' || user.role === 'REGIONAL_MANAGER') {
-      // Area manager can visible loans belonging to branches in their area
-      const areaBranches = this.branches().filter(b => (user.areaName && b.areaName === user.areaName) || b.branchId === user.branchId);
-      const branchIds = areaBranches.map(b => b.branchId);
-      return all.filter(l => branchIds.includes(l.branchId) || l.branchId === user.branchId);
+    } else if (this.authService.isAreaScoped()) {
+      // Area manager sees loans of their assigned branches only
+      return all.filter(l => this.authService.canAccessBranch(l.branchId));
     } else if (user.role === 'BRANCH_MANAGER' || user.role === 'CASHIER' || user.role === 'BRANCH_STAFF') {
       // Branch manager can visible loans in their branch
       return all.filter(l => l.branchId === user.branchId);

@@ -53,10 +53,7 @@
 
     <div class="card-body p-0">
       @if (loading()) {
-        <div class="loading-state">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <p>ক্যাশ ক্লোজিং ডেটা লোড হচ্ছে...</p>
-        </div>
+        <app-skeleton variant="table" [rows]="5" [columns]="6" label="ক্যাশ ক্লোজিং ডেটা লোড হচ্ছে..." />
       } @else if (collectionsToReconcile().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined">task_alt</span>

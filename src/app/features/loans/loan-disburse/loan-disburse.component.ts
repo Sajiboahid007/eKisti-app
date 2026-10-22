@@ -6,6 +6,7 @@ import { Firestore } from '@angular/fire/firestore';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { Customer, LoanProduct, InstallmentFrequency, Branch, CenterOrSamity, UserStaff } from '../../../core/models/database.models';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 export interface DisbursementReceiptData {
   loanId: number;
@@ -46,7 +47,7 @@ export interface DisbursementReceiptData {
 @Component({
   selector: 'app-loan-disburse',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, SkeletonComponent],
   templateUrl: './loan-disburse.component.html',
   styleUrl: './loan-disburse.component.scss'
 })

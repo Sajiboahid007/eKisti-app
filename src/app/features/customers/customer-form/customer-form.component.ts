@@ -7,11 +7,12 @@ import { KistiDatabaseService } from '../../../core/services/kisti-database.serv
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { Customer, Branch, CenterOrSamity } from '../../../core/models/database.models';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-customer-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, SkeletonComponent],
   templateUrl: './customer-form.component.html',
   styleUrl: './customer-form.component.scss'
 })

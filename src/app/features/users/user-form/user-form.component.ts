@@ -3,14 +3,15 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
-import { AuthStateService } from '../../../core/services/auth-state.service';
+import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { StaffRole, UserStaff, Role, Branch, UserCategory } from '../../../core/models/database.models';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-user-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, SkeletonComponent],
   templateUrl: './user-form.component.html',
   styleUrl: './user-form.component.scss'
 })
@@ -23,6 +24,7 @@ export class UserFormComponent implements OnInit {
 
   submitting = signal<boolean>(false);
   loadingRoles = signal<boolean>(true);
+  showPassword = signal<boolean>(false);
   dynamicRoles = signal<Role[]>([]);
   branches = signal<Branch[]>([]);
 
@@ -37,6 +39,25 @@ export class UserFormComponent implements OnInit {
   nidNumber: string = '';
   salary: number = 25000;
   status: 'ACTIVE' | 'INACTIVE' = 'ACTIVE';
+  assignedBranchIds: number[] = [];   // এরিয়া/রিজিওনাল ম্যানেজারের শাখাসমূহ
+
+  get isAreaRole(): boolean {
+    return AREA_SCOPED_ROLES.includes(this.role);
+  }
+
+  togglePasswordVisibility() {
+    this.showPassword.update(v => !v);
+  }
+
+  toggleAssignedBranch(branchId: number) {
+    this.assignedBranchIds = this.assignedBranchIds.includes(branchId)
+      ? this.assignedBranchIds.filter(id => id !== branchId)
+      : [...this.assignedBranchIds, branchId];
+  }
+
+  selectAllBranches() {
+    this.assignedBranchIds = this.branches().map(b => b.branchId);
+  }
 
   async ngOnInit() {
     this.route.queryParams.subscribe(params => {
@@ -122,6 +143,11 @@ export class UserFormComponent implements OnInit {
       return;
     }
 
+    if (this.isAreaRole && this.assignedBranchIds.length === 0) {
+      alert(this.lang.isBangla() ? 'এরিয়া ম্যানেজারের জন্য অন্তত একটি শাখা নির্বাচন করুন' : 'Select at least one branch for the area manager');
+      return;
+    }
+
     this.submitting.set(true);
     const currentUser = this.authService.currentUser();
     const now = new Date().toISOString();
@@ -145,6 +171,7 @@ export class UserFormComponent implements OnInit {
           branchId,
           branchName,
           assignedCenterIds: (!isSystemOrHO && this.role === 'FIELD_OFFICER') ? [101] : [],
+          assignedBranchIds: this.isAreaRole ? [...this.assignedBranchIds] : [],
           nidNumber: this.nidNumber.trim() || `19852692518000${Date.now().toString().slice(-3)}`,
           salary: Number(this.salary) || (this.category === 'SYSTEM_ADMIN' ? 70000 : (this.category === 'HEAD_OFFICE' ? 50000 : 25000)),
           status: this.status,

@@ -1,0 +1,198 @@
+/* Base .skeleton shimmer lives in src/styles.scss so any page can use it */
+
+:host {
+  display: block;
+}
+
+.sk-wrap {
+  width: 100%;
+  animation: skFadeIn 0.2s ease-out;
+}
+
+.sk-stack {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sk-line {
+  height: 12px;
+
+  &.sm { height: 9px; }
+  &.lg { height: 20px; }
+  &.xl { height: 26px; }
+}
+
+.sk-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sk-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+
+  &.sm {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+.sk-input {
+  height: 42px;
+  width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.sk-button {
+  width: 140px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+/* ---------- Table ---------- */
+.sk-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-tr {
+  display: grid;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+
+  &:last-child { border-bottom: none; }
+}
+
+.sk-thead {
+  background: #f8fafc;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+
+  .sk-line { height: 10px; }
+}
+
+.sk-cell-avatar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* ---------- Cards ---------- */
+.sk-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.sk-card,
+.sk-panel {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.sk-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+/* ---------- Detail ---------- */
+.sk-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sk-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* ---------- Form ---------- */
+.sk-form {
+  padding: 1.5rem;
+}
+
+.sk-form-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sk-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.sk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sk-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+/* ---------- List ---------- */
+.sk-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+
+  &:last-child { border-bottom: none; }
+}
+
+.sk-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .sk-tr {
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+  }
+
+  /* Hide trailing columns on small screens so rows stay readable */
+  .sk-tr > :nth-child(n + 4) { display: none; }
+  .sk-tr { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+@keyframes skFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

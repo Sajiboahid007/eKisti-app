@@ -70,10 +70,7 @@
   <div class="card table-card">
     <div class="card-body p-0">
       @if (loading()) {
-        <div class="loading-state">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <p>সমিতির কালেকশন শিট প্রস্তুত হচ্ছে...</p>
-        </div>
+        <app-skeleton variant="table" [rows]="8" [columns]="6" label="সমিতির কালেকশন শিট প্রস্তুত হচ্ছে..." />
       } @else if (filteredCenters().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">lock_person</span>
