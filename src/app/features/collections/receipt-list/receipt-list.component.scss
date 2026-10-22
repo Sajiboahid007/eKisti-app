@@ -19,9 +19,164 @@
 .filter-card {
   padding: 0.875rem 1.25rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 150px;
+  flex: 1 1 150px;
+  max-width: 220px;
+
+  span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .form-control {
+    height: 38px;
+  }
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* ---------- Summary Strip ---------- */
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.summary-item {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+
+  &.highlight {
+    border-color: var(--primary, #0f766e);
+    background: #f0fdfa;
+  }
+}
+
+.summary-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.summary-value {
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-family: 'Inter', 'Hind Siliguri', sans-serif;
+}
+
+/* ---------- Pagination ---------- */
+.table-pagination-footer {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--border-color);
+  background-color: #fafbfc;
+  font-size: 0.78rem;
+
+  .pagination-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-secondary);
+
+    .count-icon { font-size: 16px; color: var(--text-muted); }
+    strong { color: var(--text-primary); }
+    .page-badge { color: var(--text-muted); margin-left: 0.35rem; }
+  }
+
+  .pagination-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+  }
+
+  .page-size-selector {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-secondary);
+
+    .page-size-select {
+      height: 28px;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.78rem;
+      font-family: inherit;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: #fff;
+      cursor: pointer;
+    }
+  }
+
+  .page-nav-buttons {
+    display: inline-flex;
+    gap: 0.25rem;
+  }
+
+  .page-btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: #fff;
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover:not(:disabled) { background-color: var(--bg-main, #f1f5f9); }
+
+    &.active {
+      background-color: var(--primary, #0f766e);
+      border-color: var(--primary, #0f766e);
+      color: #fff;
+    }
+
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .material-symbols-outlined { font-size: 16px; }
+  }
+}
+
+@media (max-width: 768px) {
+  .page-container { padding: 1rem; }
+  .page-header { flex-wrap: wrap; gap: 0.75rem; }
+  .search-box { max-width: none; }
+  .filter-field { max-width: none; }
+  .filter-actions { margin-left: 0; }
 }
 
 .search-box {
@@ -41,11 +196,6 @@
   .search-input {
     padding-left: 40px;
   }
-}
-
-.count-tag {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
 }
 
 .text-right {
@@ -193,4 +343,12 @@
 
 .p-0 {
   padding: 0 !important;
+}
+
+/* প্রিন্টে রসিদটি A5-সমান প্রস্থে মাঝখানে থাকবে (পুরো A4 জুড়ে টানা হবে না) */
+@media print {
+  .receipt-voucher {
+    max-width: 150mm;
+    margin: 0 auto;
+  }
 }

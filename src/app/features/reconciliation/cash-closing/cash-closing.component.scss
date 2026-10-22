@@ -5,11 +5,9 @@
   gap: 1.25rem;
 }
 
-.page-header {
-  h2 {
-    font-size: 1.45rem;
-    font-weight: 800;
-  }
+.page-header h2 {
+  font-size: 1.45rem;
+  font-weight: 800;
 }
 
 .reconciliation-stats-grid {
@@ -127,4 +125,436 @@
 
 .p-0 {
   padding: 0 !important;
+}
+
+/* ========================================================
+   Header, banners & tabs
+   ======================================================== */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+
+  .header-right {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .branch-select {
+    min-width: 200px;
+    height: 40px;
+  }
+}
+
+.alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  font-size: 0.875rem;
+  line-height: 1.5;
+
+  > .material-symbols-outlined { font-size: 20px; flex-shrink: 0; }
+
+  &.success { background: var(--success-bg); border-color: var(--success-border); color: #065f46; }
+  &.info    { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+  &.warning { background: var(--warning-bg); border-color: var(--warning-border); color: #92400e; }
+  &.danger  { background: var(--danger-bg); border-color: var(--danger-border); color: #991b1b; }
+
+  .banner-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    padding: 0;
+    .material-symbols-outlined { font-size: 18px; }
+  }
+}
+
+.stat-card {
+  &.danger-highlight { border-color: var(--danger-border); background: var(--danger-bg); }
+
+  .stat-icon-wrap.danger-icon {
+    background-color: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid var(--danger-border);
+  }
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  .material-symbols-outlined { font-size: 20px; }
+
+  &.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+
+  .tab-count {
+    background: var(--warning);
+    color: #fff;
+    border-radius: 999px;
+    padding: 0 0.45rem;
+    font-size: 0.72rem;
+    line-height: 1.4rem;
+
+    &.muted { background: var(--border-color); color: var(--text-secondary); }
+  }
+}
+
+/* ========================================================
+   Officer handover cards
+   ======================================================== */
+.officer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.officer-card {
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  &.overdue { border-left: 4px solid var(--danger); }
+}
+
+.officer-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  .officer-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-subtle);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .officer-meta {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.officer-amounts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: var(--radius-md);
+
+  > div { display: flex; flex-direction: column; gap: 0.15rem; }
+  .amt-label { font-size: 0.72rem; color: var(--text-muted); }
+  strong { font-size: 1rem; }
+}
+
+.officer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ========================================================
+   History tab
+   ======================================================== */
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 160px;
+
+  span { font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); }
+  .form-control { height: 38px; }
+}
+
+/* ========================================================
+   Closing modal
+   ======================================================== */
+.closing-dialog {
+  max-width: 760px;
+
+  .header-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+}
+
+.closing-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.closing-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+
+  h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0;
+
+    .required { color: var(--danger); font-size: 0.78rem; font-weight: 600; }
+  }
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.receipt-pick-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.receipt-pick {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: #f8fafc; }
+  &.unchecked { opacity: 0.5; }
+
+  .rp-id { font-weight: 700; color: var(--text-secondary); }
+  .rp-name {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    small { color: var(--text-muted); font-size: 0.72rem; }
+  }
+  .rp-amt { font-weight: 700; text-align: right; min-width: 80px; }
+}
+
+.pick-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+
+  button {
+    background: #fff;
+    border: none;
+    padding: 0.35rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+
+    &.active { background: var(--primary); color: #fff; }
+  }
+}
+
+.denom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem 1.25rem;
+}
+
+.denom-row {
+  display: grid;
+  grid-template-columns: 56px 12px 1fr 90px;
+  align-items: center;
+  gap: 0.5rem;
+
+  .denom-note { font-weight: 700; }
+  .denom-x { color: var(--text-muted); }
+  .form-control { height: 34px; padding: 0.25rem 0.5rem; }
+  .denom-sum { text-align: right; font-size: 0.85rem; color: var(--text-secondary); }
+}
+
+.manual-amount {
+  height: 44px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.count-result {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: #f8fafc;
+
+  > div { display: flex; flex-direction: column; gap: 0.1rem; }
+  span { font-size: 0.75rem; color: var(--text-muted); }
+  strong { font-size: 1.1rem; }
+
+  &.ok     { background: var(--success-bg); border-color: var(--success-border); > div:last-child strong { color: var(--success); } }
+  &.short  { background: var(--danger-bg); border-color: var(--danger-border); > div:last-child strong { color: var(--danger); } }
+  &.excess { background: var(--warning-bg); border-color: var(--warning-border); > div:last-child strong { color: var(--warning); } }
+}
+
+.footer-hint {
+  margin-right: auto;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+/* ========================================================
+   Printable slip
+   ======================================================== */
+.slip-dialog { max-width: 560px; }
+
+.closing-slip {
+  border: 2px dashed #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.slip-top {
+  text-align: center;
+  .org-name { font-weight: 800; font-size: 1.05rem; }
+  .branch-line { color: var(--text-secondary); font-size: 0.8rem; }
+  .slip-title {
+    margin-top: 0.4rem;
+    display: inline-block;
+    padding: 0.2rem 0.75rem;
+    border: 1px solid #0f172a;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.8rem;
+  }
+}
+
+.slip-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 1rem;
+}
+
+.slip-table {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+
+  .s-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    &:last-child { border-bottom: none; }
+  }
+  .s-head { background: #f1f5f9; font-weight: 700; }
+  .s-total { font-weight: 800; background: #f8fafc; }
+}
+
+.slip-denoms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.8rem;
+  .slip-sub { width: 100%; font-weight: 700; }
+}
+
+.slip-vault, .slip-notes, .slip-receipts {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.slip-signatures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+
+  .sig-line { border-top: 1px solid #0f172a; margin-bottom: 0.3rem; }
+}
+
+@media print {
+  .closing-slip { max-width: 150mm; margin: 0 auto; border: none; }
+}
+
+@media (max-width: 640px) {
+  .page-container { padding: 1rem; }
+  .officer-grid { grid-template-columns: 1fr; }
+  .denom-grid { grid-template-columns: 1fr; }
+  .receipt-pick { grid-template-columns: auto 1fr auto; .rp-id, .badge { display: none; } }
+  .slip-meta { grid-template-columns: 1fr; .text-right { text-align: left; } }
 }

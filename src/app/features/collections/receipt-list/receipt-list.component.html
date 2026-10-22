@@ -4,20 +4,101 @@
       <h2>মানি রসিদ রেজিস্টার (Collection Receipts)</h2>
       <p class="sub-text">সকল কিস্তি ও সঞ্চয় আদায়ের ডিজিটাল প্রমাণপত্র ও অডিট ট্রেইল</p>
     </div>
+    <div class="header-right">
+      <button class="btn btn-secondary" (click)="loadReceipts()" [disabled]="loading()">
+        <span class="material-symbols-outlined">refresh</span>
+        <span>রিফ্রেশ</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Search Card -->
+  <!-- Summary Strip (ফিল্টার অনুযায়ী মোট) -->
+  @if (!loading() && !loadError()) {
+    <div class="summary-strip">
+      <div class="summary-item">
+        <span class="summary-label">মোট রসিদ</span>
+        <strong class="summary-value">{{ filteredReceipts().length }} টি</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">কিস্তি (আসল + লাভ)</span>
+        <strong class="summary-value">৳ {{ summary().kisti | number }}</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">সঞ্চয় জমা</span>
+        <strong class="summary-value text-success">৳ {{ summary().savings | number }}</strong>
+      </div>
+      <div class="summary-item highlight">
+        <span class="summary-label">সর্বমোট আদায়</span>
+        <strong class="summary-value text-primary">৳ {{ summary().total | number }}</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">মাঠকর্মীর কাছে (জমা বাকি)</span>
+        <strong class="summary-value text-warning">৳ {{ summary().pendingHandover | number }}</strong>
+      </div>
+    </div>
+  }
+
+  <!-- Search & Filter Card -->
   <div class="card filter-card">
     <div class="search-box">
       <span class="material-symbols-outlined search-icon">search</span>
-      <input 
-        type="text" 
-        class="form-control search-input" 
-        placeholder="গ্রাহকের নাম বা রসিদ নম্বর (#40001) দিয়ে খুঁজুন..." 
-        [(ngModel)]="searchQuery" />
+      <input
+        type="text"
+        class="form-control search-input"
+        placeholder="গ্রাহক, রসিদ নং (#40001), ঋণ হিসাব, TrxID বা কর্মীর নাম..."
+        [ngModel]="searchQuery()"
+        (ngModelChange)="updateFilter(searchQuery, $event)" />
     </div>
-    <div class="count-tag">
-      মোট রসিদ: <strong>{{ filteredReceipts().length }} টি</strong>
+
+    <div class="filter-row">
+      <label class="filter-field">
+        <span>শুরুর তারিখ</span>
+        <input type="date" class="form-control" [ngModel]="dateFrom()" (ngModelChange)="updateFilter(dateFrom, $event)" />
+      </label>
+      <label class="filter-field">
+        <span>শেষ তারিখ</span>
+        <input type="date" class="form-control" [ngModel]="dateTo()" (ngModelChange)="updateFilter(dateTo, $event)" />
+      </label>
+      <label class="filter-field">
+        <span>মাধ্যম</span>
+        <select class="form-control" [ngModel]="methodFilter()" (ngModelChange)="updateFilter(methodFilter, $event)">
+          <option value="ALL">সকল মাধ্যম</option>
+          @for (m of paymentMethods; track m.value) {
+            <option [value]="m.value">{{ m.label }}</option>
+          }
+        </select>
+      </label>
+      @if (!authService.isFieldOfficer()) {
+        <label class="filter-field">
+          <span>সংগ্রহকারী কর্মী</span>
+          <select class="form-control" [ngModel]="collectorFilter()" (ngModelChange)="updateFilter(collectorFilter, +$event)">
+            <option [ngValue]="0">সকল কর্মী</option>
+            @for (c of collectors(); track c.id) {
+              <option [ngValue]="c.id">{{ c.name }}</option>
+            }
+          </select>
+        </label>
+      }
+      <label class="filter-field">
+        <span>শাখা জমা</span>
+        <select class="form-control" [ngModel]="handoverFilter()" (ngModelChange)="updateFilter(handoverFilter, $event)">
+          <option value="ALL">সকল</option>
+          <option value="PENDING">মাঠকর্মীর কাছে</option>
+          <option value="HANDED_OVER">জমা সম্পন্ন</option>
+        </select>
+      </label>
+      <div class="filter-actions">
+        <button class="btn btn-sm btn-secondary" (click)="setTodayFilter()">
+          <span class="material-symbols-outlined">today</span>
+          <span>আজকের</span>
+        </button>
+        @if (hasActiveFilters()) {
+          <button class="btn btn-sm btn-secondary" (click)="clearFilters()">
+            <span class="material-symbols-outlined">filter_alt_off</span>
+            <span>ফিল্টার মুছুন</span>
+          </button>
+        }
+      </div>
     </div>
   </div>
 
@@ -26,10 +107,22 @@
     <div class="card-body p-0">
       @if (loading()) {
         <app-skeleton variant="table" [rows]="8" [columns]="6" label="রসিদ তালিকা লোড হচ্ছে..." />
+      } @else if (loadError()) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined text-danger">cloud_off</span>
+          <p>রসিদ তালিকা লোড করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</p>
+          <button class="btn btn-primary mt-2" (click)="loadReceipts()">
+            <span class="material-symbols-outlined">refresh</span>
+            <span>আবার চেষ্টা করুন</span>
+          </button>
+        </div>
       } @else if (filteredReceipts().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined">receipt</span>
-          <p>কোনো রসিদ পাওয়া যায়নি।</p>
+          <p>{{ hasActiveFilters() ? 'এই ফিল্টারে কোনো রসিদ পাওয়া যায়নি।' : 'কোনো রসিদ পাওয়া যায়নি।' }}</p>
+          @if (hasActiveFilters()) {
+            <button class="btn btn-secondary mt-2" (click)="clearFilters()">ফিল্টার মুছুন</button>
+          }
         </div>
       } @else {
         <div class="table-container border-0">
@@ -37,11 +130,12 @@
             <thead>
               <tr>
                 <th>রসিদ নং</th>
+                <th>তারিখ</th>
                 <th>গ্রাহক</th>
                 <th>কিস্তি নং</th>
-                <th>আসল ও লাভ</th>
-                <th>সঞ্চয় জমা</th>
-                <th>সর্বমোট আদায়</th>
+                <th class="text-right">আসল ও লাভ</th>
+                <th class="text-right">সঞ্চয় জমা</th>
+                <th class="text-right">সর্বমোট আদায়</th>
                 <th>মাধ্যম</th>
                 <th>সংগ্রহকারী কর্মী</th>
                 <th>শাখা জমা</th>
@@ -49,13 +143,17 @@
               </tr>
             </thead>
             <tbody>
-              @for (rec of filteredReceipts(); track rec.receiptId) {
+              @for (rec of paginatedReceipts(); track rec.receiptId) {
                 <tr>
                   <td>
                     <span class="id-tag">#{{ rec.receiptId }}</span>
                     @if (rec.receiptNumberManual) {
-                      <div class="sub-text">{{ rec.receiptNumberManual }}</div>
+                      <div class="sub-text">বই: {{ rec.receiptNumberManual }}</div>
                     }
+                  </td>
+                  <td>
+                    <div>{{ rec.collectionDate | date:'dd MMM yyyy' }}</div>
+                    <div class="sub-text">{{ rec.collectionDate | date:'hh:mm a' }}</div>
                   </td>
                   <td>
                     <strong>{{ rec.customerName }}</strong>
@@ -64,15 +162,21 @@
                   <td>
                     <span class="badge badge-secondary">কিস্তি {{ rec.installmentNo }}</span>
                   </td>
-                  <td class="amount-bdt">{{ (rec.principalAmountCollected + rec.profitAmountCollected) | number }}</td>
-                  <td class="amount-bdt text-success">+ ৳{{ rec.savingsAmountCollected | number }}</td>
-                  <td>
+                  <td class="amount-bdt text-right">{{ (rec.principalAmountCollected + rec.profitAmountCollected) | number }}</td>
+                  <td class="amount-bdt text-success text-right">+ ৳{{ rec.savingsAmountCollected | number }}</td>
+                  <td class="text-right">
                     <strong class="amount-bdt text-primary">{{ rec.totalAmountCollected | number }}</strong>
+                    @if (rec.fineAmountCollected > 0) {
+                      <div class="sub-text">জরিমানা ৳{{ rec.fineAmountCollected | number }}</div>
+                    }
                   </td>
                   <td>
                     <span class="badge" [ngClass]="rec.paymentMethod === 'CASH' ? 'badge-secondary' : 'badge-paid'">
-                      {{ rec.paymentMethod }}
+                      {{ getMethodLabel(rec.paymentMethod) }}
                     </span>
+                    @if (rec.trxId) {
+                      <div class="sub-text">TrxID: {{ rec.trxId }}</div>
+                    }
                   </td>
                   <td>{{ rec.collectedByName }}</td>
                   <td>
@@ -93,16 +197,53 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Table Footer / Pagination -->
+        <div class="table-pagination-footer">
+          <div class="pagination-info">
+            <span class="material-symbols-outlined count-icon">format_list_bulleted</span>
+            <span>মোট <strong>{{ filteredReceipts().length }}</strong> টি রসিদ</span>
+            @if (pageSize() > 0 && totalPages() > 1) {
+              <span class="page-badge">(পৃষ্ঠা {{ currentPage() }} / {{ totalPages() }})</span>
+            }
+          </div>
+
+          <div class="pagination-controls">
+            <div class="page-size-selector">
+              <span class="size-label">প্রতি পৃষ্ঠায়:</span>
+              <select class="page-size-select" [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)">
+                <option [ngValue]="20">২০টি</option>
+                <option [ngValue]="50">৫০টি</option>
+                <option [ngValue]="100">১০০টি</option>
+                <option [ngValue]="0">সব রসিদ</option>
+              </select>
+            </div>
+
+            @if (totalPages() > 1 && pageSize() > 0) {
+              <div class="page-nav-buttons">
+                <button class="page-btn" [disabled]="currentPage() === 1" (click)="setPage(currentPage() - 1)" title="পূর্ববর্তী পৃষ্ঠা">
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                @for (p of visiblePages(); track p) {
+                  <button class="page-btn" [class.active]="currentPage() === p" (click)="setPage(p)">{{ p }}</button>
+                }
+                <button class="page-btn" [disabled]="currentPage() === totalPages()" (click)="setPage(currentPage() + 1)" title="পরবর্তী পৃষ্ঠা">
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+              </div>
+            }
+          </div>
+        </div>
       }
     </div>
   </div>
 </div>
 
 <!-- Printable Money Receipt Modal -->
-@if (selectedReceiptForPrint()) {
+@if (selectedReceiptForPrint(); as rec) {
   <div class="modal-backdrop" (click)="closeReceipt()">
-    <div class="modal-dialog receipt-dialog" (click)="$event.stopPropagation()">
-      <div class="modal-header">
+    <div class="modal-dialog receipt-dialog" id="printableMoneyReceipt" (click)="$event.stopPropagation()">
+      <div class="modal-header no-print">
         <div class="header-title">
           <span class="material-symbols-outlined text-primary">receipt_long</span>
           <h3>ডিজিটাল মানি রসিদ (Official Receipt)</h3>
@@ -117,15 +258,28 @@
         <div class="receipt-voucher">
           <div class="voucher-top">
             <div class="org-name">eKisti মাইক্রোফাইন্যান্স সিস্টেম</div>
-            <div class="branch-line">মিরপুর শাখা • ঢাকা</div>
+            <div class="branch-line">
+              {{ getBranch(rec.branchId)?.name || ('শাখা #' + rec.branchId) }}
+              @if (getBranch(rec.branchId)?.address) {
+                • {{ getBranch(rec.branchId)?.address }}
+              }
+            </div>
             <div class="voucher-title">টাকা প্রাপ্তির মানি রসিদ (গ্রাহক কপি)</div>
           </div>
 
           <div class="voucher-meta-grid">
-            <div>রসিদ নং: <strong>#{{ selectedReceiptForPrint()!.receiptId }}</strong></div>
-            <div class="text-right">তারিখ: <strong>{{ selectedReceiptForPrint()!.collectionDate | date:'mediumDate' }}</strong></div>
-            <div>গ্রাহকের নাম: <strong>{{ selectedReceiptForPrint()!.customerName }}</strong></div>
-            <div class="text-right">ঋণ হিসাব নং: <strong>LN-{{ selectedReceiptForPrint()!.loanId }}</strong></div>
+            <div>রসিদ নং: <strong>#{{ rec.receiptId }}</strong></div>
+            <div class="text-right">তারিখ: <strong>{{ rec.collectionDate | date:'dd MMM yyyy, hh:mm a' }}</strong></div>
+            <div>গ্রাহকের নাম: <strong>{{ rec.customerName }}</strong></div>
+            <div class="text-right">ঋণ হিসাব নং: <strong>LN-{{ rec.loanId }}</strong></div>
+            <div>সমিতি: <strong>{{ getCenterName(rec.centerId) }}</strong></div>
+            <div class="text-right">মাধ্যম: <strong>{{ getMethodLabel(rec.paymentMethod) }}</strong></div>
+            @if (rec.receiptNumberManual) {
+              <div>ম্যানুয়াল রসিদ নং: <strong>{{ rec.receiptNumberManual }}</strong></div>
+            }
+            @if (rec.trxId) {
+              <div class="text-right">TrxID: <strong>{{ rec.trxId }}</strong></div>
+            }
           </div>
 
           <div class="voucher-items-table">
@@ -134,16 +288,26 @@
               <span class="text-right">টাকার পরিমাণ</span>
             </div>
             <div class="v-row">
-              <span>কিস্তি নং {{ selectedReceiptForPrint()!.installmentNo }} (আসল ও সার্ভিস চার্জ)</span>
-              <span class="amount-bdt text-right">{{ (selectedReceiptForPrint()!.principalAmountCollected + selectedReceiptForPrint()!.profitAmountCollected) | number }}</span>
+              <span>কিস্তি নং {{ rec.installmentNo }} — আসল</span>
+              <span class="amount-bdt text-right">{{ rec.principalAmountCollected | number }}</span>
             </div>
             <div class="v-row">
-              <span>সাপ্তাহিক বাধ্যতামূলক সঞ্চয় জমা</span>
-              <span class="amount-bdt text-right">{{ selectedReceiptForPrint()!.savingsAmountCollected | number }}</span>
+              <span>কিস্তি নং {{ rec.installmentNo }} — সার্ভিস চার্জ</span>
+              <span class="amount-bdt text-right">{{ rec.profitAmountCollected | number }}</span>
             </div>
+            <div class="v-row">
+              <span>বাধ্যতামূলক সঞ্চয় জমা</span>
+              <span class="amount-bdt text-right">{{ rec.savingsAmountCollected | number }}</span>
+            </div>
+            @if (rec.fineAmountCollected > 0) {
+              <div class="v-row">
+                <span>বিলম্ব জরিমানা</span>
+                <span class="amount-bdt text-right">{{ rec.fineAmountCollected | number }}</span>
+              </div>
+            }
             <div class="v-row v-total">
               <span>সর্বমোট আদায়কৃত টাকা:</span>
-              <span class="amount-bdt total-bold text-right">{{ selectedReceiptForPrint()!.totalAmountCollected | number }}</span>
+              <span class="amount-bdt total-bold text-right">{{ rec.totalAmountCollected | number }}</span>
             </div>
           </div>
 
@@ -151,7 +315,7 @@
             <div class="sig-box">
               <div class="sig-line"></div>
               <div class="sig-title">আদায়কারী কর্মীর স্বাক্ষর</div>
-              <div class="sig-name">{{ selectedReceiptForPrint()!.collectedByName }}</div>
+              <div class="sig-name">{{ rec.collectedByName }}</div>
             </div>
             <div class="sig-box">
               <div class="sig-line"></div>
@@ -161,7 +325,7 @@
         </div>
       </div>
 
-      <div class="modal-footer">
+      <div class="modal-footer no-print">
         <button class="btn btn-secondary" (click)="closeReceipt()">বন্ধ করুন</button>
         <button class="btn btn-primary" (click)="printReceipt()">
           <span class="material-symbols-outlined">print</span>

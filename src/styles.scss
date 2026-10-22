@@ -1090,7 +1090,9 @@ select.form-control {
   }
 
   /* 4. When Printing Loan Disbursement Receipt */
-  body:has(#printableLoanDisburseReceipt) {
+  body:has(#printableLoanDisburseReceipt),
+  body:has(#printableMoneyReceipt),
+  body:has(#printableCashClosingSlip) {
 
     app-navbar,
     app-sidebar,
@@ -1100,7 +1102,7 @@ select.form-control {
     .filter-card,
     .app-layout>*:not(.app-main-body),
     .app-main-body>*:not(.app-content-area),
-    .modal-backdrop>*:not(#printableLoanDisburseReceipt) {
+    .modal-backdrop>*:not(#printableLoanDisburseReceipt):not(#printableMoneyReceipt):not(#printableCashClosingSlip) {
       display: none !important;
     }
 
@@ -1128,7 +1130,9 @@ select.form-control {
       z-index: auto !important;
     }
 
-    #printableLoanDisburseReceipt {
+    #printableLoanDisburseReceipt,
+    #printableMoneyReceipt,
+    #printableCashClosingSlip {
       position: static !important;
       display: block !important;
       width: 100% !important;

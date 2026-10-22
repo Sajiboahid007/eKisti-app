@@ -9,7 +9,8 @@ import {
   updateDoc,
   query,
   where,
-  orderBy
+  orderBy,
+  runTransaction
 } from '@angular/fire/firestore';
 import { CounterService } from './counter.service';
 import { AuditHistoryService } from './audit-history.service';
@@ -24,7 +25,8 @@ import {
   UserStaff,
   Role,
   LoanProduct,
-  SavingsTransaction
+  SavingsTransaction,
+  DailyReconciliation
 } from '../models/database.models';
 
 @Injectable({
@@ -512,6 +514,24 @@ export class KistiDatabaseService {
     }
   }
 
+  // সকল কিস্তি আদায় রসিদ (নতুন থেকে পুরাতন) — মুছে ফেলা রসিদ বাদে
+  async getPaymentCollections(): Promise<PaymentCollection[]> {
+    try {
+      const snap = await getDocs(collection(this.firestore, 'collections'));
+      const list: PaymentCollection[] = [];
+      snap.forEach(d => {
+        const r = d.data() as PaymentCollection;
+        if (!r.isDeleted) {
+          list.push(r);
+        }
+      });
+      return list.sort((a, b) => b.receiptId - a.receiptId);
+    } catch (err) {
+      console.error('Error fetching payment collections:', err);
+      throw err;
+    }
+  }
+
   // সদস্যের সকল কিস্তি আদায় রসিদ (নতুন থেকে পুরাতন)
   async getPaymentCollectionsByCustomerId(customerId: number): Promise<PaymentCollection[]> {
     try {
@@ -532,6 +552,216 @@ export class KistiDatabaseService {
       console.error('Error fetching payment collections:', err);
       return [];
     }
+  }
+
+  // ==========================================
+  // 4b. CASH CLOSING / RECONCILIATION (মাঠকর্মীর ক্যাশ ক্লোজিং ও ভল্টে জমা)
+  // ==========================================
+
+  /** ক্যাশ ক্লোজিং রেজিস্টার (নতুন থেকে পুরাতন), branchIds = null হলে সকল শাখা */
+  async getReconciliations(branchIds: number[] | null = null): Promise<DailyReconciliation[]> {
+    try {
+      const snap = await getDocs(collection(this.firestore, 'reconciliations'));
+      const list: DailyReconciliation[] = [];
+      snap.forEach(d => {
+        const r = d.data() as DailyReconciliation;
+        if (!r.isDeleted && (branchIds === null || branchIds.includes(Number(r.branchId)))) {
+          list.push(r);
+        }
+      });
+      return list.sort((a, b) => b.reconciliationId - a.reconciliationId);
+    } catch (err) {
+      console.error('Error fetching reconciliations:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * মাঠকর্মীর হাতের টাকা ক্যাশিয়ার কর্তৃক গ্রহণ — একটি Firestore ট্রানজ্যাকশনে:
+   *  1. DailyReconciliation রেকর্ড তৈরি (50001+)
+   *  2. প্রতিটি রসিদে isHandedOverToBranch / reconciliationId সেট + অডিট হিস্ট্রি
+   *  3. শাখার ভল্ট ক্যাশ বৃদ্ধি (শুধু গণনাকৃত নগদ) + অডিট হিস্ট্রি
+   * কোনো রসিদ ইতোমধ্যে অন্য কেউ জমা নিলে পুরো ট্রানজ্যাকশন বাতিল হয় (ডাবল কাউন্ট প্রতিরোধ)।
+   */
+  async reconcileFieldOfficerCash(params: {
+    branchId: number;
+    fieldOfficerUserId: number;
+    fieldOfficerName: string;
+    receiptIds: number[];
+    countedCashAmount: number;
+    denominations?: Record<string, number>;
+    notes?: string;
+    cashier: { userId: number; name: string; role: string };
+  }): Promise<DailyReconciliation> {
+    const receiptIds = [...new Set(params.receiptIds)];
+    if (receiptIds.length === 0) {
+      throw new Error('কমপক্ষে একটি রসিদ নির্বাচন করুন');
+    }
+    if (receiptIds.length > 400) {
+      throw new Error('একবারে সর্বোচ্চ ৪০০টি রসিদ জমা নেওয়া যাবে');
+    }
+    if (!(params.countedCashAmount >= 0)) {
+      throw new Error('গণনাকৃত নগদ টাকার পরিমাণ সঠিক নয়');
+    }
+
+    // আইডি আগেই সংরক্ষণ (ট্রানজ্যাকশন ব্যর্থ হলে শুধু সিকোয়েন্সে ফাঁক থাকবে, ডেটা নয়)
+    const reconciliationId = await this.counterService.getNextIntegerId('reconciliations');
+    // প্রতিটি রসিদ + শাখা + ক্লোজিং রেকর্ডের জন্য একটি করে হিস্ট্রি আইডি
+    let nextHistoryId = await this.counterService.reserveIntegerIds('history', receiptIds.length + 2);
+
+    const now = new Date().toISOString();
+    const today = this.toLocalDayKey(new Date());
+    const cashier = params.cashier;
+    const notes = (params.notes || '').trim();
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    const makeHistory = (
+      reason: string,
+      previousData: Record<string, any> | undefined,
+      newData: Record<string, any>
+    ): EditHistoryEntry => {
+      const prev = previousData ? { ...previousData } : {};
+      delete prev['history'];
+      return {
+        historyId: nextHistoryId++,
+        action: 'CASH_RECONCILED',
+        timestamp: now,
+        changedByUserId: cashier.userId,
+        changedByName: cashier.name,
+        changedByRole: cashier.role,
+        reason,
+        previousData: prev,
+        newData
+      };
+    };
+
+    return runTransaction(this.firestore, async (tx) => {
+      // ---------- READS (ট্রানজ্যাকশনে সব রিড আগে) ----------
+      const branchRef = doc(this.firestore, 'branches', params.branchId.toString());
+      const branchSnap = await tx.get(branchRef);
+      if (!branchSnap.exists()) {
+        throw new Error(`শাখা #${params.branchId} পাওয়া যায়নি`);
+      }
+      const branch = branchSnap.data() as Branch;
+
+      const receiptRefs = receiptIds.map(id => doc(this.firestore, 'collections', id.toString()));
+      const receiptSnaps = await Promise.all(receiptRefs.map(ref => tx.get(ref)));
+
+      const receipts: PaymentCollection[] = receiptSnaps.map((snap, i) => {
+        if (!snap.exists()) {
+          throw new Error(`রসিদ #${receiptIds[i]} পাওয়া যায়নি`);
+        }
+        const r = snap.data() as PaymentCollection;
+        if (r.isDeleted) {
+          throw new Error(`রসিদ #${r.receiptId} মুছে ফেলা হয়েছে`);
+        }
+        if (r.isHandedOverToBranch) {
+          throw new Error(`রসিদ #${r.receiptId} ইতোমধ্যে ভল্টে জমা নেওয়া হয়েছে। পেজ রিফ্রেশ করুন।`);
+        }
+        if (Number(r.branchId) !== Number(params.branchId)) {
+          throw new Error(`রসিদ #${r.receiptId} এই শাখার নয়`);
+        }
+        if (Number(r.collectedByUserId) !== Number(params.fieldOfficerUserId)) {
+          throw new Error(`রসিদ #${r.receiptId} এই মাঠকর্মীর আদায় নয়`);
+        }
+        return r;
+      });
+
+      // ---------- হিসাব ----------
+      let totalCollected = 0, expectedCash = 0, digital = 0, kisti = 0, savings = 0, fine = 0;
+      for (const r of receipts) {
+        const amount = r.totalAmountCollected || 0;
+        totalCollected += amount;
+        if (r.paymentMethod === 'CASH') expectedCash += amount; else digital += amount;
+        kisti += (r.principalAmountCollected || 0) + (r.profitAmountCollected || 0);
+        savings += r.savingsAmountCollected || 0;
+        fine += r.fineAmountCollected || 0;
+      }
+
+      const counted = round2(params.countedCashAmount);
+      const shortage = round2(expectedCash - counted); // + ঘাটতি, − অতিরিক্ত
+      const status: DailyReconciliation['cashierStatus'] = shortage === 0 ? 'ACCEPTED' : 'MISMATCH_DISCREPANCY';
+      if (status === 'MISMATCH_DISCREPANCY' && !notes) {
+        throw new Error('টাকার অমিল থাকলে কারণ / নোট লেখা বাধ্যতামূলক');
+      }
+
+      const vaultBefore = branch.currentVaultCash || 0;
+      const vaultAfter = round2(vaultBefore + counted);
+
+      const record: Omit<DailyReconciliation, 'history'> = {
+        reconciliationId,
+        date: today,
+        branchId: Number(params.branchId),
+        fieldOfficerUserId: params.fieldOfficerUserId,
+        fieldOfficerName: params.fieldOfficerName,
+        targetCollectionAmount: round2(totalCollected),
+        actualCashCollected: round2(expectedCash),
+        shortageOrDeficitAmount: shortage,
+        totalReceiptsCount: receipts.length,
+        cashHandedOverAmount: counted,
+        cashierUserId: cashier.userId,
+        cashierName: cashier.name,
+        cashierStatus: status,
+        cashierNotes: notes,
+        receiptIds,
+        digitalCollectedAmount: round2(digital),
+        kistiAmount: round2(kisti),
+        savingsAmount: round2(savings),
+        fineAmount: round2(fine),
+        denominations: params.denominations || {},
+        vaultBalanceBefore: vaultBefore,
+        vaultBalanceAfter: vaultAfter,
+        submittedAt: now,
+        verifiedAt: now,
+        createdAt: now,
+        isDeleted: false,
+        deletedAt: null,
+        deletedByUserId: null,
+        deleteReason: null
+      };
+      const reconciliation: DailyReconciliation = {
+        ...record,
+        history: [makeHistory('মাঠকর্মীর ক্যাশ ক্লোজিং ও ভল্টে জমা গ্রহণ', undefined, record)]
+      };
+
+      // ---------- WRITES ----------
+      tx.set(doc(this.firestore, 'reconciliations', reconciliationId.toString()), reconciliation);
+
+      receipts.forEach((r, i) => {
+        const fields = {
+          isHandedOverToBranch: true,
+          reconciliationId,
+          reconciledAt: now,
+          reconciledByUserId: cashier.userId
+        };
+        tx.update(receiptRefs[i], {
+          ...fields,
+          history: this.auditHistoryService.appendHistory(
+            r.history,
+            makeHistory(`ক্যাশ ক্লোজিং #${reconciliationId} — ক্যাশিয়ার কর্তৃক গ্রহণ`, r, fields)
+          )
+        });
+      });
+
+      const branchFields = { currentVaultCash: vaultAfter };
+      tx.update(branchRef, {
+        ...branchFields,
+        history: this.auditHistoryService.appendHistory(
+          branch.history,
+          makeHistory(
+            `ক্যাশ ক্লোজিং #${reconciliationId}: ${params.fieldOfficerName} থেকে ৳${counted} ভল্টে জমা`,
+            { currentVaultCash: vaultBefore },
+            branchFields
+          )
+        )
+      });
+
+      return reconciliation;
+    });
+  }
+
+  private toLocalDayKey(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
   // ==========================================

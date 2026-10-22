@@ -2,128 +2,495 @@
   <div class="page-header">
     <div class="header-left">
       <h2>ক্যাশিয়ার ভল্ট ও মাঠকর্মীর ক্যাশ ক্লোজিং (Reconciliation)</h2>
-      <p class="sub-text">মাঠকর্মী কর্তৃক সংগৃহীত নগদ টাকা যাচাই ও শাখার ক্যাশ ভল্টে গ্রহণ</p>
+      <p class="sub-text">মাঠকর্মী কর্তৃক সংগৃহীত নগদ টাকা গণনা, যাচাই ও শাখার ক্যাশ ভল্টে গ্রহণ</p>
+    </div>
+    <div class="header-right">
+      @if (accessibleBranches().length > 1) {
+        <select class="form-control branch-select" [ngModel]="selectedBranchId()" (ngModelChange)="onBranchChange($event)" [disabled]="loading()">
+          @for (b of accessibleBranches(); track b.branchId) {
+            <option [ngValue]="b.branchId">{{ b.name }}</option>
+          }
+        </select>
+      }
+      <button class="btn btn-secondary" (click)="loadData()" [disabled]="loading()">
+        <span class="material-symbols-outlined">refresh</span>
+        <span>রিফ্রেশ</span>
+      </button>
     </div>
   </div>
 
-  <!-- Vault Status & Reconciliation Summary -->
-  <div class="reconciliation-stats-grid">
-    <div class="stat-card vault-highlight">
-      <div class="stat-icon-wrap primary-icon">
-        <span class="material-symbols-outlined">account_balance</span>
+  @if (successMessage()) {
+    <div class="alert-banner success" role="status">
+      <span class="material-symbols-outlined">check_circle</span>
+      <span>{{ successMessage() }}</span>
+      <button class="banner-close" (click)="successMessage.set('')" aria-label="বন্ধ করুন">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  }
+
+  @if (!canVerify()) {
+    <div class="alert-banner info">
+      <span class="material-symbols-outlined">info</span>
+      <span>আপনি শুধু দেখতে পারবেন। ক্যাশ গ্রহণ ও ভল্টে জমা শুধুমাত্র ক্যাশিয়ার / শাখা ব্যবস্থাপক করতে পারবেন।</span>
+    </div>
+  }
+
+  @if (loading()) {
+    <app-skeleton variant="cards" [cards]="4" />
+    <div class="card"><app-skeleton variant="table" [rows]="5" [columns]="6" label="ক্যাশ ক্লোজিং ডেটা লোড হচ্ছে..." /></div>
+  } @else if (loadError()) {
+    <div class="card empty-state">
+      <span class="material-symbols-outlined text-danger">cloud_off</span>
+      <p>{{ loadError() }}</p>
+      <button class="btn btn-primary" (click)="loadData()">আবার চেষ্টা করুন</button>
+    </div>
+  } @else if (!selectedBranch()) {
+    <div class="card empty-state">
+      <span class="material-symbols-outlined">domain_disabled</span>
+      <p>আপনার অ্যাকাউন্টে কোনো শাখা নির্ধারিত নেই।</p>
+    </div>
+  } @else {
+    <!-- Vault Status & Summary -->
+    <div class="reconciliation-stats-grid">
+      <div class="stat-card vault-highlight">
+        <div class="stat-icon-wrap primary-icon">
+          <span class="material-symbols-outlined">account_balance</span>
+        </div>
+        <div class="stat-info">
+          <div class="stat-label">শাখা ভল্ট ব্যালেন্স (Vault Cash)</div>
+          <div class="stat-val amount-bdt">{{ selectedBranch()!.currentVaultCash || 0 | number:'1.2-2' }}</div>
+          <div class="stat-subtext">{{ selectedBranch()!.name }} • নিরাপদ সংরক্ষিত ক্যাশ</div>
+        </div>
       </div>
-      <div class="stat-info">
-        <div class="stat-label">শাখা ভল্ট ব্যালেন্স (Vault Cash)</div>
-        <div class="stat-val amount-bdt">{{ branch()?.currentVaultCash | number:'1.2-2' }}</div>
-        <div class="stat-subtext">মিরপুর শাখা • নিরাপদ সংরক্ষিত ক্যাশ</div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrap warning-icon">
+          <span class="material-symbols-outlined">pending_actions</span>
+        </div>
+        <div class="stat-info">
+          <div class="stat-label">মাঠকর্মীদের কাছে বাকি নগদ</div>
+          <div class="stat-val amount-bdt text-warning">{{ stats().pendingCash | number }}</div>
+          <div class="stat-subtext">{{ stats().pendingOfficers }} জন মাঠকর্মী
+            @if (stats().pendingDigital > 0) { • ডিজিটাল ৳{{ stats().pendingDigital | number }} }
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrap success-icon">
+          <span class="material-symbols-outlined">price_check</span>
+        </div>
+        <div class="stat-info">
+          <div class="stat-label">আজ ভল্টে গৃহীত নগদ</div>
+          <div class="stat-val amount-bdt text-success">{{ stats().todayAccepted | number }}</div>
+          <div class="stat-subtext">{{ stats().todayClosings }} টি ক্লোজিং সম্পন্ন</div>
+        </div>
+      </div>
+
+      <div class="stat-card" [class.danger-highlight]="stats().todayMismatches > 0">
+        <div class="stat-icon-wrap" [class.danger-icon]="stats().todayMismatches > 0" [class.success-icon]="stats().todayMismatches === 0">
+          <span class="material-symbols-outlined">{{ stats().todayMismatches > 0 ? 'report' : 'verified' }}</span>
+        </div>
+        <div class="stat-info">
+          <div class="stat-label">আজকের অমিল / ঘাটতি</div>
+          <div class="stat-val amount-bdt" [class.text-danger]="stats().todayShortage > 0">{{ stats().todayShortage | number }}</div>
+          <div class="stat-subtext">{{ stats().todayMismatches }} টি অমিল রেকর্ড</div>
+        </div>
       </div>
     </div>
 
-    <div class="stat-card">
-      <div class="stat-icon-wrap success-icon">
-        <span class="material-symbols-outlined">price_check</span>
-      </div>
-      <div class="stat-info">
-        <div class="stat-label">শাখায় জমা সম্পন্ন ক্যাশ</div>
-        <div class="stat-val amount-bdt text-success">{{ getCompletedHandoverAmount() | number }}</div>
-        <div class="stat-subtext">ক্যাশিয়ার ভেরিফাইড ও ভল্টে জমা</div>
-      </div>
+    <!-- Tabs -->
+    <div class="tab-bar" role="tablist">
+      <button role="tab" class="tab-btn" [class.active]="activeTab() === 'pending'" (click)="activeTab.set('pending')">
+        <span class="material-symbols-outlined">move_to_inbox</span>
+        <span>জমা গ্রহণ (অপেক্ষমাণ)</span>
+        @if (officerGroups().length > 0) { <span class="tab-count">{{ officerGroups().length }}</span> }
+      </button>
+      <button role="tab" class="tab-btn" [class.active]="activeTab() === 'history'" (click)="activeTab.set('history')">
+        <span class="material-symbols-outlined">history</span>
+        <span>ক্লোজিং রেজিস্টার</span>
+        <span class="tab-count muted">{{ branchReconciliations().length }}</span>
+      </button>
     </div>
 
-    <div class="stat-card">
-      <div class="stat-icon-wrap warning-icon">
-        <span class="material-symbols-outlined">pending_actions</span>
-      </div>
-      <div class="stat-info">
-        <div class="stat-label">মাঠকর্মীদের কাছে বাকি ক্যাশ</div>
-        <div class="stat-val amount-bdt text-warning">{{ getPendingHandoverAmount() | number }}</div>
-        <div class="stat-subtext">এখনও শাখায় জমা দেয়নি</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Handover Verification Table -->
-  <div class="card mt-4">
-    <div class="card-header">
-      <div class="header-title">
-        <span class="material-symbols-outlined text-primary">fact_check</span>
-        <h3>মাঠকর্মীদের সংগৃহীত ক্যাশ তালিকা ও জমা গ্রহণ</h3>
-      </div>
-    </div>
-
-    <div class="card-body p-0">
-      @if (loading()) {
-        <app-skeleton variant="table" [rows]="5" [columns]="6" label="ক্যাশ ক্লোজিং ডেটা লোড হচ্ছে..." />
-      } @else if (collectionsToReconcile().length === 0) {
-        <div class="empty-state">
-          <span class="material-symbols-outlined">task_alt</span>
-          <p>কোনো অপেক্ষমাণ ক্যাশ কালেকশন নেই।</p>
+    <!-- TAB 1: Pending handovers grouped by field officer -->
+    @if (activeTab() === 'pending') {
+      @if (officerGroups().length === 0) {
+        <div class="card empty-state">
+          <span class="material-symbols-outlined text-success">task_alt</span>
+          <p>সব মাঠকর্মীর টাকা ভল্টে জমা হয়েছে। কোনো অপেক্ষমাণ কালেকশন নেই।</p>
         </div>
       } @else {
-        <div class="table-container border-0">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>রসিদ নং</th>
-                <th>মাঠকর্মী (Field Officer)</th>
-                <th>গ্রাহক</th>
-                <th>সংগৃহীত পরিমাণ</th>
-                <th>আদায়ের মাধ্যম</th>
-                <th>আদায়ের তারিখ ও সময়</th>
-                <th>ভল্টে জমা অবস্থা</th>
-                <th class="text-right">ক্যাশিয়ার অ্যাকশন</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (rec of collectionsToReconcile(); track rec.receiptId) {
-                <tr>
-                  <td>
-                    <span class="id-tag">#{{ rec.receiptId }}</span>
-                  </td>
-                  <td>
-                    <strong>{{ rec.collectedByName }}</strong>
-                    <div class="sub-text">অফিসার আইডি: #{{ rec.collectedByUserId }}</div>
-                  </td>
-                  <td>
-                    <strong>{{ rec.customerName }}</strong>
-                    <div class="sub-text">হিসাব #LN-{{ rec.loanId }}</div>
-                  </td>
-                  <td>
-                    <strong class="amount-bdt text-success">{{ rec.totalAmountCollected | number }}</strong>
-                    <div class="sub-text">কিস্তি: ৳{{ rec.principalAmountCollected + rec.profitAmountCollected }} + সঞ্চয়: ৳{{ rec.savingsAmountCollected }}</div>
-                  </td>
-                  <td>
-                    <span class="badge" [ngClass]="rec.paymentMethod === 'CASH' ? 'badge-secondary' : 'badge-paid'">
-                      {{ rec.paymentMethod }}
-                    </span>
-                  </td>
-                  <td>{{ rec.collectionDate | date:'medium' }}</td>
-                  <td>
-                    @if (rec.isHandedOverToBranch) {
-                      <span class="badge badge-paid">
-                        <span class="material-symbols-outlined icon-mini">verified</span>
-                        ভল্টে জমা গৃহীত
-                      </span>
-                    } @else {
-                      <span class="badge badge-warning">মাঠকর্মীর কাছে</span>
-                    }
-                  </td>
-                  <td class="text-right">
-                    @if (rec.isHandedOverToBranch) {
-                      <span class="text-muted text-sm">সম্পন্ন</span>
-                    } @else {
-                      <button class="btn btn-sm btn-success" (click)="verifyAndAcceptCash(rec)" [disabled]="verifying()">
-                        <span class="material-symbols-outlined">done_all</span>
-                        <span>ক্যাশ গ্রহণ করুন</span>
-                      </button>
-                    }
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
+        <div class="officer-grid">
+          @for (g of officerGroups(); track g.userId) {
+            <div class="card officer-card" [class.overdue]="g.isOverdue">
+              <div class="officer-head">
+                <div class="officer-avatar">{{ g.name.charAt(0) }}</div>
+                <div class="officer-meta">
+                  <strong>{{ g.name }}</strong>
+                  <span class="sub-text">অফিসার আইডি #{{ g.userId }} • {{ g.receipts.length }} টি রসিদ</span>
+                </div>
+                @if (g.isOverdue) {
+                  <span class="badge badge-danger" title="আগের দিনের আদায় এখনো জমা হয়নি">বিলম্বিত</span>
+                }
+              </div>
+
+              <div class="officer-amounts">
+                <div>
+                  <span class="amt-label">নগদ (ভল্টে জমা)</span>
+                  <strong class="amount-bdt">{{ g.cashAmount | number }}</strong>
+                </div>
+                <div>
+                  <span class="amt-label">ডিজিটাল</span>
+                  <strong class="amount-bdt text-muted">{{ g.digitalAmount | number }}</strong>
+                </div>
+                <div>
+                  <span class="amt-label">সর্বমোট</span>
+                  <strong class="amount-bdt text-primary">{{ g.totalAmount | number }}</strong>
+                </div>
+              </div>
+
+              <div class="officer-foot">
+                <span class="sub-text">
+                  <span class="material-symbols-outlined icon-mini">schedule</span>
+                  প্রথম আদায়: {{ g.oldestDate | date:'dd MMM, hh:mm a' }}
+                </span>
+                @if (canVerify()) {
+                  <button class="btn btn-sm btn-success" (click)="openClosing(g)">
+                    <span class="material-symbols-outlined">point_of_sale</span>
+                    <span>গণনা ও গ্রহণ করুন</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
         </div>
       }
+    }
+
+    <!-- TAB 2: Closing register (history) -->
+    @if (activeTab() === 'history') {
+      <div class="card">
+        <div class="history-filters">
+          <label class="filter-field">
+            <span>শুরুর তারিখ</span>
+            <input type="date" class="form-control" [ngModel]="historyDateFrom()" (ngModelChange)="historyDateFrom.set($event)" />
+          </label>
+          <label class="filter-field">
+            <span>শেষ তারিখ</span>
+            <input type="date" class="form-control" [ngModel]="historyDateTo()" (ngModelChange)="historyDateTo.set($event)" />
+          </label>
+          <label class="filter-field">
+            <span>অবস্থা</span>
+            <select class="form-control" [ngModel]="historyStatus()" (ngModelChange)="historyStatus.set($event)">
+              <option value="ALL">সকল</option>
+              <option value="ACCEPTED">মিলেছে</option>
+              <option value="MISMATCH_DISCREPANCY">অমিল</option>
+            </select>
+          </label>
+          @if (historyDateFrom() || historyDateTo() || historyStatus() !== 'ALL') {
+            <button class="btn btn-sm btn-secondary" (click)="clearHistoryFilters()">ফিল্টার মুছুন</button>
+          }
+        </div>
+
+        @if (filteredHistory().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined">inventory_2</span>
+            <p>কোনো ক্লোজিং রেকর্ড পাওয়া যায়নি।</p>
+          </div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ক্লোজিং নং</th>
+                  <th>তারিখ ও সময়</th>
+                  <th>মাঠকর্মী</th>
+                  <th class="text-right">প্রত্যাশিত নগদ</th>
+                  <th class="text-right">গৃহীত নগদ</th>
+                  <th class="text-right">পার্থক্য</th>
+                  <th>অবস্থা</th>
+                  <th>ক্যাশিয়ার</th>
+                  <th class="text-right">অ্যাকশন</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of filteredHistory(); track r.reconciliationId) {
+                  <tr>
+                    <td>
+                      <span class="id-tag">#{{ r.reconciliationId }}</span>
+                      <div class="sub-text">{{ r.totalReceiptsCount }} টি রসিদ</div>
+                    </td>
+                    <td>
+                      <div>{{ r.verifiedAt || r.submittedAt | date:'dd MMM yyyy' }}</div>
+                      <div class="sub-text">{{ r.verifiedAt || r.submittedAt | date:'hh:mm a' }}</div>
+                    </td>
+                    <td><strong>{{ r.fieldOfficerName }}</strong></td>
+                    <td class="amount-bdt text-right">{{ r.actualCashCollected | number }}</td>
+                    <td class="amount-bdt text-right"><strong>{{ r.cashHandedOverAmount | number }}</strong></td>
+                    <td class="amount-bdt text-right"
+                        [class.text-danger]="r.shortageOrDeficitAmount > 0"
+                        [class.text-warning]="r.shortageOrDeficitAmount < 0">
+                      @if (r.shortageOrDeficitAmount === 0) { — }
+                      @else { {{ r.shortageOrDeficitAmount > 0 ? '−' : '+' }}{{ (r.shortageOrDeficitAmount > 0 ? r.shortageOrDeficitAmount : -r.shortageOrDeficitAmount) | number }} }
+                    </td>
+                    <td>
+                      @if (r.cashierStatus === 'ACCEPTED') {
+                        <span class="badge badge-paid">মিলেছে</span>
+                      } @else if (r.cashierStatus === 'MISMATCH_DISCREPANCY') {
+                        <span class="badge badge-danger" [title]="r.cashierNotes || ''">অমিল</span>
+                      } @else {
+                        <span class="badge badge-warning">অপেক্ষমাণ</span>
+                      }
+                    </td>
+                    <td>{{ r.cashierName || ('#' + r.cashierUserId) }}</td>
+                    <td class="text-right">
+                      <button class="btn btn-sm btn-secondary" (click)="openSlip(r)">
+                        <span class="material-symbols-outlined">receipt_long</span>
+                        <span>স্লিপ</span>
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
+
+<!-- ============================================================ -->
+<!-- CLOSING MODAL: receipts + denomination count + verification  -->
+<!-- ============================================================ -->
+@if (closingGroup(); as g) {
+  <div class="modal-backdrop" (click)="closeClosing()">
+    <div class="modal-dialog closing-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">point_of_sale</span>
+          <div>
+            <h3>ক্যাশ গণনা ও ভল্টে গ্রহণ</h3>
+            <span class="sub-text">{{ g.name }} • {{ selectedBranch()?.name }}</span>
+          </div>
+        </div>
+        <button class="close-btn" (click)="closeClosing()" [disabled]="submitting()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body closing-body">
+        <!-- Step 1: receipts -->
+        <section class="closing-section">
+          <div class="section-head">
+            <h4>১. জমা নেওয়া রসিদ নির্বাচন</h4>
+            <button type="button" class="link-btn" (click)="toggleAllReceipts()" [disabled]="submitting()">
+              {{ selectedReceiptIds().size === g.receipts.length ? 'সব বাদ দিন' : 'সব নির্বাচন' }}
+            </button>
+          </div>
+          <div class="receipt-pick-list">
+            @for (r of g.receipts; track r.receiptId) {
+              <label class="receipt-pick" [class.unchecked]="!selectedReceiptIds().has(r.receiptId)">
+                <input type="checkbox" [checked]="selectedReceiptIds().has(r.receiptId)" (change)="toggleReceipt(r.receiptId)" [disabled]="submitting()" />
+                <span class="rp-id">#{{ r.receiptId }}</span>
+                <span class="rp-name">{{ r.customerName }}<small>{{ r.collectionDate | date:'dd MMM, hh:mm a' }}</small></span>
+                <span class="badge" [ngClass]="r.paymentMethod === 'CASH' ? 'badge-secondary' : 'badge-paid'">{{ r.paymentMethod }}</span>
+                <span class="rp-amt amount-bdt">{{ r.totalAmountCollected | number }}</span>
+              </label>
+            }
+          </div>
+          <div class="pick-summary">
+            <span>নির্বাচিত: <strong>{{ selectedReceipts().length }}</strong> / {{ g.receipts.length }}</span>
+            <span>প্রত্যাশিত নগদ: <strong class="amount-bdt">{{ expectedCash() | number }}</strong></span>
+            @if (expectedDigital() > 0) {
+              <span>ডিজিটাল (TrxID যাচাই): <strong class="amount-bdt">{{ expectedDigital() | number }}</strong></span>
+            }
+          </div>
+        </section>
+
+        <!-- Step 2: cash count -->
+        <section class="closing-section">
+          <div class="section-head">
+            <h4>২. হাতে পাওয়া নগদ গণনা</h4>
+            <div class="mode-toggle">
+              <button type="button" [class.active]="useDenominations()" (click)="setCountMode(true)" [disabled]="submitting()">নোট গণনা</button>
+              <button type="button" [class.active]="!useDenominations()" (click)="setCountMode(false)" [disabled]="submitting()">সরাসরি পরিমাণ</button>
+            </div>
+          </div>
+
+          @if (useDenominations()) {
+            <div class="denom-grid">
+              @for (d of denominationList; track d) {
+                <label class="denom-row">
+                  <span class="denom-note">৳{{ d }}</span>
+                  <span class="denom-x">×</span>
+                  <input type="number" min="0" step="1" inputmode="numeric" class="form-control"
+                         [ngModel]="denominationCounts()[d] || null" (ngModelChange)="setDenomination(d, $event)"
+                         [disabled]="submitting()" placeholder="0" />
+                  <span class="denom-sum amount-bdt">{{ d * (denominationCounts()[d] || 0) | number }}</span>
+                </label>
+              }
+            </div>
+          } @else {
+            <input type="number" min="0" step="0.01" inputmode="decimal" class="form-control manual-amount"
+                   [ngModel]="manualCashAmount()" (ngModelChange)="setManualAmount($event)"
+                   [disabled]="submitting()" placeholder="গণনাকৃত মোট নগদ টাকা" />
+          }
+
+          <div class="count-result" [class.ok]="difference() === 0" [class.short]="difference() > 0" [class.excess]="difference() < 0">
+            <div><span>প্রত্যাশিত</span><strong class="amount-bdt">{{ expectedCash() | number }}</strong></div>
+            <div><span>গণনাকৃত</span><strong class="amount-bdt">{{ countedCash() | number }}</strong></div>
+            <div>
+              <span>{{ difference() === 0 ? 'মিলেছে' : (difference() > 0 ? 'ঘাটতি' : 'অতিরিক্ত') }}</span>
+              <strong class="amount-bdt">{{ (difference() > 0 ? difference() : -difference()) | number }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- Step 3: notes -->
+        <section class="closing-section">
+          <h4>৩. মন্তব্য @if (difference() !== 0) { <span class="required">* (অমিলের কারণ বাধ্যতামূলক)</span> }</h4>
+          <textarea class="form-control" rows="2" [ngModel]="closingNotes()" (ngModelChange)="closingNotes.set($event); confirmStep.set(false)"
+                    [disabled]="submitting()"
+                    placeholder="যেমন: ২টি রসিদের টাকা আগামীকাল জমা দেবে / ১০০ টাকার নোট ছেঁড়া"></textarea>
+        </section>
+
+        @if (closingError()) {
+          <div class="alert-banner danger">
+            <span class="material-symbols-outlined">error</span>
+            <span>{{ closingError() }}</span>
+          </div>
+        }
+
+        @if (confirmStep()) {
+          <div class="alert-banner warning">
+            <span class="material-symbols-outlined">gpp_maybe</span>
+            <span>
+              নিশ্চিত করুন: <strong>{{ selectedReceipts().length }}</strong> টি রসিদ জমা নেওয়া হবে এবং ভল্টে
+              <strong>৳{{ countedCash() | number }}</strong> যোগ হবে
+              (৳{{ selectedBranch()?.currentVaultCash || 0 | number }} → ৳{{ (selectedBranch()?.currentVaultCash || 0) + countedCash() | number }})।
+              এটি পরে পরিবর্তন করা যাবে না।
+            </span>
+          </div>
+        }
+      </div>
+
+      <div class="modal-footer">
+        @if (closingValidationError() && !confirmStep()) {
+          <span class="footer-hint">{{ closingValidationError() }}</span>
+        }
+        <button class="btn btn-secondary" (click)="confirmStep() ? confirmStep.set(false) : closeClosing()" [disabled]="submitting()">
+          {{ confirmStep() ? 'ফিরে যান' : 'বাতিল' }}
+        </button>
+        @if (!confirmStep()) {
+          <button class="btn btn-primary" (click)="reviewClosing()" [disabled]="!!closingValidationError()">
+            <span class="material-symbols-outlined">fact_check</span>
+            <span>যাচাই করুন</span>
+          </button>
+        } @else {
+          <button class="btn btn-success" (click)="submitClosing()" [disabled]="submitting()">
+            <span class="material-symbols-outlined" [class.spinning]="submitting()">{{ submitting() ? 'sync' : 'done_all' }}</span>
+            <span>{{ submitting() ? 'সংরক্ষণ হচ্ছে...' : 'নিশ্চিত করে ভল্টে জমা নিন' }}</span>
+          </button>
+        }
+      </div>
     </div>
   </div>
-</div>
+}
+
+<!-- ============================================================ -->
+<!-- PRINTABLE CASH CLOSING SLIP                                  -->
+<!-- ============================================================ -->
+@if (slipRecord(); as s) {
+  <div class="modal-backdrop" (click)="closeSlip()">
+    <div class="modal-dialog slip-dialog" id="printableCashClosingSlip" (click)="$event.stopPropagation()">
+      <div class="modal-header no-print">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">receipt_long</span>
+          <h3>ক্যাশ ক্লোজিং স্লিপ #{{ s.reconciliationId }}</h3>
+        </div>
+        <button class="close-btn" (click)="closeSlip()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="closing-slip">
+          <div class="slip-top">
+            <div class="org-name">eKisti মাইক্রোফাইন্যান্স সিস্টেম</div>
+            <div class="branch-line">{{ getBranchName(s.branchId) }}</div>
+            <div class="slip-title">মাঠকর্মীর ক্যাশ জমা ও ভল্ট গ্রহণ স্লিপ</div>
+          </div>
+
+          <div class="slip-meta">
+            <div>ক্লোজিং নং: <strong>#{{ s.reconciliationId }}</strong></div>
+            <div class="text-right">তারিখ: <strong>{{ s.verifiedAt || s.submittedAt | date:'dd MMM yyyy, hh:mm a' }}</strong></div>
+            <div>মাঠকর্মী: <strong>{{ s.fieldOfficerName }} (#{{ s.fieldOfficerUserId }})</strong></div>
+            <div class="text-right">ক্যাশিয়ার: <strong>{{ s.cashierName || ('#' + s.cashierUserId) }}</strong></div>
+          </div>
+
+          <div class="slip-table">
+            <div class="s-row s-head"><span>বিবরণ</span><span class="text-right">টাকা</span></div>
+            <div class="s-row"><span>মোট রসিদ</span><span class="text-right">{{ s.totalReceiptsCount }} টি</span></div>
+            @if (s.kistiAmount !== undefined) {
+              <div class="s-row"><span>কিস্তি (আসল + লাভ)</span><span class="text-right amount-bdt">{{ s.kistiAmount | number }}</span></div>
+              <div class="s-row"><span>সঞ্চয় জমা</span><span class="text-right amount-bdt">{{ s.savingsAmount | number }}</span></div>
+              @if (s.fineAmount) {
+                <div class="s-row"><span>জরিমানা</span><span class="text-right amount-bdt">{{ s.fineAmount | number }}</span></div>
+              }
+            }
+            <div class="s-row"><span>সর্বমোট আদায়</span><span class="text-right amount-bdt">{{ s.targetCollectionAmount | number }}</span></div>
+            @if (s.digitalCollectedAmount) {
+              <div class="s-row"><span>(−) ডিজিটাল আদায় (বিকাশ/নগদ/ব্যাংক)</span><span class="text-right amount-bdt">{{ s.digitalCollectedAmount | number }}</span></div>
+            }
+            <div class="s-row"><span>প্রত্যাশিত নগদ</span><span class="text-right amount-bdt">{{ s.actualCashCollected | number }}</span></div>
+            <div class="s-row s-total"><span>ক্যাশিয়ার কর্তৃক গৃহীত নগদ</span><span class="text-right amount-bdt">{{ s.cashHandedOverAmount | number }}</span></div>
+            <div class="s-row" [class.text-danger]="s.shortageOrDeficitAmount !== 0">
+              <span>{{ s.shortageOrDeficitAmount === 0 ? 'পার্থক্য' : (s.shortageOrDeficitAmount > 0 ? 'ঘাটতি' : 'অতিরিক্ত') }}</span>
+              <span class="text-right amount-bdt">{{ (s.shortageOrDeficitAmount > 0 ? s.shortageOrDeficitAmount : -s.shortageOrDeficitAmount) | number }}</span>
+            </div>
+          </div>
+
+          @if (slipDenominations(s).length > 0) {
+            <div class="slip-denoms">
+              <div class="slip-sub">নোট গণনা</div>
+              @for (d of slipDenominations(s); track d.note) {
+                <span>৳{{ d.note }} × {{ d.count }} = {{ d.note * d.count | number }}</span>
+              }
+            </div>
+          }
+
+          @if (s.vaultBalanceBefore !== undefined) {
+            <div class="slip-vault">
+              ভল্ট ব্যালেন্স: ৳{{ s.vaultBalanceBefore | number }} → <strong>৳{{ s.vaultBalanceAfter | number }}</strong>
+            </div>
+          }
+
+          @if (s.cashierNotes) {
+            <div class="slip-notes"><strong>মন্তব্য:</strong> {{ s.cashierNotes }}</div>
+          }
+
+          @if (s.receiptIds?.length) {
+            <div class="slip-receipts">রসিদ নং: {{ s.receiptIds!.join(', ') }}</div>
+          }
+
+          <div class="slip-signatures">
+            <div class="sig-box"><div class="sig-line"></div><div>মাঠকর্মীর স্বাক্ষর</div></div>
+            <div class="sig-box"><div class="sig-line"></div><div>ক্যাশিয়ারের স্বাক্ষর</div></div>
+            <div class="sig-box"><div class="sig-line"></div><div>শাখা ব্যবস্থাপক</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer no-print">
+        <button class="btn btn-secondary" (click)="closeSlip()">বন্ধ করুন</button>
+        <button class="btn btn-primary" (click)="printSlip()">
+          <span class="material-symbols-outlined">print</span>
+          <span>প্রিন্ট করুন</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}

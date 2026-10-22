@@ -408,11 +408,25 @@ export interface DailyReconciliation extends SoftDeletable {
   // ক্যাশিয়ার গ্রহণ
   cashHandedOverAmount: number;   // মাঠকর্মী ক্যাশিয়ারকে কত নগদ বুঝিয়ে দিল
   cashierUserId: number;          // কোন ক্যাশিয়ার রিসিভ করল
+  cashierName?: string;
   cashierStatus: 'PENDING' | 'ACCEPTED' | 'MISMATCH_DISCREPANCY';
   cashierNotes?: string;          // কোনো অমিল থাকলে নোট
-  
+
+  // রসিদ ভিত্তিক বিভাজন (কোন কোন রসিদ এই ক্লোজিংয়ে জমা হলো)
+  receiptIds?: number[];
+  digitalCollectedAmount?: number; // বিকাশ/নগদ/ব্যাংক — ভল্টে যায় না, TrxID দিয়ে যাচাই
+  kistiAmount?: number;            // আসল + লাভ
+  savingsAmount?: number;          // সঞ্চয়
+  fineAmount?: number;             // জরিমানা
+  denominations?: Record<string, number>; // নোট গণনা, যেমন { "1000": 2, "500": 3 }
+
+  // ভল্ট লেজার (ক্লোজিংয়ের আগে ও পরে ভল্ট ব্যালেন্স)
+  vaultBalanceBefore?: number;
+  vaultBalanceAfter?: number;
+
   submittedAt: string;
   verifiedAt?: string;
+  createdAt?: string;
   history: EditHistoryEntry[];
 }
 
