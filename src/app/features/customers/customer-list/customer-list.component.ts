@@ -1,10 +1,11 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Firestore, collection, getDocs, doc, setDoc } from '@angular/fire/firestore';
-import { Customer, EditHistoryEntry, Branch, CenterOrSamity, UserStaff, Loan, LoanStatus, SavingsTransaction, PaymentCollection } from '../../../core/models/database.models';
+import { Customer, EditHistoryEntry, Branch, CenterOrSamity, UserStaff, Loan, LoanStatus, SavingsTransaction, PaymentCollection, MemberTransfer, CreditScoreChange } from '../../../core/models/database.models';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
+import { MemberService } from '../../../core/services/member.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
@@ -30,6 +31,7 @@ export class CustomerListComponent implements OnInit {
   private router = inject(Router);
   private firestore = inject(Firestore);
   private kistiService = inject(KistiDatabaseService);
+  private memberService = inject(MemberService);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
 
@@ -95,6 +97,46 @@ export class CustomerListComponent implements OnInit {
   savingsEditAmount: number = 0;
   savingsEditReason: string = 'সঞ্চয় স্থিতি সমন্বয় / সংশোধন';
   savingsSubmitting = signal<boolean>(false);
+  readonly savingsError = signal<string>('');
+  readonly discloseError = signal<string>('');
+
+  // পাতার উপরের ইনলাইন বার্তা (alert() এর পরিবর্তে)
+  readonly notice = signal<{ type: 'success' | 'danger' | 'warning' | 'info'; text: string } | null>(null);
+
+  // সদস্য স্থানান্তর ও ক্রেডিট স্কোর ইতিহাস (বিস্তারিত মডালে)
+  readonly selectedCustomerTransfers = signal<MemberTransfer[]>([]);
+  readonly selectedCustomerCreditHistory = signal<CreditScoreChange[]>([]);
+
+  // সদস্য স্থানান্তর মডাল
+  readonly transferCustomer = signal<Customer | null>(null);
+  readonly transferBranchId = signal<number | null>(null);
+  readonly transferCenterId = signal<number | null>(null);
+  readonly transferFoId = signal<number | null>(null);
+  transferReason: string = '';
+  readonly transferSubmitting = signal<boolean>(false);
+  readonly transferError = signal<string>('');
+  readonly transferCenters = computed(() => {
+    const bId = Number(this.transferBranchId());
+    return this.centers().filter(c => Number(c.branchId) === bId && !c.isDeleted);
+  });
+  readonly transferOfficers = computed(() => {
+    const bId = Number(this.transferBranchId());
+    return this.staffList().filter(s => s.role === 'FIELD_OFFICER' && Number(s.branchId) === bId && s.status !== 'INACTIVE');
+  });
+
+  // ক্রেডিট স্কোর / কালো তালিকা মডাল
+  readonly creditCustomer = signal<Customer | null>(null);
+  creditScoreValue: Customer['creditScore'] = 'GOOD';
+  creditReason: string = '';
+  readonly creditSubmitting = signal<boolean>(false);
+  readonly creditError = signal<string>('');
+  readonly creditScoreOptions: { value: Customer['creditScore']; label: string }[] = [
+    { value: 'GOOD', label: 'ভালো (GOOD)' },
+    { value: 'AVERAGE', label: 'মধ্যম (AVERAGE)' },
+    { value: 'RISKY', label: 'ঝুঁকিপূর্ণ (RISKY)' },
+    { value: 'BLACKLISTED', label: 'কালো তালিকাভুক্ত (BLACKLISTED)' }
+  ];
+  readonly canChangeCreditScore = computed(() => this.authService.canApproveLoans() || this.authService.canManageUsers());
 
   async ngOnInit() {
     await this.loadAllData();
@@ -117,6 +159,8 @@ export class CustomerListComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+    // মাঠকর্মীর নাম ও স্থানান্তরের জন্য কর্মী তালিকা (পটভূমিতে)
+    this.kistiService.getStaff().then(list => this.staffList.set(list)).catch(err => console.error('Error loading staff:', err));
   }
 
   async loadCustomers() {
@@ -171,6 +215,8 @@ export class CustomerListComponent implements OnInit {
   }
 
   getFieldOfficerName(officerId: number): string {
+    const staff = this.staffList().find(s => Number(s.userId) === Number(officerId));
+    if (staff) return staff.name;
     if (officerId === 502) return 'মোঃ রফিকুল ইসলাম (মাঠকর্মী)';
     if (officerId === 501) return 'মোঃ কামরুল ইসলাম (BM)';
     return `মাঠ কর্মকর্তা #${officerId}`;
@@ -182,11 +228,168 @@ export class CustomerListComponent implements OnInit {
     this.paymentsExpanded.set(false);
     this.expandedPaymentIds.set(new Set());
     this.showDetailsModal.set(true);
+    this.selectedCustomerTransfers.set([]);
+    this.selectedCustomerCreditHistory.set([]);
     await Promise.all([
       this.loadCustomerLoans(customer.customerId),
       this.loadCustomerSavingsHistory(customer.customerId),
-      this.loadCustomerPayments(customer.customerId)
+      this.loadCustomerPayments(customer.customerId),
+      this.loadMemberHistories(customer.customerId)
     ]);
+  }
+
+  /** স্থানান্তর ও ক্রেডিট স্কোর পরিবর্তনের ইতিহাস */
+  async loadMemberHistories(customerId: number) {
+    const [transfers, credit] = await Promise.all([
+      this.memberService.getTransfers(customerId).catch(err => { console.error('Error loading transfers:', err); return []; }),
+      this.memberService.getCreditScoreHistory(customerId).catch(err => { console.error('Error loading credit history:', err); return []; })
+    ]);
+    this.selectedCustomerTransfers.set(transfers);
+    this.selectedCustomerCreditHistory.set(credit);
+  }
+
+  getCreditScoreLabel(score: Customer['creditScore'] | undefined): string {
+    return this.creditScoreOptions.find(o => o.value === (score || 'GOOD'))?.label || String(score);
+  }
+
+  getCreditScoreBadgeClass(score: Customer['creditScore'] | undefined): string {
+    switch (score) {
+      case 'AVERAGE': return 'badge-warning';
+      case 'RISKY':
+      case 'BLACKLISTED': return 'badge-danger';
+      default: return 'badge-paid';
+    }
+  }
+
+  private errorText(err: unknown, fallback: string): string {
+    return err instanceof Error && err.message ? err.message : fallback;
+  }
+
+  private get actor() {
+    const u = this.authService.currentUser();
+    return { userId: u.userId, name: u.name, role: u.role };
+  }
+
+  private patchCustomerLocal(customerId: number, fields: Partial<Customer>) {
+    this.customers.update(list => list.map(c => c.customerId === customerId ? { ...c, ...fields } : c));
+    if (this.selectedCustomerForDetails()?.customerId === customerId) {
+      this.selectedCustomerForDetails.update(c => c ? { ...c, ...fields } : null);
+    }
+  }
+
+  // ==========================================
+  // সদস্য স্থানান্তর (Member Transfer)
+  // ==========================================
+  openTransferModal(customer: Customer) {
+    this.transferCustomer.set(customer);
+    this.transferReason = '';
+    this.transferError.set('');
+    this.onTransferBranchChange(Number(customer.branchId));
+    // একই শাখায় থাকলে বর্তমান সমিতি বাদে প্রথম সমিতি ডিফল্ট
+    const other = this.transferCenters().find(c => c.centerId !== customer.centerId);
+    if (other) this.onTransferCenterChange(other.centerId);
+  }
+
+  closeTransferModal() {
+    this.transferCustomer.set(null);
+  }
+
+  onTransferBranchChange(branchId: number) {
+    this.transferBranchId.set(Number(branchId));
+    const first = this.transferCenters()[0];
+    this.onTransferCenterChange(first ? first.centerId : null);
+  }
+
+  onTransferCenterChange(centerId: number | null) {
+    this.transferCenterId.set(centerId === null ? null : Number(centerId));
+    const center = this.centers().find(c => c.centerId === Number(centerId));
+    // সমিতির নির্ধারিত মাঠকর্মী ডিফল্ট
+    this.transferFoId.set(center?.fieldOfficerUserId ?? this.transferOfficers()[0]?.userId ?? null);
+  }
+
+  async confirmTransfer() {
+    const customer = this.transferCustomer();
+    if (!customer) return;
+    const toBranchId = this.transferBranchId();
+    const toCenterId = this.transferCenterId();
+    const toFieldOfficerId = this.transferFoId();
+    if (!toBranchId || !toCenterId || !toFieldOfficerId) {
+      this.transferError.set('নতুন শাখা, সমিতি ও মাঠকর্মী নির্বাচন করুন');
+      return;
+    }
+    if (!this.transferReason.trim()) {
+      this.transferError.set('স্থানান্তরের কারণ লিখুন');
+      return;
+    }
+    this.transferSubmitting.set(true);
+    this.transferError.set('');
+    try {
+      const transfer = await this.memberService.transferMember(
+        { customerId: customer.customerId, toBranchId, toCenterId, toFieldOfficerId, reason: this.transferReason },
+        this.actor
+      );
+      this.patchCustomerLocal(customer.customerId, { branchId: transfer.toBranchId, centerId: transfer.toCenterId, assignedFieldOfficerId: transfer.toFieldOfficerId });
+      if (this.selectedCustomerForDetails()?.customerId === customer.customerId) {
+        await Promise.all([this.loadMemberHistories(customer.customerId), this.loadCustomerLoans(customer.customerId)]);
+      }
+      this.closeTransferModal();
+      this.notice.set({
+        type: 'success',
+        text: `সদস্য #${customer.customerId} (${customer.fullName}) ${this.getCenterName(transfer.toCenterId)} সমিতিতে স্থানান্তরিত হয়েছে (${transfer.loansMoved.length}টি চলমান ঋণসহ)`
+      });
+    } catch (err) {
+      console.error('Transfer error:', err);
+      this.transferError.set(this.errorText(err, 'স্থানান্তরে সমস্যা হয়েছে'));
+    } finally {
+      this.transferSubmitting.set(false);
+    }
+  }
+
+  // ==========================================
+  // ক্রেডিট স্কোর / কালো তালিকা
+  // ==========================================
+  openCreditModal(customer: Customer) {
+    this.creditCustomer.set(customer);
+    this.creditScoreValue = customer.creditScore || 'GOOD';
+    this.creditReason = '';
+    this.creditError.set('');
+  }
+
+  closeCreditModal() {
+    this.creditCustomer.set(null);
+  }
+
+  async confirmCreditScore() {
+    const customer = this.creditCustomer();
+    if (!customer) return;
+    if (!this.creditReason.trim()) {
+      this.creditError.set('কারণ লেখা বাধ্যতামূলক');
+      return;
+    }
+    if ((customer.creditScore || 'GOOD') === this.creditScoreValue) {
+      this.creditError.set('নতুন স্কোর বর্তমান স্কোরের মতোই — পরিবর্তন করুন');
+      return;
+    }
+    this.creditSubmitting.set(true);
+    this.creditError.set('');
+    try {
+      await this.memberService.setCreditScore(customer.customerId, this.creditScoreValue, this.creditReason, this.actor);
+      this.patchCustomerLocal(customer.customerId, {
+        creditScore: this.creditScoreValue,
+        blacklistReason: this.creditScoreValue === 'BLACKLISTED' ? this.creditReason.trim() : '',
+        creditScoreUpdatedAt: new Date().toISOString()
+      });
+      if (this.selectedCustomerForDetails()?.customerId === customer.customerId) {
+        await this.loadMemberHistories(customer.customerId);
+      }
+      this.closeCreditModal();
+      this.notice.set({ type: 'success', text: `সদস্য #${customer.customerId} এর ক্রেডিট স্কোর ${this.getCreditScoreLabel(this.creditScoreValue)} করা হয়েছে` });
+    } catch (err) {
+      console.error('Credit score error:', err);
+      this.creditError.set(this.errorText(err, 'ক্রেডিট স্কোর পরিবর্তনে সমস্যা হয়েছে'));
+    } finally {
+      this.creditSubmitting.set(false);
+    }
   }
 
   toggleSavingsExpanded() {
@@ -485,6 +688,7 @@ export class CustomerListComponent implements OnInit {
     this.disclosePaymentMethod = 'CASH';
     this.discloseNewStatus = 'CLOSED';
     this.adjustOutstandingWithSavings = false;
+    this.discloseError.set('');
 
     // Load customer's loans to calculate any outstanding balance
     try {
@@ -532,9 +736,10 @@ export class CustomerListComponent implements OnInit {
   async confirmDiscloseAccount() {
     const customer = this.selectedCustomerForDisclose();
     if (!customer) return;
+    this.discloseError.set('');
 
     if (!this.discloseReason.trim()) {
-      alert('অনুগ্রহ করে হিসাব বন্ধ করার কারণ উল্লেখ করুন');
+      this.discloseError.set('অনুগ্রহ করে হিসাব বন্ধ করার কারণ উল্লেখ করুন');
       return;
     }
 
@@ -547,28 +752,35 @@ export class CustomerListComponent implements OnInit {
     }
 
     this.discloseSubmitting.set(true);
-    try {
-      const activeUser = this.authService.currentUser();
-      const newSavings = Math.max(0, Math.round(Number(this.discloseRemainingSavings) || 0));
-      const refunded = Number(this.discloseRefundAmount) || 0;
+    const actor = this.actor;
+    let currentSavings = customer.totalSavingsBalance || 0;
+    let closedLoanCount = 0;
+    let refunded = 0;
+    const done: string[] = [];
 
-      let auditReason = `হিসাব সমাপ্তি (${this.discloseNewStatus}): সঞ্চয় ফেরত ৳ ${refunded.toLocaleString()} (${this.disclosePaymentMethod}) প্রদান। অবশিষ্ট সঞ্চয়: ৳ ${newSavings.toLocaleString()}। কারণ: ${this.discloseReason}`;
+    try {
+      // (ক) সঞ্চয় হতে বকেয়া ঋণ সমন্বয় — ঋণ CLOSED, বাকি কিস্তি PAID ও সঞ্চয় খতিয়ানে ADJUSTMENT এন্ট্রি
       if (this.adjustOutstandingWithSavings && outstanding > 0) {
-        auditReason += ` [বকেয়া ঋণ ৳ ${outstanding.toLocaleString()} সঞ্চয় হতে সমন্বয় করা হয়েছে]`;
+        const settlement = await this.kistiService.settleLoansFromSavings(
+          customer.customerId,
+          actor,
+          `সদস্যপদ সমাপ্তি: ${this.discloseReason}`
+        );
+        currentSavings = settlement.newSavingsBalance;
+        closedLoanCount = settlement.closedLoanIds.length;
+        this.patchCustomerLocal(customer.customerId, { totalSavingsBalance: currentSavings });
+        done.push(`৳ ${settlement.adjustedAmount.toLocaleString()} সঞ্চয় হতে ঋণ সমন্বয় (${closedLoanCount}টি ঋণ ক্লোজ)`);
       }
 
-      await this.kistiService.updateCustomer(
-        customer.customerId,
-        {
-          status: this.discloseNewStatus,
-          totalSavingsBalance: newSavings
-        },
-        { userId: activeUser.userId, name: activeUser.name, role: activeUser.role },
-        auditReason
-      );
+      // (খ) সঞ্চয় ফেরত — সমন্বয়ের পর যা আছে তার বেশি নয়; স্থিতি সার্ভিস নিজেই খতিয়ান থেকে হিসাব করে
+      refunded = Math.min(Math.max(0, Number(this.discloseRefundAmount) || 0), currentSavings);
+      let auditReason = `হিসাব সমাপ্তি (${this.discloseNewStatus}): সঞ্চয় ফেরত ৳ ${refunded.toLocaleString()} (${this.disclosePaymentMethod})। কারণ: ${this.discloseReason}`;
+      if (closedLoanCount > 0) {
+        auditReason += ` [বকেয়া ঋণ সঞ্চয় হতে সমন্বয়, ${closedLoanCount}টি ঋণ ক্লোজ]`;
+      }
 
       if (refunded > 0) {
-        await this.kistiService.recordSavingsTransaction(
+        const txn = await this.kistiService.recordSavingsTransaction(
           {
             customerId: customer.customerId,
             customerName: customer.fullName,
@@ -577,47 +789,46 @@ export class CustomerListComponent implements OnInit {
             type: 'ACCOUNT_CLOSURE',
             amount: refunded,
             isCredit: false,
-            previousBalance: customer.totalSavingsBalance || 0,
-            newBalance: newSavings,
-            paymentMethod: this.disclosePaymentMethod === 'BANK' ? 'BANK' : (this.disclosePaymentMethod === 'BKASH' ? 'BKASH' : 'CASH'),
+            previousBalance: currentSavings,
+            newBalance: currentSavings - refunded,
+            paymentMethod: this.disclosePaymentMethod,
             transactionDate: new Date().toISOString(),
-            performedByUserId: activeUser.userId,
-            performedByName: activeUser.name,
-            performedByRole: activeUser.role,
+            performedByUserId: actor.userId,
+            performedByName: actor.name,
+            performedByRole: actor.role,
             reason: auditReason
           },
-          { userId: activeUser.userId, name: activeUser.name, role: activeUser.role },
+          actor,
           auditReason
         );
+        currentSavings = txn.newBalance;
+        this.patchCustomerLocal(customer.customerId, { totalSavingsBalance: currentSavings });
+        done.push(`৳ ${refunded.toLocaleString()} সঞ্চয় ফেরত`);
       }
 
-      // Update customers signal
-      this.customers.update(list => list.map(c => {
-        if (c.customerId === customer.customerId) {
-          return {
-            ...c,
-            status: this.discloseNewStatus,
-            totalSavingsBalance: newSavings
-          };
-        }
-        return c;
-      }));
+      // (গ) শুধু স্ট্যাটাস পরিবর্তন — সঞ্চয় স্থিতি খতিয়ান-নিয়ন্ত্রিত
+      await this.kistiService.updateCustomer(customer.customerId, { status: this.discloseNewStatus }, actor, auditReason);
+      this.patchCustomerLocal(customer.customerId, { status: this.discloseNewStatus });
 
-      // Update details modal customer if open
       if (this.selectedCustomerForDetails()?.customerId === customer.customerId) {
-        this.selectedCustomerForDetails.update(c => c ? {
-          ...c,
-          status: this.discloseNewStatus,
-          totalSavingsBalance: newSavings
-        } : null);
         await this.loadCustomerSavingsHistory(customer.customerId);
+        if (closedLoanCount > 0) {
+          this.selectedCustomerLoans.set(await this.kistiService.getLoansByCustomerId(customer.customerId));
+        }
       }
 
       this.closeDiscloseModal();
-      alert(`সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর হিসাব ${this.discloseNewStatus === 'CLOSED' ? 'সমাপ্ত/ক্লোজ' : 'নিষ্ক্রিয়'} করা হয়েছে এবং সঞ্চয় ফেরত (৳ ${refunded.toLocaleString()}) নিষ্পত্তি রেকর্ড করা হয়েছে।`);
+      this.notice.set({
+        type: 'success',
+        text: `সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর হিসাব ${this.discloseNewStatus === 'CLOSED' ? 'সমাপ্ত/ক্লোজ' : 'নিষ্ক্রিয়'} করা হয়েছে। সঞ্চয় ফেরত ৳ ${refunded.toLocaleString()}, অবশিষ্ট সঞ্চয় ৳ ${currentSavings.toLocaleString()}।`
+      });
     } catch (err) {
       console.error('Error disclosing account:', err);
-      alert('হিসাব সমাপ্তকরণে সমস্যা হয়েছে');
+      const partial = done.length ? ` (সম্পন্ন হয়েছে: ${done.join('; ')})` : '';
+      this.discloseError.set('হিসাব সমাপ্তকরণে সমস্যা: ' + this.errorText(err, 'অজানা সমস্যা') + partial);
+      if (this.selectedCustomerForDetails()?.customerId === customer.customerId && done.length) {
+        await this.loadCustomerSavingsHistory(customer.customerId);
+      }
     } finally {
       this.discloseSubmitting.set(false);
     }
@@ -633,6 +844,7 @@ export class CustomerListComponent implements OnInit {
     this.savingsEditAdjustmentType = 'DIRECT';
     this.savingsEditAmount = 0;
     this.savingsEditReason = 'সঞ্চয় স্থিতি সমন্বয় / সংশোধন';
+    this.savingsError.set('');
     this.showEditSavingsModal.set(true);
   }
 
@@ -663,71 +875,79 @@ export class CustomerListComponent implements OnInit {
   async confirmEditSavings() {
     const customer = this.selectedCustomerForEditSavings();
     if (!customer) return;
+    this.savingsError.set('');
 
-    if (this.newSavingsBalance < 0) {
-      alert('সঞ্চয় ব্যালেন্স শূন্য বা তার বেশি হতে হবে');
+    if (!this.savingsEditReason.trim()) {
+      this.savingsError.set('সঞ্চয় পরিবর্তনের কারণ উল্লেখ করুন');
       return;
     }
 
-    if (!this.savingsEditReason.trim()) {
-      alert('সঞ্চয় পরিবর্তনের কারণ উল্লেখ করুন');
+    // সার্ভিস ডাটাবেসের সর্বশেষ স্থিতি থেকে amount + isCredit দিয়ে নতুন স্থিতি হিসাব করে
+    const prevBalance = this.editSavingsCurrentBalance;
+    let txType: 'DEPOSIT' | 'WITHDRAW' | 'ADJUSTMENT';
+    let amount: number;
+    let isCredit: boolean;
+
+    if (this.savingsEditAdjustmentType === 'DIRECT') {
+      const target = Math.round((Number(this.newSavingsBalance) || 0) * 100) / 100;
+      if (target < 0) {
+        this.savingsError.set('সঞ্চয় ব্যালেন্স শূন্য বা তার বেশি হতে হবে');
+        return;
+      }
+      txType = 'ADJUSTMENT';
+      amount = Math.abs(target - prevBalance);
+      isCredit = target >= prevBalance;
+    } else {
+      txType = this.savingsEditAdjustmentType;
+      amount = Number(this.savingsEditAmount) || 0;
+      isCredit = txType === 'DEPOSIT';
+      if (!isCredit && amount > prevBalance) {
+        this.savingsError.set(`সঞ্চয় স্থিতি (৳ ${prevBalance.toLocaleString()}) এর চেয়ে বেশি উত্তোলন সম্ভব নয়`);
+        return;
+      }
+    }
+
+    if (!(amount > 0)) {
+      this.savingsError.set(this.savingsEditAdjustmentType === 'DIRECT' ? 'নতুন ব্যালেন্স বর্তমান ব্যালেন্সের সমান — কোনো পরিবর্তন নেই' : 'সঠিক টাকার পরিমাণ দিন');
       return;
     }
 
     this.savingsSubmitting.set(true);
     try {
-      const activeUser = this.authService.currentUser();
-      const prevBalance = customer.totalSavingsBalance || 0;
-      const updatedBalance = Math.max(0, Math.round(Number(this.newSavingsBalance) || 0));
-      const amountChange = Math.abs(updatedBalance - prevBalance);
-
-      let txType: 'DEPOSIT' | 'WITHDRAW' | 'ADJUSTMENT' = 'ADJUSTMENT';
-      if (this.savingsEditAdjustmentType === 'WITHDRAW') {
-        txType = 'WITHDRAW';
-      } else if (this.savingsEditAdjustmentType === 'DEPOSIT') {
-        txType = 'DEPOSIT';
-      }
-
-      await this.kistiService.recordSavingsTransaction(
+      const actor = this.actor;
+      const txn = await this.kistiService.recordSavingsTransaction(
         {
           customerId: customer.customerId,
           customerName: customer.fullName,
           branchId: customer.branchId,
           centerId: customer.centerId,
           type: txType,
-          amount: this.savingsEditAdjustmentType === 'DIRECT' ? amountChange : (Number(this.savingsEditAmount) || amountChange),
-          isCredit: updatedBalance >= prevBalance,
+          amount,
+          isCredit,
           previousBalance: prevBalance,
-          newBalance: updatedBalance,
+          newBalance: isCredit ? prevBalance + amount : prevBalance - amount,
           paymentMethod: 'CASH',
           transactionDate: new Date().toISOString(),
-          performedByUserId: activeUser.userId,
-          performedByName: activeUser.name,
-          performedByRole: activeUser.role,
+          performedByUserId: actor.userId,
+          performedByName: actor.name,
+          performedByRole: actor.role,
           reason: this.savingsEditReason
         },
-        { userId: activeUser.userId, name: activeUser.name, role: activeUser.role },
+        actor,
         this.savingsEditReason
       );
 
-      // Update in local signals
-      this.customers.update(list => list.map(c => {
-        if (c.customerId === customer.customerId) {
-          return { ...c, totalSavingsBalance: updatedBalance };
-        }
-        return c;
-      }));
-
+      const updatedBalance = txn.newBalance;
+      this.patchCustomerLocal(customer.customerId, { totalSavingsBalance: updatedBalance });
       if (this.selectedCustomerForDetails()?.customerId === customer.customerId) {
-        this.selectedCustomerForDetails.update(c => c ? { ...c, totalSavingsBalance: updatedBalance } : null);
         await this.loadCustomerSavingsHistory(customer.customerId);
       }
 
       this.closeEditSavingsModal();
-      alert(`সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর সঞ্চয় ব্যালেন্স ৳ ${updatedBalance.toLocaleString()} এ সফলভাবে সংরক্ষিত হয়েছে।`);
+      this.notice.set({ type: 'success', text: `সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর সঞ্চয় ব্যালেন্স এখন ৳ ${updatedBalance.toLocaleString()}` });
     } catch (err) {
       console.error('Error updating savings:', err);
-      alert('সঞ্চয় আপডেটে সমস্যা হয়েছে: ' + (err instanceof Error ? err.message : ''));
+      this.savingsError.set(this.errorText(err, 'সঞ্চয় আপডেটে সমস্যা হয়েছে'));
     } finally {
       this.savingsSubmitting.set(false);
     }
@@ -759,10 +979,10 @@ export class CustomerListComponent implements OnInit {
         this.selectedCustomerForDetails.update(c => c ? { ...c, status: 'ACTIVE' } : null);
       }
 
-      alert(`সদস্য #${customer.customerId} এর অ্যাকাউন্ট সফলভাবে পুনরায় সক্রিয় করা হয়েছে`);
+      this.notice.set({ type: 'success', text: `সদস্য #${customer.customerId} এর অ্যাকাউন্ট সফলভাবে পুনরায় সক্রিয় করা হয়েছে` });
     } catch (err) {
       console.error('Error reactivating customer:', err);
-      alert('অ্যাকাউন্ট পুনরায় সক্রিয় করতে সমস্যা হয়েছে');
+      this.notice.set({ type: 'danger', text: 'অ্যাকাউন্ট পুনরায় সক্রিয় করতে সমস্যা হয়েছে' + ': ' + this.errorText(err, '') });
     }
   }
 
@@ -788,7 +1008,7 @@ export class CustomerListComponent implements OnInit {
       }));
     } catch (err) {
       console.error('Error toggling customer status:', err);
-      alert('স্ট্যাটাস পরিবর্তনে সমস্যা হয়েছে');
+      this.notice.set({ type: 'danger', text: 'স্ট্যাটাস পরিবর্তনে সমস্যা হয়েছে' + ': ' + this.errorText(err, '') });
     }
   }
 
@@ -815,7 +1035,7 @@ export class CustomerListComponent implements OnInit {
     if (!customer) return;
 
     if (!this.deleteReason.trim()) {
-      alert('অনুগ্রহ করে গ্রাহক বাতিলের কারণ উল্লেখ করুন');
+      this.notice.set({ type: 'warning', text: 'অনুগ্রহ করে গ্রাহক বাতিলের কারণ উল্লেখ করুন' });
       return;
     }
 
@@ -829,10 +1049,10 @@ export class CustomerListComponent implements OnInit {
 
       this.closeDeleteModal();
       await this.loadCustomers();
-      alert(`গ্রাহক #${customer.customerId} সফলভাবে সফট-ডিলিট করা হয়েছে (হিস্ট্রি সংরক্ষিত)`);
+      this.notice.set({ type: 'success', text: `গ্রাহক #${customer.customerId} সফলভাবে সফট-ডিলিট করা হয়েছে (হিস্ট্রি সংরক্ষিত)` });
     } catch (err) {
       console.error('Delete error:', err);
-      alert('গ্রাহক ডিলিট করতে সমস্যা হয়েছে');
+      this.notice.set({ type: 'danger', text: 'গ্রাহক ডিলিট করতে সমস্যা হয়েছে' + ': ' + this.errorText(err, '') });
     }
   }
 }

@@ -1,0 +1,388 @@
+<div class="page-container reports-page">
+  <div class="page-header no-print">
+    <div class="header-left">
+      <h2>রিপোর্ট</h2>
+      <p class="sub-text">দৈনিক আদায়, বকেয়া, পোর্টফোলিও মান, ক্যাশ বই, ট্রায়াল ব্যালেন্স ও শাখা MIS</p>
+    </div>
+    <div class="header-right">
+      @if (branches().length > 1) {
+        <select class="form-control branch-select" [ngModel]="branchId()" (ngModelChange)="onBranchChange($event)" aria-label="শাখা">
+          <option [ngValue]="0">সকল শাখা</option>
+          @for (b of branches(); track b.branchId) { <option [ngValue]="b.branchId">{{ b.name }}</option> }
+        </select>
+      }
+      <button class="btn btn-secondary" (click)="refresh()" [disabled]="loading() || baseLoading()" title="রিফ্রেশ">
+        <span class="material-symbols-outlined">refresh</span>
+      </button>
+      <button class="btn btn-secondary" (click)="exportCsv()" [disabled]="loading() || baseLoading()">
+        <span class="material-symbols-outlined">download</span><span class="hide-sm">CSV</span>
+      </button>
+      <button class="btn btn-primary" (click)="print()" [disabled]="loading() || baseLoading()">
+        <span class="material-symbols-outlined">print</span><span class="hide-sm">প্রিন্ট</span>
+      </button>
+    </div>
+  </div>
+
+  @if (notice(); as n) {
+    <div class="flow-alert no-print" [class.success]="n.kind === 'success'" [class.info]="n.kind === 'info'"
+         [class.warning]="n.kind === 'warning'" [class.danger]="n.kind === 'danger'">
+      <span class="material-symbols-outlined">{{ n.kind === 'success' ? 'check_circle' : n.kind === 'danger' ? 'error' : 'info' }}</span>
+      <span class="pre-line">{{ n.text }}</span>
+    </div>
+  }
+
+  <div class="tab-bar no-print" role="tablist">
+    @for (t of tabs(); track t) {
+      <button role="tab" class="tab-btn" [class.active]="tab() === t" (click)="setTab(t)">
+        <span class="material-symbols-outlined">{{ tabLabels[t].icon }}</span><span>{{ tabLabels[t].label }}</span>
+      </button>
+    }
+  </div>
+
+  <!-- ফিল্টার -->
+  <div class="filter-row no-print">
+    @switch (tab()) {
+      @case ('DAILY') {
+        <label>তারিখ</label>
+        <input type="date" class="form-control" [max]="today" [ngModel]="date()" (ngModelChange)="date.set($event)" />
+        <button class="btn btn-sm btn-primary" (click)="loadTab()">দেখুন</button>
+        <button class="btn btn-sm btn-secondary" (click)="date.set(today); loadTab()">আজ</button>
+      }
+      @case ('DUE') {
+        <select class="form-control" [ngModel]="centerId()" (ngModelChange)="centerId.set(+$event)" aria-label="সমিতি">
+          <option [ngValue]="0">সকল সমিতি</option>
+          @for (c of filterCenters(); track c.centerId) { <option [ngValue]="c.centerId">{{ c.name }}</option> }
+        </select>
+        <label class="check">
+          <input type="checkbox" [ngModel]="onlyOverdue()" (ngModelChange)="onlyOverdue.set($event)" /> শুধু বকেয়া
+        </label>
+        <span class="sub-text">আজ: {{ today }}</span>
+      }
+      @case ('PORTFOLIO') {
+        <span class="sub-text">আজ ({{ today }}) পর্যন্ত চলমান ঋণের অবস্থা</span>
+      }
+      @default {
+        <input type="date" class="form-control" [ngModel]="from()" (ngModelChange)="from.set($event)" aria-label="শুরু" />
+        <span>থেকে</span>
+        <input type="date" class="form-control" [ngModel]="to()" (ngModelChange)="to.set($event)" aria-label="শেষ" />
+        <button class="btn btn-sm btn-primary" (click)="loadTab()">দেখুন</button>
+        <button class="btn btn-sm btn-secondary" (click)="setRange(0)">আজ</button>
+        <button class="btn btn-sm btn-secondary" (click)="setRange(6)">৭ দিন</button>
+        <button class="btn btn-sm btn-secondary" (click)="setRange(29)">৩০ দিন</button>
+      }
+    }
+  </div>
+
+  <div class="card report-card" id="printableReport">
+    <div class="print-head">
+      <h3>{{ tabLabels[tab()].label }}</h3>
+      <div>{{ branchLabel() }} · {{ periodLabel() }}</div>
+      <div class="sub-text">প্রস্তুতকারী: {{ auth.currentUser().name }} · প্রিন্টের তারিখ: {{ today }}</div>
+    </div>
+
+    @if (baseLoading() || loading()) {
+      <app-skeleton variant="table" [rows]="6" [columns]="7" />
+    } @else {
+      @switch (tab()) {
+
+        <!-- ১. দৈনিক আদায় -->
+        @case ('DAILY') {
+          <div class="kpi-row">
+            <div class="kpi"><span class="kpi-label">রসিদ</span><strong>{{ dailyTotal().count }}</strong></div>
+            <div class="kpi"><span class="kpi-label">কিস্তি (আসল+লাভ)</span><strong class="amount-bdt">{{ dailyTotal().kisti | number:'1.0-2' }}</strong></div>
+            <div class="kpi"><span class="kpi-label">সঞ্চয়</span><strong class="amount-bdt">{{ dailyTotal().savings | number:'1.0-2' }}</strong></div>
+            <div class="kpi"><span class="kpi-label">মোট আদায়</span><strong class="amount-bdt">{{ dailyTotal().total | number:'1.0-2' }}</strong></div>
+            <div class="kpi" [class.warn]="dailyTotal().pending > 0"><span class="kpi-label">শাখায় জমা বাকি</span><strong class="amount-bdt">{{ dailyTotal().pending | number:'1.0-2' }}</strong></div>
+          </div>
+          @if (dailyScoped().length === 0) {
+            <div class="empty-state"><p>{{ date() }} তারিখে কোনো আদায় নেই।</p></div>
+          } @else {
+            @for (sec of [{ title: 'মাঠকর্মী অনুযায়ী', rows: dailyByOfficer() }, { title: 'সমিতি অনুযায়ী', rows: dailyByCenter() }]; track sec.title) {
+              <h4 class="section-title">{{ sec.title }}</h4>
+              <div class="table-container">
+                <table class="data-table compact">
+                  <thead><tr>
+                    <th>নাম</th><th class="text-right">রসিদ</th><th class="text-right">কিস্তি</th><th class="text-right">সঞ্চয়</th>
+                    <th class="text-right">মোট</th><th class="text-right col-opt">নগদ</th><th class="text-right col-opt">ডিজিটাল</th>
+                    <th class="text-right col-opt">জমা দেওয়া</th><th class="text-right">জমা বাকি</th>
+                  </tr></thead>
+                  <tbody>
+                    @for (r of sec.rows; track r.key) {
+                      <tr>
+                        <td>{{ r.name }}</td>
+                        <td class="text-right">{{ r.count }}</td>
+                        <td class="text-right"><span class="amount-bdt">{{ r.kisti | number:'1.0-2' }}</span></td>
+                        <td class="text-right"><span class="amount-bdt">{{ r.savings | number:'1.0-2' }}</span></td>
+                        <td class="text-right"><strong class="amount-bdt">{{ r.total | number:'1.0-2' }}</strong></td>
+                        <td class="text-right col-opt">{{ r.cash | number:'1.0-2' }}</td>
+                        <td class="text-right col-opt">{{ r.digital | number:'1.0-2' }}</td>
+                        <td class="text-right col-opt text-success">{{ r.handedOver | number:'1.0-2' }}</td>
+                        <td class="text-right" [class.text-danger]="r.pending > 0">{{ r.pending | number:'1.0-2' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                  <tfoot><tr>
+                    <th>মোট</th><th class="text-right">{{ dailyTotal().count }}</th>
+                    <th class="text-right">{{ dailyTotal().kisti | number:'1.0-2' }}</th><th class="text-right">{{ dailyTotal().savings | number:'1.0-2' }}</th>
+                    <th class="text-right"><span class="amount-bdt">{{ dailyTotal().total | number:'1.0-2' }}</span></th>
+                    <th class="text-right col-opt">{{ dailyTotal().cash | number:'1.0-2' }}</th><th class="text-right col-opt">{{ dailyTotal().digital | number:'1.0-2' }}</th>
+                    <th class="text-right col-opt">{{ dailyTotal().handedOver | number:'1.0-2' }}</th><th class="text-right">{{ dailyTotal().pending | number:'1.0-2' }}</th>
+                  </tr></tfoot>
+                </table>
+              </div>
+            }
+            <p class="note">বাতিলকৃত (রিভার্সাল) রসিদ বাদ দেওয়া হয়েছে। "মোট" = কিস্তি + সঞ্চয় + জরিমানা।</p>
+          }
+        }
+
+        <!-- ২. দেয় ও বকেয়া -->
+        @case ('DUE') {
+          <div class="kpi-row">
+            <div class="kpi"><span class="kpi-label">তালিকাভুক্ত ঋণ</span><strong>{{ dueRows().length }}</strong></div>
+            <div class="kpi"><span class="kpi-label">আজ দেয়</span><strong class="amount-bdt">{{ dueTotals().dueToday | number:'1.0-2' }}</strong></div>
+            <div class="kpi warn"><span class="kpi-label">বকেয়া ({{ dueTotals().overdueLoans }}টি ঋণ)</span><strong class="amount-bdt text-danger">{{ dueTotals().overdue | number:'1.0-2' }}</strong></div>
+          </div>
+          @if (dueRows().length === 0) {
+            <div class="empty-state"><p>কোনো দেয় বা বকেয়া কিস্তি নেই।</p></div>
+          } @else {
+            <div class="table-container">
+              <table class="data-table compact">
+                <thead><tr>
+                  <th>সদস্য / ঋণ</th><th class="col-opt">সমিতি / মাঠকর্মী</th><th class="text-right">আজ দেয়</th>
+                  <th class="text-right">বকেয়া</th><th class="text-right">দিন</th><th class="col-opt">জামিনদার</th>
+                </tr></thead>
+                <tbody>
+                  @for (r of dueRows(); track r.loan.loanId) {
+                    <tr>
+                      <td>
+                        <strong>{{ r.customer?.fullName || r.loan.customerName }}</strong>
+                        <div class="sub-text">{{ r.loan.loanAccountNo }} · <a [href]="'tel:' + (r.customer?.phonePrimary || '')">{{ r.customer?.phonePrimary || '—' }}</a></div>
+                      </td>
+                      <td class="col-opt">{{ r.centerName }}<div class="sub-text">{{ r.foName }}</div></td>
+                      <td class="text-right">@if (r.dueToday > 0) { <span class="amount-bdt">{{ r.dueToday | number:'1.0-2' }}</span> } @else { — }</td>
+                      <td class="text-right">
+                        @if (r.overdueAmount > 0) {
+                          <span class="amount-bdt text-danger">{{ r.overdueAmount | number:'1.0-2' }}</span>
+                          <div class="sub-text">{{ r.missed }}টি কিস্তি</div>
+                        } @else { — }
+                      </td>
+                      <td class="text-right">
+                        @if (r.daysPastDue > 0) {
+                          <span class="badge" [class.badge-warning]="r.daysPastDue <= 30" [class.badge-danger]="r.daysPastDue > 30">{{ r.daysPastDue }}</span>
+                        } @else { <span class="badge badge-success">0</span> }
+                      </td>
+                      <td class="col-opt">
+                        @if (r.customer?.primaryGuarantor?.name) {
+                          <div>{{ r.customer!.primaryGuarantor.name }} <span class="sub-text">{{ r.customer!.primaryGuarantor.phone }}</span></div>
+                        }
+                        @if (r.customer?.secondaryGuarantor?.name) {
+                          <div>{{ r.customer!.secondaryGuarantor!.name }} <span class="sub-text">{{ r.customer!.secondaryGuarantor!.phone }}</span></div>
+                        }
+                        @if (!r.customer?.primaryGuarantor?.name && !r.customer?.secondaryGuarantor?.name) { — }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+                <tfoot><tr>
+                  <th>মোট</th><th class="col-opt"></th>
+                  <th class="text-right">{{ dueTotals().dueToday | number:'1.0-2' }}</th>
+                  <th class="text-right">{{ dueTotals().overdue | number:'1.0-2' }}</th><th></th><th class="col-opt"></th>
+                </tr></tfoot>
+              </table>
+            </div>
+            <p class="note">বকেয়া দিনের ক্রম অনুসারে সাজানো (সবচেয়ে পুরাতন বকেয়া আগে)। আজ দেয় = আজকের নির্ধারিত কিস্তির অবশিষ্ট।</p>
+          }
+        }
+
+        <!-- ৩. পোর্টফোলিও ও শ্রেণীকরণ -->
+        @case ('PORTFOLIO') {
+          <div class="kpi-row">
+            <div class="kpi"><span class="kpi-label">চলমান ঋণ</span><strong>{{ pq().loansCount }}</strong></div>
+            <div class="kpi"><span class="kpi-label">বাকি আসল</span><strong class="amount-bdt">{{ pq().outstandingPrincipal | number:'1.0-0' }}</strong></div>
+            <div class="kpi" [class.warn]="pq().par1Percent > 0"><span class="kpi-label">PAR &gt; ১ দিন</span><strong>{{ pq().par1Percent }}%</strong><span class="sub-text amount-bdt">{{ pq().par1Amount | number:'1.0-0' }}</span></div>
+            <div class="kpi" [class.danger]="pq().par30Percent > 5"><span class="kpi-label">PAR &gt; ৩০ দিন</span><strong>{{ pq().par30Percent }}%</strong><span class="sub-text amount-bdt">{{ pq().par30Amount | number:'1.0-0' }}</span></div>
+            <div class="kpi"><span class="kpi-label">OTR (সময়মতো আদায়)</span><strong>{{ rates().otrPercent }}%</strong></div>
+            <div class="kpi"><span class="kpi-label">CRR (ক্রমপুঞ্জিত আদায়)</span><strong>{{ rates().crrPercent }}%</strong></div>
+          </div>
+          <div class="table-container">
+            <table class="data-table compact">
+              <thead><tr>
+                <th>শ্রেণী</th><th class="col-opt">বকেয়া দিন</th><th class="text-right">ঋণ</th><th class="text-right">বাকি আসল</th>
+                <th class="text-right">সঞ্চিতি হার</th><th class="text-right">সঞ্চিতি</th>
+              </tr></thead>
+              <tbody>
+                @for (b of pq().byClass; track b.rule.classification) {
+                  <tr>
+                    <td>{{ b.rule.labelBn }} <span class="sub-text">({{ b.rule.labelEn }})</span></td>
+                    <td class="col-opt">{{ dayRange(b.rule.minDays, b.rule.maxDays) }}</td>
+                    <td class="text-right">{{ b.loans }}</td>
+                    <td class="text-right"><span class="amount-bdt">{{ b.outstanding | number:'1.0-0' }}</span></td>
+                    <td class="text-right">{{ pct(b.rule.provisionRate) }}%</td>
+                    <td class="text-right"><span class="amount-bdt">{{ b.provision | number:'1.0-0' }}</span></td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot><tr>
+                <th>মোট</th><th class="col-opt"></th><th class="text-right">{{ pq().loansCount }}</th>
+                <th class="text-right">{{ pq().outstandingPrincipal | number:'1.0-0' }}</th><th></th>
+                <th class="text-right"><span class="amount-bdt">{{ pq().requiredProvision | number:'1.0-0' }}</span></th>
+              </tr></tfoot>
+            </table>
+          </div>
+          <div class="flow-alert warning">
+            <span class="material-symbols-outlined">gavel</span>
+            <span>শ্রেণীকরণের দিনসীমা ও ঋণ ক্ষতি সঞ্চিতির হার সর্বশেষ MRA সার্কুলারের সাথে মিলিয়ে নিশ্চিত করুন — এখানে ব্যবহৃত হার শুধু নির্দেশক।</span>
+          </div>
+          <p class="note">PAR = বকেয়া থাকা ঋণের সম্পূর্ণ বাকি আসল ÷ মোট বাকি আসল। OTR = নির্ধারিত তারিখের মধ্যে আদায় ÷ আজ পর্যন্ত পাওনা ({{ rates().dueTotal | number:'1.0-0' }} টাকা); CRR = মোট আদায় ÷ আজ পর্যন্ত পাওনা (চলমান ঋণ, আসল + লাভ)।</p>
+        }
+
+        <!-- ৪. ক্যাশ বই -->
+        @case ('DAYBOOK') {
+          @if (!branchId()) {
+            <div class="flow-alert info"><span class="material-symbols-outlined">info</span><span>ক্যাশ বই দেখতে উপরের তালিকা থেকে একটি শাখা নির্বাচন করুন।</span></div>
+          } @else {
+            <div class="kpi-row">
+              <div class="kpi"><span class="kpi-label">প্রারম্ভিক স্থিতি</span><strong class="amount-bdt">{{ daybook().opening | number:'1.0-2' }}</strong></div>
+              <div class="kpi"><span class="kpi-label">মোট জমা</span><strong class="amount-bdt text-success">{{ daybook().inn | number:'1.0-2' }}</strong></div>
+              <div class="kpi"><span class="kpi-label">মোট খরচ/বের</span><strong class="amount-bdt text-danger">{{ daybook().out | number:'1.0-2' }}</strong></div>
+              <div class="kpi"><span class="kpi-label">সমাপনী স্থিতি</span><strong class="amount-bdt">{{ daybook().closing | number:'1.0-2' }}</strong></div>
+            </div>
+            @if (vaultRows().length === 0) {
+              <div class="empty-state"><p>এই সময়ে কোনো ভল্ট লেনদেন নেই।</p></div>
+            } @else {
+              @if (daybook().computedClosing !== daybook().closing) {
+                <div class="flow-alert danger"><span class="material-symbols-outlined">error</span>
+                  <span>হিসাবকৃত সমাপনী ({{ daybook().computedClosing | number:'1.0-2' }}) খতিয়ানের সমাপনী স্থিতির সাথে মিলছে না — খতিয়ান যাচাই করুন।</span></div>
+              }
+              <div class="table-container">
+                <table class="data-table compact">
+                  <thead><tr>
+                    <th>তারিখ</th><th>বিবরণ</th><th class="col-opt">রেফারেন্স</th><th class="text-right">জমা</th>
+                    <th class="text-right">খরচ/বের</th><th class="text-right">স্থিতি</th><th class="col-opt">কর্মী</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr class="row-muted"><td></td><td>প্রারম্ভিক স্থিতি</td><td class="col-opt"></td><td></td><td></td>
+                      <td class="text-right"><strong>{{ daybook().opening | number:'1.0-2' }}</strong></td><td class="col-opt"></td></tr>
+                    @for (v of vaultRows(); track v.vaultTransactionId) {
+                      <tr>
+                        <td>{{ v.businessDate }}<div class="sub-text">#{{ v.vaultTransactionId }}</div></td>
+                        <td>{{ typeLabel(v.type) }}@if (v.note) { <div class="sub-text">{{ v.note }}</div> }</td>
+                        <td class="col-opt">@if (v.slipNo) { স্লিপ {{ v.slipNo }} } @if (v.refType) { <span class="sub-text">{{ v.refType }} #{{ v.refId }}</span> }</td>
+                        <td class="text-right">@if (v.direction === 'IN') { <span class="text-success">{{ v.amount | number:'1.0-2' }}</span> }</td>
+                        <td class="text-right">@if (v.direction === 'OUT') { <span class="text-danger">{{ v.amount | number:'1.0-2' }}</span> }</td>
+                        <td class="text-right"><strong>{{ v.balanceAfter | number:'1.0-2' }}</strong></td>
+                        <td class="col-opt">{{ v.createdBy.name }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                  <tfoot><tr>
+                    <th></th><th>মোট / সমাপনী</th><th class="col-opt"></th>
+                    <th class="text-right">{{ daybook().inn | number:'1.0-2' }}</th><th class="text-right">{{ daybook().out | number:'1.0-2' }}</th>
+                    <th class="text-right"><span class="amount-bdt">{{ daybook().closing | number:'1.0-2' }}</span></th><th class="col-opt"></th>
+                  </tr></tfoot>
+                </table>
+              </div>
+            }
+          }
+        }
+
+        <!-- ৫. ট্রায়াল ব্যালেন্স -->
+        @case ('TRIAL') {
+          @if (trialRows().length === 0) {
+            <div class="empty-state"><p>এই সময়ে কোনো জার্নাল এন্ট্রি নেই।</p></div>
+          } @else {
+            <div class="flow-alert" [class.success]="trialTotals().balanced" [class.danger]="!trialTotals().balanced">
+              <span class="material-symbols-outlined">{{ trialTotals().balanced ? 'check_circle' : 'error' }}</span>
+              <span>
+                @if (trialTotals().balanced) { ডেবিট = ক্রেডিট — হিসাব মিলেছে। }
+                @else { ডেবিট ও ক্রেডিটে পার্থক্য {{ trialTotals().diff | number:'1.0-2' }} টাকা — জার্নাল যাচাই করুন। }
+              </span>
+            </div>
+            <div class="table-container">
+              <table class="data-table compact">
+                <thead><tr><th>কোড</th><th>খাতের নাম</th><th class="col-opt">ধরন</th><th class="text-right">ডেবিট</th><th class="text-right">ক্রেডিট</th></tr></thead>
+                <tbody>
+                  @for (r of trialRows(); track r.code) {
+                    <tr>
+                      <td>{{ r.code }}</td><td>{{ r.name }}</td><td class="col-opt"><span class="sub-text">{{ r.type }}</span></td>
+                      <td class="text-right">{{ r.debit ? (r.debit | number:'1.0-2') : '' }}</td>
+                      <td class="text-right">{{ r.credit ? (r.credit | number:'1.0-2') : '' }}</td>
+                    </tr>
+                  }
+                </tbody>
+                <tfoot><tr>
+                  <th></th><th>মোট</th><th class="col-opt"></th>
+                  <th class="text-right"><span class="amount-bdt">{{ trialTotals().debit | number:'1.0-2' }}</span></th>
+                  <th class="text-right"><span class="amount-bdt">{{ trialTotals().credit | number:'1.0-2' }}</span></th>
+                </tr></tfoot>
+              </table>
+            </div>
+
+            <h4 class="section-title">আয়-ব্যয় বিবরণী</h4>
+            <div class="table-container">
+              <table class="data-table compact">
+                <tbody>
+                  <tr class="row-head"><td colspan="2">আয়</td></tr>
+                  @for (r of incomeStatement().income; track r.code) {
+                    <tr><td>{{ r.code }} · {{ r.name }}</td><td class="text-right">{{ r.net | number:'1.0-2' }}</td></tr>
+                  } @empty { <tr><td colspan="2" class="sub-text">কোনো আয় নেই</td></tr> }
+                  <tr class="row-sub"><td>মোট আয়</td><td class="text-right"><span class="amount-bdt">{{ incomeStatement().totalIncome | number:'1.0-2' }}</span></td></tr>
+                  <tr class="row-head"><td colspan="2">ব্যয়</td></tr>
+                  @for (r of incomeStatement().expense; track r.code) {
+                    <tr><td>{{ r.code }} · {{ r.name }}</td><td class="text-right">{{ r.net | number:'1.0-2' }}</td></tr>
+                  } @empty { <tr><td colspan="2" class="sub-text">কোনো ব্যয় নেই</td></tr> }
+                  <tr class="row-sub"><td>মোট ব্যয়</td><td class="text-right"><span class="amount-bdt">{{ incomeStatement().totalExpense | number:'1.0-2' }}</span></td></tr>
+                </tbody>
+                <tfoot><tr>
+                  <th>নিট উদ্বৃত্ত / (ঘাটতি)</th>
+                  <th class="text-right" [class.text-danger]="incomeStatement().surplus < 0"><span class="amount-bdt">{{ incomeStatement().surplus | number:'1.0-2' }}</span></th>
+                </tr></tfoot>
+              </table>
+            </div>
+            <p class="note">নির্বাচিত সময়কালের জার্নাল লেনদেনের যোগফল (প্রারম্ভিক স্থিতি অন্তর্ভুক্ত নয়)। সার্ভিস চার্জ নগদ ভিত্তিতে আয় হিসেবে ধরা হয়।</p>
+          }
+        }
+
+        <!-- ৬. শাখা MIS -->
+        @case ('MIS') {
+          @if (misRows().length === 0) {
+            <div class="empty-state"><p>কোনো শাখা পাওয়া যায়নি।</p></div>
+          } @else {
+            <div class="table-container">
+              <table class="data-table compact">
+                <thead><tr>
+                  <th>শাখা</th><th class="text-right">সদস্য</th><th class="text-right col-opt">সক্রিয় ঋণগ্রহীতা</th>
+                  <th class="text-right">বাকি আসল</th><th class="text-right col-opt">বিতরণ</th><th class="text-right">আদায়</th>
+                  <th class="text-right">PAR&gt;৩০</th><th class="text-right col-opt">ভল্ট নগদ</th>
+                </tr></thead>
+                <tbody>
+                  @for (r of misRows(); track r.branch.branchId) {
+                    <tr>
+                      <td><strong>{{ r.branch.name }}</strong><div class="sub-text">{{ r.branch.branchCode }}</div></td>
+                      <td class="text-right">{{ r.members }}</td>
+                      <td class="text-right col-opt">{{ r.activeBorrowers }}</td>
+                      <td class="text-right"><span class="amount-bdt">{{ r.outstandingPrincipal | number:'1.0-0' }}</span></td>
+                      <td class="text-right col-opt">{{ r.disbursed | number:'1.0-0' }}<div class="sub-text">{{ r.disbursedCount }}টি ঋণ</div></td>
+                      <td class="text-right">{{ r.collected | number:'1.0-0' }}</td>
+                      <td class="text-right"><span class="badge" [class.badge-success]="r.par30Percent <= 5" [class.badge-danger]="r.par30Percent > 5">{{ r.par30Percent }}%</span></td>
+                      <td class="text-right col-opt">{{ r.vaultCash | number:'1.0-0' }}</td>
+                    </tr>
+                  }
+                </tbody>
+                @if (misRows().length > 1) {
+                  <tfoot><tr>
+                    <th>মোট</th><th class="text-right">{{ misTotals().members }}</th><th class="text-right col-opt">{{ misTotals().activeBorrowers }}</th>
+                    <th class="text-right">{{ misTotals().outstandingPrincipal | number:'1.0-0' }}</th><th class="text-right col-opt">{{ misTotals().disbursed | number:'1.0-0' }}</th>
+                    <th class="text-right">{{ misTotals().collected | number:'1.0-0' }}</th><th class="text-right">{{ misTotals().par30Percent }}%</th>
+                    <th class="text-right col-opt">{{ misTotals().vaultCash | number:'1.0-0' }}</th>
+                  </tr></tfoot>
+                }
+              </table>
+            </div>
+            <p class="note">বিতরণ ও আদায় নির্বাচিত সময়কালের ({{ from() }} — {{ to() }}); বাকি আসল, PAR ও ভল্ট নগদ বর্তমান অবস্থা।</p>
+          }
+        }
+      }
+    }
+  </div>
+</div>

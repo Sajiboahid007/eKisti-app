@@ -14,8 +14,21 @@ export type AuditAction =
   | 'DELETE' 
   | 'RESTORE' 
   | 'STATUS_CHANGE' 
-  | 'PAYMENT_COLLECTED' 
-  | 'CASH_RECONCILED';
+  | 'PAYMENT_COLLECTED'
+  | 'CASH_RECONCILED'
+  | 'PAYMENT_REVERSED'
+  | 'LOAN_APPLIED'
+  | 'LOAN_VERIFIED'
+  | 'LOAN_APPROVED'
+  | 'LOAN_REJECTED'
+  | 'LOAN_DISBURSED'
+  | 'LOAN_SETTLED'
+  | 'LOAN_RESCHEDULED'
+  | 'LOAN_WRITTEN_OFF'
+  | 'VAULT_TRANSACTION'
+  | 'DAY_CLOSED'
+  | 'DAY_REOPENED'
+  | 'TRANSFER';
 
 export interface EditHistoryEntry {
   historyId: number;              // Unique integer ID for this edit
@@ -52,6 +65,7 @@ export interface Branch extends SoftDeletable {
   managerUserId: number;          // Branch Manager's integer User ID
   cashierUserId: number;          // Cashier/Accountant's integer User ID
   currentVaultCash: number;       // ভল্টের বর্তমান নগদ টাকা
+  currentBankBalance?: number;    // শাখার ব্যাংক হিসাবের স্থিতি
   status?: 'ACTIVE' | 'INACTIVE'; // সক্রিয় বা নিষ্ক্রিয় অবস্থা
   createdAt: string;
   history: EditHistoryEntry[];
@@ -68,7 +82,8 @@ export interface CenterOrSamity extends SoftDeletable {
   location: string;               // "ওয়ার্ড ৪, মাস্টারপাড়া"
   totalMembers: number;
   activeLoansCount: number;
-  status?: 'ACTIVE' | 'INACTIVE'; // সক্রিয় বা নিষ্ক্রিয় অবস্থা
+  centerChiefCustomerId?: number; // কেন্দ্র প্রধান
+  status?: 'ACTIVE' | 'INACTIVE'; // সক্রিয় বা নিষ্ক্রিয় অবস্থা
   createdAt: string;
   history: EditHistoryEntry[];
 }
@@ -226,9 +241,32 @@ export interface Customer extends SoftDeletable {
   nidFrontPhotoUrl?: string;
   nidBackPhotoUrl?: string;
   signaturePhotoUrl?: string;
-  
+
+  // নমিনি (মৃত্যুতে সঞ্চয় ও বীমা দাবির প্রাপক)
+  nominees?: CustomerNominee[];
+
+  // দল ও সমিতি কাঠামো
+  groupNo?: number;               // সমিতির ভেতরে দল নং (১, ২, ৩ …)
+  isGroupLeader?: boolean;        // দলনেতা
+
+  // ভর্তি ফি ও পাসবুক ফি
+  admissionFeePaid?: number;
+  passbookFeePaid?: number;
+
+  // কালো তালিকা / ক্রেডিট স্কোর কারণ
+  blacklistReason?: string;
+  creditScoreUpdatedAt?: string;
+
   createdAt: string;
   history: EditHistoryEntry[];
+}
+
+export interface CustomerNominee {
+  name: string;
+  relation: string;
+  nidNumber?: string;
+  phone?: string;
+  sharePercent: number;           // মোট ১০০%
 }
 
 // ==========================================
@@ -249,6 +287,13 @@ export interface LoanProduct extends SoftDeletable {
   minAmount: number;              // 10000
   maxAmount: number;              // 100000
   isActive: boolean;
+
+  // ঋণ নীতি (সব ঐচ্ছিক — না থাকলে পূর্বের আচরণ)
+  interestMethod?: 'FLAT' | 'DECLINING'; // FLAT: মেয়াদের মোট %; DECLINING: বার্ষিক হ্রাসমান %
+  graceDays?: number;                    // বিতরণ থেকে প্রথম কিস্তির আগে বিরতি (দিন)
+  cycleCeilings?: number[];              // ঋণ চক্র অনুযায়ী সর্বোচ্চ সীমা [১ম, ২য়, ৩য় …]
+  allowConcurrentLoans?: boolean;        // চলমান ঋণ থাকা অবস্থায় নতুন ঋণ
+  earlySettlementRebatePercent?: number; // আগাম পরিশোধে ভবিষ্যৎ লাভের কত % মওকুফ
   history: EditHistoryEntry[];
 }
 
@@ -264,7 +309,11 @@ export type LoanStatus =
   | 'OVERDUE'         // বকেয়া / খেলাপি
   | 'CLOSED'          // সম্পূর্ণ পরিশোধিত
   | 'DEFAULTED'       // কু-ঋণ / ক্ষতি
-  | 'CANCELLED';      // বাতিল
+  | 'CANCELLED'       // বাতিল
+  | 'REJECTED'        // আবেদন প্রত্যাখ্যাত
+  | 'WRITTEN_OFF';    // অবলোপিত
+
+export type LoanClassification = 'STANDARD' | 'WATCHFUL' | 'SUBSTANDARD' | 'DOUBTFUL' | 'BAD';
 
 export interface Loan extends SoftDeletable {
   loanId: number;                 // Integer ID, e.g. 20001, 20002
@@ -312,7 +361,43 @@ export interface Loan extends SoftDeletable {
   
   purposeOfLoan: string;          // "ব্যবসা সম্প্রসারণ"
   status: LoanStatus;
-  
+
+  // ঋণ নীতি ও শর্ত
+  loanCycle?: number;             // কততম ঋণ (ঋণ চক্র)
+  interestMethod?: 'FLAT' | 'DECLINING';
+  ratePercent?: number;           // FLAT: মেয়াদের মোট %, DECLINING: বার্ষিক %
+  effectiveAnnualRate?: number;   // সমতুল্য বার্ষিক হ্রাসমান হার (ডিসক্লোজার)
+  lastInstallmentAmount?: number; // রাউন্ডিং সমন্বয়ের পর শেষ কিস্তি
+  outstandingPrincipal?: number;  // বাকি আসল
+
+  // অনুমোদন প্রবাহ (Maker-Checker)
+  appliedByUserId?: number;
+  appliedByName?: string;
+  verifiedByUserId?: number;
+  verifiedByName?: string;
+  verifiedAt?: string;
+  verificationNotes?: string;
+  approvedByName?: string;
+  rejectedByUserId?: number;
+  rejectedReason?: string;
+  disbursedByUserId?: number;
+  disbursedByName?: string;
+
+  // বকেয়া ও শ্রেণীকরণ (রাত্রিকালীন বকেয়া ইঞ্জিন)
+  daysPastDue?: number;
+  classification?: LoanClassification;
+  classifiedAt?: string;
+
+  // বিশেষ নিষ্পত্তি
+  rebateAmount?: number;          // আগাম পরিশোধে মওকুফ
+  rescheduleCount?: number;
+  writtenOffAmount?: number;
+  writtenOffAt?: string;
+  writtenOffByUserId?: number;
+  recoveredAfterWriteOff?: number;
+  waivedAmount?: number;          // মৃত্যু/বীমা দাবিতে মওকুফ
+  ledgerVersion?: number;        // প্রতিটি টাকার লেনদেনে +১ (একসাথে দুই আদায়ে সংঘর্ষ ধরতে)
+
   history: EditHistoryEntry[];
 }
 
@@ -320,7 +405,7 @@ export interface Loan extends SoftDeletable {
 // 7. INSTALLMENT SCHEDULE (প্রতিটি কিস্তির সময়সূচি)
 // ==========================================
 
-export type InstallmentStatus = 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'ADVANCE';
+export type InstallmentStatus = 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'ADVANCE' | 'RESCHEDULED' | 'WAIVED';
 
 export interface InstallmentSchedule extends SoftDeletable {
   installmentId: number;          // Integer ID, e.g. 30001, 30002
@@ -346,6 +431,7 @@ export interface InstallmentSchedule extends SoftDeletable {
   status: InstallmentStatus;
   paidDate?: string;
   collectionReceiptId?: number;   // Foreign Key -> PaymentCollection.receiptId
+  receiptIds?: number[];          // আংশিক/একাধিক আদায়ের সব রসিদ
   
   history: EditHistoryEntry[];
 }
@@ -384,7 +470,29 @@ export interface PaymentCollection extends SoftDeletable {
   reconciliationId?: number;      // Foreign Key -> DailyReconciliation.reconciliationId
   reconciledAt?: string;
   reconciledByUserId?: number;    // Cashier User ID
-  
+  digitalVerifiedByUserId?: number; // বিকাশ/নগদ TrxID ক্যাশিয়ার যাচাই
+
+  // কিস্তি বণ্টন (আংশিক / অগ্রিম / একাধিক কিস্তি)
+  allocations?: { installmentId: number; installmentNo: number; principal: number; profit: number; savings: number }[];
+
+  /**
+   * মাঠে নেওয়া টাকার ধরন — সব ধরনই মাঠকর্মীর হাতে থাকে যতক্ষণ না ক্যাশিয়ার ক্যাশ ক্লোজিংয়ে গ্রহণ করেন।
+   * না থাকলে 'KISTI' (পুরাতন রসিদ)।
+   */
+  receiptType?: ReceiptType;
+  feeAmountCollected?: number;    // ভর্তি / পাসবুক ফি (receiptType FEE)
+  feeBreakdown?: { feeType: FeeType; amount: number }[];
+  isAdvance?: boolean;
+  isWriteOffRecovery?: boolean;
+  correlationId?: string;
+
+  // বাতিল (রিভার্সাল) — রসিদ কখনো মোছা হয় না
+  isReversed?: boolean;
+  reversedAt?: string;
+  reversedByUserId?: number;
+  reversedByName?: string;
+  reversalReason?: string;
+
   history: EditHistoryEntry[];
 }
 
@@ -418,7 +526,10 @@ export interface DailyReconciliation extends SoftDeletable {
   kistiAmount?: number;            // আসল + লাভ
   savingsAmount?: number;          // সঞ্চয়
   fineAmount?: number;             // জরিমানা
-  denominations?: Record<string, number>; // নোট গণনা, যেমন { "1000": 2, "500": 3 }
+  feeAmount?: number;              // ভর্তি / পাসবুক ফি
+  recoveryAmount?: number;         // অবলোপিত ঋণ আদায়
+  byType?: Record<string, number>; // রসিদের ধরন অনুযায়ী মোট
+  denominations?: Record<string, number>;// নোট গণনা, যেমন { "1000": 2, "500": 3 }
 
   // ভল্ট লেজার (ক্লোজিংয়ের আগে ও পরে ভল্ট ব্যালেন্স)
   vaultBalanceBefore?: number;
@@ -439,7 +550,9 @@ export type SavingsTransactionType =
   | 'WITHDRAW'             // সঞ্চয় কর্তন / উত্তোলন
   | 'KISTI_COLLECTION'     // কিস্তির সাথে সাপ্তাহিক সঞ্চয় জমা
   | 'ADJUSTMENT'           // সঞ্চয় স্থিতি সমন্বয় / সংশোধন
-  | 'ACCOUNT_CLOSURE';     // হিসাব সমাপ্তি ও সঞ্চয় ফেরত
+  | 'ACCOUNT_CLOSURE'      // হিসাব সমাপ্তি ও সঞ্চয় ফেরত
+  | 'INTEREST'             // সঞ্চয়ের মুনাফা জমা
+  | 'REVERSAL';            // রসিদ বাতিলে সঞ্চয় ফেরত নেওয়া
 
 export interface SavingsTransaction extends SoftDeletable {
   transactionId: number;          // Integer ID, e.g. 60001
@@ -461,6 +574,7 @@ export interface SavingsTransaction extends SoftDeletable {
   performedByRole: string;
   reason: string;                 // যেমন: "সঞ্চয় উত্তোলন (-৳ ২০০)" বা "কিস্তি #১ সঞ্চয় জমা"
   receiptNo?: string;             // Optional receipt / voucher number
+  correlationId?: string;
   history?: EditHistoryEntry[];
 }
 
@@ -472,4 +586,337 @@ export interface SequenceCounter {
   entityName: string;             // 'customers' | 'loans' | 'installments' | 'receipts' | 'branches' | 'history' | 'savings'
   currentSequenceId: number;      // বর্তমান সর্বোচ্চ পূর্ণসংখ্যা
   updatedAt: string;
+}
+
+// ==========================================
+// 12. LEDGERS (অপরিবর্তনীয় খতিয়ান — শুধু যোগ হয়, এডিট/ডিলিট হয় না)
+// ==========================================
+
+/** যে ব্যবহারকারী লেনদেন করেছেন */
+export interface ActorStamp {
+  userId: number;
+  name: string;
+  role: string;
+}
+
+export type LoanTransactionType =
+  | 'DISBURSEMENT'
+  | 'REPAYMENT'
+  | 'REVERSAL'
+  | 'ADJUSTMENT_FROM_SAVINGS'
+  | 'EARLY_SETTLEMENT'
+  | 'REBATE'
+  | 'RESCHEDULE'
+  | 'WRITE_OFF'
+  | 'WRITE_OFF_RECOVERY'
+  | 'INSURANCE_WAIVER';
+
+/** ঋণ লেনদেন খতিয়ান — ঋণের প্রতিটি টাকার নড়াচড়া */
+export interface LoanTransaction {
+  loanTransactionId: number;      // 70001+
+  loanId: number;
+  customerId: number;
+  branchId: number;
+  type: LoanTransactionType;
+  principal: number;
+  profit: number;
+  amount: number;                 // principal + profit
+  outstandingBefore: number;      // ঋণের মোট বাকি (আসল + লাভ)
+  outstandingAfter: number;
+  receiptId?: number;
+  businessDate: string;           // ঢাকা "YYYY-MM-DD"
+  correlationId: string;
+  note?: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export type VaultTransactionType =
+  | 'OPENING'
+  | 'CLOSING_IN'          // মাঠকর্মীর ক্যাশ জমা
+  | 'DISBURSEMENT_OUT'    // ঋণ বিতরণ
+  | 'FEE_IN'              // ভর্তি/ফরম/বীমা ফি
+  | 'SAVINGS_DEPOSIT_IN'
+  | 'SAVINGS_WITHDRAW_OUT'
+  | 'BANK_DEPOSIT'        // ভল্ট → ব্যাংক
+  | 'BANK_WITHDRAW'       // ব্যাংক → ভল্ট
+  | 'EXPENSE'
+  | 'HO_TRANSFER_IN'
+  | 'HO_TRANSFER_OUT'
+  | 'ADJUSTMENT';
+
+/** শাখা ভল্ট খতিয়ান — currentVaultCash এই খতিয়ানের চলতি যোগফল */
+export interface VaultTransaction {
+  vaultTransactionId: number;     // 80001+
+  branchId: number;
+  type: VaultTransactionType;
+  direction: 'IN' | 'OUT';
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  bankBalanceAfter?: number;
+  refType?: string;               // 'RECONCILIATION' | 'LOAN' | 'EXPENSE' | 'FEE' | 'SAVINGS' …
+  refId?: number;
+  slipNo?: string;                // ব্যাংক স্লিপ / ভাউচার নং
+  businessDate: string;
+  correlationId: string;
+  note?: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export type FeeType = 'ADMISSION' | 'PASSBOOK' | 'LOAN_FORM' | 'INSURANCE';
+
+/** মাঠ রসিদের ধরন */
+export type ReceiptType = 'KISTI' | 'SAVINGS_DEPOSIT' | 'FEE' | 'WRITE_OFF_RECOVERY';
+
+export interface FeeTransaction {
+  feeTransactionId: number;       // 90001+
+  branchId: number;
+  customerId: number;
+  loanId?: number;
+  feeType: FeeType;
+  amount: number;
+  businessDate: string;
+  correlationId: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export interface Expense {
+  expenseId: number;              // 91001+
+  branchId: number;
+  head: string;                   // খাত: অফিস ভাড়া, বিদ্যুৎ, যাতায়াত …
+  amount: number;
+  voucherNo?: string;
+  description?: string;
+  paidTo?: string;
+  businessDate: string;
+  correlationId: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export interface JournalLine {
+  account: string;                // হিসাবের খাত কোড (core/finance/accounts.ts)
+  debit: number;
+  credit: number;
+}
+
+/** দ্বৈত লেখা জার্নাল */
+export interface JournalEntry {
+  journalId: number;              // 100001+
+  branchId: number;
+  businessDate: string;
+  memo: string;
+  lines: JournalLine[];
+  correlationId: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+// ==========================================
+// 13. HISTORY & STATE-CHANGE LOGS (অডিট ও অবস্থা পরিবর্তনের ইতিহাস)
+// ==========================================
+
+/** কেন্দ্রীয় অডিট লগ — ডকুমেন্টের ভেতরে history[] অসীম না বাড়িয়ে আলাদা কালেকশনে */
+export interface AuditLog {
+  auditId?: string;               // Firestore auto ID (লগের জন্য পূর্ণসংখ্যা সিকোয়েন্স দরকার নেই)
+  entityType: string;             // 'loans' | 'customers' | 'collections' | 'branches' …
+  entityId: number | string;
+  action: AuditAction;
+  reason: string;
+  changes: Record<string, { before: any; after: any }>;
+  branchId?: number;
+  correlationId?: string;
+  timestamp: string;
+  actor: ActorStamp;
+}
+
+export interface LoanStatusChange {
+  loanId: number;
+  fromStatus: LoanStatus | null;
+  toStatus: LoanStatus;
+  reason: string;
+  branchId: number;
+  timestamp: string;
+  actor: ActorStamp;
+}
+
+export interface StaffAssignment {
+  kind: 'CENTER_FIELD_OFFICER' | 'STAFF_BRANCH';
+  centerId?: number;
+  staffUserId: number;
+  previousStaffUserId?: number;
+  branchId: number;
+  previousBranchId?: number;
+  effectiveFrom: string;
+  timestamp: string;
+  actor: ActorStamp;
+}
+
+export interface MemberTransfer {
+  transferId: number;             // 94001+
+  customerId: number;
+  fromBranchId: number;
+  fromCenterId: number;
+  fromFieldOfficerId: number;
+  toBranchId: number;
+  toCenterId: number;
+  toFieldOfficerId: number;
+  loansMoved: number[];
+  reason: string;
+  businessDate: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export interface CreditScoreChange {
+  customerId: number;
+  from: Customer['creditScore'];
+  to: Customer['creditScore'];
+  reason: string;
+  timestamp: string;
+  actor: ActorStamp;
+}
+
+export interface DocumentVersion {
+  customerId: number;
+  docType: 'PHOTO' | 'NID_FRONT' | 'NID_BACK' | 'SIGNATURE';
+  storagePath: string;
+  url: string;
+  uploadedAt: string;
+  actor: ActorStamp;
+}
+
+export interface FollowUp {
+  followUpId: number;             // 92001+
+  loanId: number;
+  customerId: number;
+  branchId: number;
+  contactedPerson: 'BORROWER' | 'PRIMARY_GUARANTOR' | 'SECONDARY_GUARANTOR' | 'FAMILY' | 'OTHER';
+  method: 'VISIT' | 'PHONE';
+  outcome: string;
+  promiseDate?: string;
+  promiseAmount?: number;
+  businessDate: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export interface InsuranceClaim {
+  claimId: number;                // 93001+
+  loanId: number;
+  customerId: number;
+  branchId: number;
+  claimType: 'DEATH' | 'DISABILITY';
+  eventDate: string;
+  waivedOutstanding: number;
+  nomineeName?: string;
+  notes?: string;
+  businessDate: string;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export interface MeetingAttendance {
+  meetingId: string;              // `${centerId}_${date}`
+  centerId: number;
+  branchId: number;
+  date: string;
+  presentCustomerIds: number[];
+  absentCustomerIds: number[];
+  notes?: string;
+  recordedAt: string;
+  recordedBy: ActorStamp;
+}
+
+export interface SmsLog {
+  to: string;
+  message: string;
+  type: 'COLLECTION_RECEIPT' | 'DUE_REMINDER' | 'OVERDUE_NOTICE' | 'DISBURSEMENT';
+  status: 'QUEUED' | 'SENT' | 'FAILED';
+  relatedId?: number;
+  branchId: number;
+  createdAt: string;
+}
+
+// ==========================================
+// 14. PERIOD CLOSING & SNAPSHOTS (দিবস/মাস সমাপনী)
+// ==========================================
+
+export interface PeriodClosing {
+  closingId: string;              // `${branchId}_${date}` বা `${branchId}_${YYYY-MM}`
+  branchId: number;
+  periodType: 'DAY' | 'MONTH';
+  period: string;                 // "YYYY-MM-DD" বা "YYYY-MM"
+  status: 'CLOSED' | 'REOPENED';
+  closedAt: string;
+  closedBy: ActorStamp;
+  reopenedAt?: string;
+  reopenedBy?: ActorStamp;
+  reopenReason?: string;
+}
+
+export interface DailyBranchSummary {
+  summaryId: string;              // `${branchId}_${date}`
+  branchId: number;
+  date: string;
+  openingVault: number;
+  closingVault: number;
+  vaultIn: Record<string, number>;
+  vaultOut: Record<string, number>;
+  bankBalance: number;
+  collectionsCount: number;
+  collectionsTotal: number;
+  kistiCollected: number;
+  savingsCollected: number;
+  disbursementsCount: number;
+  disbursedAmount: number;
+  expensesTotal: number;
+  newMembers: number;
+  reversalsCount: number;
+  outstandingPrincipal: number;
+  par1Percent: number;
+  par30Percent: number;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+export interface MonthlyPortfolioSnapshot {
+  snapshotId: string;             // `${branchId}_${YYYY-MM}`
+  branchId: number;
+  month: string;
+  loansCount: number;
+  outstandingPrincipal: number;
+  par1Percent: number;
+  par30Percent: number;
+  requiredProvision: number;
+  byClass: { classification: LoanClassification; loans: number; outstanding: number; provision: number }[];
+  otrPercent: number;
+  crrPercent: number;
+  createdAt: string;
+  createdBy: ActorStamp;
+}
+
+// ==========================================
+// 15. SETTINGS (সাধারণ সেটিংস ও ছুটির ক্যালেন্ডার)
+// ==========================================
+
+export interface GeneralSettings {
+  weeklyOffDays: number[];        // 5 = শুক্রবার
+  defaultAdmissionFee: number;
+  defaultPassbookFee: number;
+  savingsInterestAnnualPercent: number; // ⚖️ নীতি অনুযায়ী
+  lockSavingsWithdrawalWithActiveLoan: boolean;
+  foCashInHandLimit: number;      // এর বেশি নগদ হাতে থাকলে সতর্কতা
+  updatedAt?: string;
+}
+
+export interface Holiday {
+  date: string;                   // "YYYY-MM-DD" (ডকুমেন্ট আইডিও)
+  name: string;
+  branchIds: number[] | null;     // null = সকল শাখা
+  createdAt: string;
+  createdBy: ActorStamp;
 }

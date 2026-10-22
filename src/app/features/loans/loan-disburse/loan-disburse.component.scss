@@ -1108,3 +1108,54 @@
     border-radius: 4px;
   }
 }
+/* ---------- Approval trail (disburse mode) & eligibility ---------- */
+.approval-trail {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+
+  .trail-head { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+  .trail-steps { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; }
+  .trail-step {
+    display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted);
+    .material-symbols-outlined { font-size: 18px; }
+    &.done { color: var(--text-primary); .material-symbols-outlined { color: var(--success); } }
+  }
+  .trail-terms { font-size: 0.8rem; color: var(--text-secondary); }
+}
+
+.eligibility-box {
+  border: 1px solid var(--success-border);
+  background: var(--success-bg);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+
+  &.blocked { border-color: var(--danger-border); background: var(--danger-bg); }
+  .elig-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; .material-symbols-outlined { font-size: 20px; } }
+  .elig-line { margin-top: 0.35rem; &.danger { color: #991b1b; } &.warning { color: #92400e; } }
+}
+
+/* ---------- কিস্তির বার/তারিখ ---------- */
+.due-day-hint { color: var(--primary); }
+.meta-sub { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem; }
+.voucher-sub { font-size: 0.75rem; color: #475569; }
+.link-fix {
+  margin-top: 0.35rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #b45309;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+}

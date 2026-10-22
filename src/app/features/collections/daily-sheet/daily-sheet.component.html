@@ -41,30 +41,47 @@
   <!-- Today's Collection Status Bar -->
   <div class="status-summary-bar">
     <div class="summary-stat">
-      <div class="stat-label">সমিতির আজকের টার্গেট</div>
-      <div class="stat-val amount-bdt">৳ {{ getTotalExpectedToday() | number }}</div>
+      <div class="stat-label">আজ পর্যন্ত বাকি দেয় (কিস্তি + সঞ্চয়)</div>
+      <div class="stat-val amount-bdt text-danger">{{ getTotalExpectedToday() | number }}</div>
     </div>
-
     <div class="stat-divider"></div>
-
     <div class="summary-stat">
-      <div class="stat-label">বাস্তবে আদায় হয়েছে</div>
-      <div class="stat-val amount-bdt text-success">৳ {{ getTotalCollectedToday() | number }}</div>
+      <div class="stat-label">আজ আদায় হয়েছে</div>
+      <div class="stat-val amount-bdt text-success">{{ getTotalCollectedToday() | number }}</div>
     </div>
-
     <div class="stat-divider"></div>
-
     <div class="summary-stat">
-      <div class="stat-label">বাকি / ঘাটতি</div>
-      <div class="stat-val amount-bdt text-danger">৳ {{ (getTotalExpectedToday() - getTotalCollectedToday()) | number }}</div>
+      <div class="stat-label">তারিখ</div>
+      <div class="stat-val">{{ today }}</div>
     </div>
-
-    <div class="summary-stat right-aligned">
-      <span class="badge badge-active">
-        {{ sheetItems().length }} জন সদস্যের কিস্তি তালিকা
+    <div class="sheet-tools no-print">
+      <span class="tool-chip">
+        <span class="material-symbols-outlined">groups</span>
+        {{ sheetItems().length }} জন সদস্য
       </span>
+      @if (sheetItems().length > 0) {
+        <span class="tool-chip" [class.ok]="presentCount() === memberCount()">
+          <span class="material-symbols-outlined">how_to_reg</span>
+          উপস্থিত {{ presentCount() }}/{{ memberCount() }}
+        </span>
+        <button class="btn btn-sm tool-btn" [class.saved]="attendanceSaved()" (click)="saveAttendance()" [disabled]="attendanceSaved()">
+          <span class="material-symbols-outlined">{{ attendanceSaved() ? 'task_alt' : 'save' }}</span>
+          <span>{{ attendanceSaved() ? 'হাজিরা সংরক্ষিত' : 'হাজিরা সংরক্ষণ' }}</span>
+        </button>
+        <button class="btn btn-sm tool-btn" (click)="printSheet()">
+          <span class="material-symbols-outlined">print</span>
+          <span>শিট প্রিন্ট</span>
+        </button>
+      }
     </div>
   </div>
+
+  @if (notice(); as n) {
+    <div class="flow-alert" [class.success]="n.kind === 'success'" [class.danger]="n.kind === 'danger'">
+      <span class="material-symbols-outlined">{{ n.kind === 'success' ? 'check_circle' : 'error' }}</span>
+      <span>{{ n.text }}</span>
+    </div>
+  }
 
   <!-- Collection Sheet Table Card -->
   <div class="card table-card">
@@ -89,80 +106,66 @@
           <table class="data-table daily-sheet-table">
             <thead>
               <tr>
-                <th class="col-id">গ্রাহক আইডি</th>
-                <th class="col-name">সদস্যের নাম</th>
+                <th class="col-present" title="সাপ্তাহিক মিটিং হাজিরা">হাজিরা</th>
+                <th class="col-name">সদস্য</th>
                 <th class="col-account">ঋণ হিসাব</th>
-                <th class="col-inst-no">কিস্তি নং</th>
-                <th class="col-date">নির্ধারিত তারিখ</th>
-                <th class="col-inst-amount">কিস্তির টাকা</th>
-                <th class="col-savings">সঞ্চয় জমা</th>
-                <th class="col-total">মোট পাওনা</th>
-                <th class="col-status">আজকের অবস্থা</th>
-                <th class="col-action text-right">কালেকশন অ্যাকশন</th>
+                <th class="col-inst-no">দেয় কিস্তি</th>
+                <th class="col-inst-amount text-right">কিস্তির টাকা</th>
+                <th class="col-savings text-right">সঞ্চয়</th>
+                <th class="col-total text-right">আজ আদায়</th>
+                <th class="col-status">অবস্থা</th>
+                <th class="col-action text-right">অ্যাকশন</th>
               </tr>
             </thead>
             <tbody>
               @for (item of sheetItems(); track item.loan.loanId) {
-                <tr [class.collected-row]="item.isCollectedToday">
-                  <td class="col-id">
-                    <span class="id-tag">#{{ item.loan.customerId }}</span>
+                @let st = rowState(item);
+                <tr [class.collected-row]="item.collectedTodayAmount > 0 && !item.view.hasDue">
+                  <td class="col-present">
+                    @let isPresent = present().has(item.loan.customerId);
+                    <button type="button" class="attend-toggle" [class.present]="isPresent" [class.absent]="!isPresent"
+                            (click)="togglePresent(item.loan.customerId)" [attr.aria-pressed]="isPresent"
+                            [title]="isPresent ? 'উপস্থিত — অনুপস্থিত করতে ক্লিক করুন' : 'অনুপস্থিত — উপস্থিত করতে ক্লিক করুন'">
+                      <span class="material-symbols-outlined">{{ isPresent ? 'check_circle' : 'cancel' }}</span>
+                      <span>{{ isPresent ? 'উপস্থিত' : 'অনুপস্থিত' }}</span>
+                    </button>
                   </td>
                   <td class="col-name">
                     <strong class="customer-name" [title]="item.loan.customerName">{{ item.loan.customerName }}</strong>
+                    <div class="sub-text">#{{ item.loan.customerId }}@if (item.customer?.groupNo) { • দল {{ item.customer!.groupNo }}@if (item.customer!.isGroupLeader) { (নেতা) } }</div>
                   </td>
                   <td class="col-account">
                     <span class="account-tag" [title]="item.loan.loanAccountNo">{{ item.loan.loanAccountNo }}</span>
                   </td>
                   <td class="col-inst-no">
-                    <span class="badge" [ngClass]="item.isCollectedToday ? 'badge-paid' : 'badge-secondary font-bold'">
-                      কিস্তি {{ item.nextInstallment.installmentNo }}
-                    </span>
-                  </td>
-                  <td class="col-date">
-                    <span class="date-txt">{{ item.nextInstallment.dueDate }}</span>
-                  </td>
-                  <td class="col-inst-amount amount-bdt">
-                    ৳ {{ (item.nextInstallment.expectedPrincipal + item.nextInstallment.expectedProfit) | number }}
-                  </td>
-                  <td class="col-savings amount-bdt text-success">
-                    +৳ {{ item.nextInstallment.expectedSavings | number }}
-                  </td>
-                  <td class="col-total">
-                    <strong class="amount-bdt text-primary">৳ {{ item.nextInstallment.expectedTotalAmount | number }}</strong>
-                  </td>
-                  <td class="col-status">
-                    @if (item.isCollectedToday) {
-                      <span class="badge badge-paid" title="এই সপ্তাহের কিস্তি আদায় সম্পন্ন">
-                        <span class="material-symbols-outlined icon-mini">check_circle</span>
-                        <span>আদায় সম্পন্ন</span>
-                      </span>
-                    } @else {
-                      <span class="badge badge-pending">অনাদায়ী</span>
+                    @if (item.view.dueInstallments.length) {
+                      <span class="due-nos" [class.overdue]="item.view.overdueCount > 0" [title]="dueNosFull(item)">{{ dueNos(item) }}</span>
                     }
-                  </td>
-                  <td class="col-action text-right">
-                    @if (item.isCollectedToday) {
-                      <div class="collected-status-wrap">
-                        <div class="paid-badge-mini">
-                          <span class="material-symbols-outlined mini-icon">verified</span>
-                          <span>এই সপ্তাহে আদায় সম্পন্ন</span>
-                        </div>
-                        @if (item.nextPendingInstallmentNo) {
-                          <div class="next-due-hint">
-                            পরবর্তী কিস্তি {{ item.nextPendingInstallmentNo }}: {{ item.daysRemainingForNext }} দিন পর ({{ item.nextEligibleDate }})
-                          </div>
-                        } @else {
-                          <div class="next-due-hint text-success">
-                            সকল কিস্তি পরিশোধিত
-                          </div>
-                        }
+                    @if (item.upcoming) {
+                      <div class="next-due" [title]="'পরবর্তী কিস্তি #' + item.upcoming.installmentNo">
+                        <span class="material-symbols-outlined">event</span>
+                        পরের: {{ dayLabel(item.upcoming.dueDate) }}
                       </div>
-                    } @else {
-                      <button class="btn btn-sm btn-success btn-collect-action" (click)="openCollectModal(item)">
-                        <span class="material-symbols-outlined">payments</span>
-                        <span>টাকা গ্রহণ</span>
-                      </button>
                     }
+                  </td>
+                  <td class="col-inst-amount amount-bdt text-right">{{ item.view.dueAmount | number }}</td>
+                  <td class="col-savings amount-bdt text-success text-right">{{ item.view.dueSavings | number }}</td>
+                  <td class="col-total text-right">
+                    @if (item.collectedTodayAmount > 0) { <strong class="amount-bdt text-success">{{ item.collectedTodayAmount | number }}</strong> } @else { <span class="text-muted">—</span> }
+                  </td>
+                  <td class="col-status"><span class="badge" [ngClass]="st.cls">{{ st.label }}</span></td>
+                  <td class="col-action text-right">
+                    @if (item.view.nextInstallment) {
+                      <button class="btn btn-sm btn-collect-action" [class.btn-success]="item.view.hasDue" [class.btn-secondary]="!item.view.hasDue" (click)="openCollectModal(item)">
+                        <span class="material-symbols-outlined">payments</span>
+                        <span>{{ item.view.hasDue ? 'টাকা গ্রহণ' : 'অগ্রিম' }}</span>
+                      </button>
+                    } @else {
+                      <span class="text-success sub-text">সব কিস্তি পরিশোধিত</span>
+                    }
+                    <button class="btn btn-sm btn-secondary btn-savings-only" (click)="openSavingsModal(item)" title="শুধু সঞ্চয় জমা (কিস্তি ছাড়া)">
+                      <span class="material-symbols-outlined">savings</span>
+                    </button>
                   </td>
                 </tr>
               }
@@ -175,13 +178,13 @@
 </div>
 
 <!-- Quick Collection Modal -->
-@if (activeItemForCollect()) {
+@if (activeItemForCollect(); as item) {
   <div class="modal-backdrop" (click)="closeCollectModal()">
     <div class="modal-dialog" (click)="$event.stopPropagation()">
       <div class="modal-header">
         <div class="header-title">
           <span class="material-symbols-outlined text-success">payments</span>
-          <h3>মাঠপর্যায়ে কিস্তি আদায় নিশ্চিতকরণ</h3>
+          <h3>মাঠপর্যায়ে কিস্তি আদায়</h3>
         </div>
         <button class="close-btn" (click)="closeCollectModal()">
           <span class="material-symbols-outlined">close</span>
@@ -190,44 +193,173 @@
 
       <div class="modal-body">
         <div class="member-header-box mb-3">
-          <div>সদস্য: <strong>{{ activeItemForCollect()!.loan.customerName }}</strong> (#{{ activeItemForCollect()!.loan.customerId }})</div>
-          <div>ঋণ অ্যাকাউন্ট: <strong>{{ activeItemForCollect()!.loan.loanAccountNo }}</strong> (কিস্তি নং {{ activeItemForCollect()!.nextInstallment.installmentNo }})</div>
-          <div>সংগ্রহকারী মাঠকর্মী: <strong>{{ authService.currentUser().name }}</strong></div>
+          <div>সদস্য: <strong>{{ item.loan.customerName }}</strong> (#{{ item.loan.customerId }}) • {{ item.loan.loanAccountNo }}</div>
+          <div>আজ পর্যন্ত দেয়: <strong>৳{{ item.view.dueAmount | number }}</strong> ({{ item.view.dueInstallments.length }} কিস্তি@if (item.view.overdueCount) {, {{ item.view.overdueCount }}টি বকেয়া }) • মোট বাকি ৳{{ item.view.totalOutstanding | number }}</div>
+          <div class="sub-text">কম দিলে কিস্তি "আংশিক" থাকবে; বেশি দিলে পরের কিস্তি অগ্রিম পরিশোধ হবে।</div>
+        </div>
+
+        <div class="quick-picks">
+          @for (p of quickPicks(); track p.n) {
+            <button type="button" class="pick-chip" [class.active]="selectedCount() === p.n" (click)="pickInstallments(p.n)">
+              <span class="pick-label">{{ p.label }}</span>
+              <span class="pick-amt">৳{{ p.amount | number }}</span>
+            </button>
+          }
         </div>
 
         <div class="form-grid-modal">
           <div class="form-group">
-            <label>কিস্তির টাকা (আসল + লাভ) <span class="required">*</span></label>
-            <input type="number" class="form-control" [(ngModel)]="collectAmount" name="collectAmount" />
+            <label>কিস্তির টাকা (আসল + লাভ)</label>
+            <input type="number" class="form-control" min="0" [ngModel]="collectAmount()" (ngModelChange)="setCollectAmount(+$event)" name="collectAmount" />
           </div>
-
           <div class="form-group">
-            <label>বাধ্যতামূলক সঞ্চয় জমা <span class="required">*</span></label>
-            <input type="number" class="form-control" [(ngModel)]="collectSavings" name="collectSavings" />
+            <label>সঞ্চয় জমা</label>
+            <input type="number" class="form-control" min="0" [ngModel]="collectSavings()" (ngModelChange)="collectSavings.set(+$event)" name="collectSavings" />
           </div>
-
-          <div class="form-group span-2">
+          <div class="form-group" [class.span-2]="collectMethod() === 'CASH'">
             <label>টাকা প্রাপ্তির মাধ্যম</label>
-            <select class="form-control" [(ngModel)]="collectMethod" name="collectMethod">
+            <select class="form-control" [ngModel]="collectMethod()" (ngModelChange)="collectMethod.set($event)" name="collectMethod">
               <option value="CASH">নগদ গ্রহণ (Cash in Field)</option>
               <option value="BKASH">বিকাশ (bKash)</option>
               <option value="NAGAD">নগদ (Nagad)</option>
             </select>
           </div>
+          @if (collectMethod() !== 'CASH') {
+            <div class="form-group">
+              <label>TrxID *</label>
+              <input class="form-control" [ngModel]="collectTrxId()" (ngModelChange)="collectTrxId.set($event)" name="collectTrxId" />
+            </div>
+          }
         </div>
 
+        @if (allocationPreview().length) {
+          <div class="alloc-preview">
+            <span class="alloc-title">এই টাকায় পরিশোধ হবে:</span>
+            @for (a of allocationPreview(); track a.installmentNo) {
+              <span class="alloc-chip" [class.partial]="!a.full" [class.advance]="a.advance">
+                #{{ a.installmentNo }} {{ a.full ? (a.advance ? 'অগ্রিম' : 'পূর্ণ') : 'আংশিক' }} ৳{{ a.amount | number }}
+              </span>
+            }
+          </div>
+        }
+
+        @if (nextAfterPayment(); as nx) {
+          <div class="next-after" [class.overdue]="nx.overdue">
+            <span class="material-symbols-outlined">event_upcoming</span>
+            <span>এই আদায়ের পর পরবর্তী কিস্তি <strong>#{{ nx.no }}</strong>: <strong>{{ nx.label }}</strong> — ৳{{ nx.remaining | number }}@if (nx.overdue) { (ইতোমধ্যে বকেয়া) }</span>
+          </div>
+        } @else if (collectAmount() > 0) {
+          <div class="next-after done"><span class="material-symbols-outlined">task_alt</span><span>এই আদায়ে ঋণ সম্পূর্ণ পরিশোধ হবে</span></div>
+        }
+
+        @if (advanceNeeded()) {
+          <label class="advance-check">
+            <input type="checkbox" [checked]="allowAdvance()" (change)="allowAdvance.set(!allowAdvance())" />
+            আজকের দেয়ের বেশি — পরের কিস্তির অগ্রিম আদায় নিশ্চিত করছি
+          </label>
+        }
+
         <div class="total-collection-preview">
-          <span>সর্বমোট আদায় জমা:</span>
-          <span class="total-val">৳ {{ (collectAmount + collectSavings) | number }}</span>
+          <span>সর্বমোট আদায়:</span>
+          <span class="total-val">৳ {{ (collectAmount() + collectSavings()) | number }}</span>
         </div>
+
+        @if (collectError()) {
+          <div class="flow-alert danger"><span class="material-symbols-outlined">error</span><span>{{ collectError() }}</span></div>
+        }
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" (click)="closeCollectModal()">বাতিল</button>
-        <button class="btn btn-success" (click)="confirmCollection()" [disabled]="isProcessing">
+        <button class="btn btn-secondary" (click)="closeCollectModal()" [disabled]="isProcessing()">বাতিল</button>
+        <button class="btn btn-success" (click)="confirmCollection()" [disabled]="isProcessing() || (collectAmount() + collectSavings()) <= 0 || (advanceNeeded() && !allowAdvance())">
           <span class="material-symbols-outlined">receipt_long</span>
-          <span>{{ isProcessing ? 'প্রসেসিং হচ্ছে...' : 'কালেকশন ও মানি রিসিট প্রস্তুত' }}</span>
+          <span>{{ isProcessing() ? 'প্রসেসিং হচ্ছে...' : 'আদায় ও রসিদ নিশ্চিত' }}</span>
         </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- শুধু সঞ্চয় জমা (মাঠ রসিদ) -->
+@if (savingsItem(); as si) {
+  <div class="modal-backdrop" (click)="closeSavingsModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">savings</span>
+          <h3>সঞ্চয় জমা — {{ si.loan.customerName }}</h3>
+        </div>
+        <button class="close-btn" (click)="closeSavingsModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="member-header-box mb-3">
+          <div>সদস্য #{{ si.loan.customerId }} • বর্তমান সঞ্চয়: <strong>৳{{ si.customer?.totalSavingsBalance || 0 | number }}</strong></div>
+          <div class="sub-text">কিস্তি ছাড়া শুধু সঞ্চয় জমা। রসিদ তৈরি হবে এবং টাকা আপনার হাতে থাকবে — দিন শেষে ক্যাশিয়ারকে জমা দিন।</div>
+        </div>
+        <div class="form-grid-modal">
+          <div class="form-group">
+            <label>সঞ্চয়ের টাকা *</label>
+            <input type="number" class="form-control" min="1" [ngModel]="savingsAmount()" (ngModelChange)="savingsAmount.set(+$event)" name="savingsOnlyAmount" />
+          </div>
+          <div class="form-group">
+            <label>মাধ্যম</label>
+            <select class="form-control" [ngModel]="savingsMethod()" (ngModelChange)="savingsMethod.set($event)" name="savingsOnlyMethod">
+              <option value="CASH">নগদ</option>
+              <option value="BKASH">বিকাশ</option>
+              <option value="NAGAD">নগদ (Nagad)</option>
+            </select>
+          </div>
+        </div>
+        @if (savingsError()) {
+          <div class="flow-alert danger"><span class="material-symbols-outlined">error</span><span>{{ savingsError() }}</span></div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeSavingsModal()" [disabled]="savingsBusy()">বাতিল</button>
+        <button class="btn btn-success" (click)="confirmSavingsDeposit()" [disabled]="savingsBusy() || savingsAmount() <= 0">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>{{ savingsBusy() ? 'সংরক্ষণ হচ্ছে...' : 'জমা ও রসিদ' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Printable samity collection sheet (মাঠে নেওয়ার কাগজের শিট) -->
+@if (printing()) {
+  <div class="modal-backdrop print-sheet-host">
+    <div id="printableCollectionSheet" class="collection-print-sheet">
+      <div class="cps-head">
+        <div class="cps-org">eKisti মাইক্রোফাইন্যান্স — সমিতি কালেকশন শিট</div>
+        <div>সমিতি: <strong>{{ centerName() }}</strong> • তারিখ: <strong>{{ today }}</strong> • মাঠকর্মী: <strong>{{ authService.currentUser().name }}</strong></div>
+      </div>
+      <table class="cps-table">
+        <thead>
+          <tr><th>#</th><th>সদস্য</th><th>দল</th><th>ঋণ হিসাব</th><th>দেয় কিস্তি</th><th>কিস্তি ৳</th><th>সঞ্চয় ৳</th><th>মোট বাকি ৳</th><th>আদায় ৳</th><th>হাজিরা</th><th>স্বাক্ষর</th></tr>
+        </thead>
+        <tbody>
+          @for (item of sheetItems(); track item.loan.loanId; let i = $index) {
+            <tr>
+              <td>{{ i + 1 }}</td>
+              <td>{{ item.loan.customerName }}</td>
+              <td>{{ item.customer?.groupNo || '' }}</td>
+              <td>{{ item.loan.loanAccountNo }}</td>
+              <td>{{ dueNos(item) }}</td>
+              <td>{{ item.view.dueAmount | number }}</td>
+              <td>{{ item.view.dueSavings | number }}</td>
+              <td>{{ item.view.totalOutstanding | number }}</td>
+              <td></td>
+              <td>{{ present().has(item.loan.customerId) ? '✓' : '' }}</td>
+              <td></td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr><td colspan="5">মোট</td><td>{{ getTotalExpectedToday() | number }}</td><td colspan="5"></td></tr>
+        </tfoot>
+      </table>
+      <div class="cps-signs">
+        <div>মাঠকর্মীর স্বাক্ষর</div><div>কেন্দ্র প্রধানের স্বাক্ষর</div><div>শাখা ব্যবস্থাপক</div>
       </div>
     </div>
   </div>

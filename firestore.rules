@@ -1,0 +1,425 @@
+rules_version = '2';
+
+// =====================================================================================
+//  eKisti (ই-কিস্তি) — Firestore Security Rules
+// =====================================================================================
+//
+//  ⚠️  IMPORTANT — CLIENT-SIDE ROUTE GUARDS ARE UX ONLY.
+//      authGuard / superAdminGuard / role checks in Angular only hide screens. Anyone can
+//      open DevTools and call Firestore directly. The ONLY real protection is this file
+//      (and, for money movement, server-side Cloud Functions in the future).
+//
+//  Two layers of rules live here:
+//
+//   1. STRUCTURAL integrity — enforced ALWAYS, even before Firebase Auth exists:
+//        • ledgers / audit trails are append-only (create yes, update/delete no)
+//        • receipts (collections) are never deleted (reversal = isReversed flag)
+//        • ID counters can never be decreased or deleted
+//        • period (day) closings are never deleted
+//        • business records use soft delete (isDeleted) — hard delete is denied
+//
+//   2. ROLE / BRANCH conditions — gated behind authEnforced() (see below).
+//
+//  Custom claims expected on the Firebase Auth ID token (set via Admin SDK):
+//        role      : 'SUPER_ADMIN' | 'ADMIN' | 'MANAGING_DIRECTOR' | 'REGIONAL_MANAGER' |
+//                    'AREA_MANAGER' | 'CENTRAL_AUDITOR' | 'AUDITOR' | 'BRANCH_MANAGER' |
+//                    'CASHIER' | 'FIELD_OFFICER'
+//        branchId  : number   (own branch, for branch staff)
+//        branchIds : number[] (assigned branches, for AREA_MANAGER / REGIONAL_MANAGER)
+//        userId    : number   (UserStaff.userId — sequential integer, NOT the Auth UID)
+//
+//  NOTE on list queries: when authEnforced() is true, a query is only allowed if Firestore
+//  can prove every possible result passes the rule. Branch-scoped users must therefore query
+//  with where('branchId', 'in' / '==', ...) — queries that read a whole collection and filter
+//  client-side will be rejected for branch staff and must be updated before switching on.
+// =====================================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =================================================================================
+    // ███  MASTER SWITCH  ███
+    //
+    //   Firebase Auth + custom claims are NOT wired yet, so this returns false and only the
+    //   STRUCTURAL conditions are enforced (the app keeps working with the demo role switcher).
+    //
+    //   👉 ONCE FIREBASE AUTH + CUSTOM CLAIMS (role, branchId, branchIds, userId) ARE LIVE,
+    //      THIS MUST RETURN true.  Until then the database is effectively open to anyone
+    //      holding the web API key (apart from the structural guarantees below).
+    //
+    //   Every rule follows the pattern:
+    //      allow <op>: if (!authEnforced() || <role/branch condition>) && <structural condition>;
+    // =================================================================================
+    function authEnforced() {
+      return false;
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Identity helpers (custom claims)
+    // ---------------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return isSignedIn() ? request.auth.token.get('role', '') : '';
+    }
+
+    function branchId() {
+      return isSignedIn() ? request.auth.token.get('branchId', -1) : -1;
+    }
+
+    function assignedBranchIds() {
+      return isSignedIn() ? request.auth.token.get('branchIds', []) : [];
+    }
+
+    function isAdmin() {
+      return role() in ['SUPER_ADMIN', 'ADMIN'];
+    }
+
+    // সকল শাখা দেখার অনুমতি (auth-state.service.ts → NATIONWIDE_ROLES)
+    function isNationwide() {
+      return role() in ['SUPER_ADMIN', 'ADMIN', 'MANAGING_DIRECTOR', 'CENTRAL_AUDITOR', 'AUDITOR'];
+    }
+
+    // এরিয়া / রিজিওনাল ম্যানেজার — শুধু নির্ধারিত শাখা
+    function isAreaScoped() {
+      return role() in ['AREA_MANAGER', 'REGIONAL_MANAGER'];
+    }
+
+    // অডিটর শুধু পড়তে পারেন
+    function isReadOnlyRole() {
+      return role() in ['CENTRAL_AUDITOR', 'AUDITOR'];
+    }
+
+    function canAccessBranch(b) {
+      return isSignedIn() && (
+        isNationwide()
+        || (isAreaScoped() && b in assignedBranchIds())
+        || (b == branchId())
+      );
+    }
+
+    // লেখার অনুমতি: সাইন-ইন, অডিটর নয়, এবং শাখায় প্রবেশাধিকার আছে
+    function canWriteBranch(b) {
+      return canAccessBranch(b) && !isReadOnlyRole();
+    }
+
+    // ভল্ট / ক্যাশ ক্লোজিং: ক্যাশিয়ার, শাখা ব্যবস্থাপক ও ঊর্ধ্বতন (মাঠকর্মী নয়)
+    function isVaultHandler() {
+      return role() in ['CASHIER', 'BRANCH_MANAGER', 'AREA_MANAGER', 'REGIONAL_MANAGER', 'MANAGING_DIRECTOR', 'SUPER_ADMIN', 'ADMIN'];
+    }
+
+    // শাখা / সমিতি ব্যবস্থাপনা
+    function isBranchAdmin() {
+      return role() in ['BRANCH_MANAGER', 'AREA_MANAGER', 'REGIONAL_MANAGER', 'MANAGING_DIRECTOR', 'SUPER_ADMIN', 'ADMIN'];
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Document helpers
+    // ---------------------------------------------------------------------------------
+    function existingBranch() {
+      return resource.data.get('branchId', -1);
+    }
+
+    function incomingBranch() {
+      return request.resource.data.get('branchId', -1);
+    }
+
+    // শাখা পরিবর্তন (সদস্য স্থানান্তর) — নতুন ও পুরাতন দুই শাখাতেই অনুমতি লাগবে
+    function canWriteBothBranches() {
+      return canWriteBranch(existingBranch()) && canWriteBranch(incomingBranch());
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // =================================================================================
+    // 1. MASTER DATA (শাখা, সমিতি, স্টাফ, রোল, সেটিংস, ঋণ প্রোডাক্ট)
+    // =================================================================================
+
+    match /branches/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if !authEnforced() || isAdmin() || role() == 'MANAGING_DIRECTOR';
+      allow update: if !authEnforced() || (isBranchAdmin() && canWriteBranch(existingBranch()))
+                                       || (isVaultHandler() && canWriteBranch(existingBranch()));
+      allow delete: if false; // soft delete only
+    }
+
+    match /centers/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || (isBranchAdmin() && canWriteBranch(incomingBranch()));
+      allow update: if !authEnforced() || (isBranchAdmin() && canWriteBothBranches());
+      allow delete: if false;
+    }
+
+    match /staff/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create, update: if !authEnforced() || isAdmin();
+      allow delete: if false;
+    }
+
+    match /roles/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create, update: if !authEnforced() || isAdmin();
+      allow delete: if false;
+    }
+
+    match /settings/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create, update: if !authEnforced() || isAdmin();
+      allow delete: if false;
+    }
+
+    match /holidays/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create, update: if !authEnforced() || isAdmin();
+      allow delete: if !authEnforced() || isAdmin();
+    }
+
+    match /loanProducts/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create, update: if !authEnforced() || isAdmin();
+      allow delete: if false;
+    }
+
+    // =================================================================================
+    // 2. ID COUNTERS — sequence may only go UP, never deleted
+    // =================================================================================
+
+    match /counters/{entity} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if (!authEnforced() || (isSignedIn() && !isReadOnlyRole()))
+                    && request.resource.data.currentSequenceId is int;
+      allow update: if (!authEnforced() || (isSignedIn() && !isReadOnlyRole()))
+                    && request.resource.data.currentSequenceId is int
+                    && request.resource.data.currentSequenceId > resource.data.currentSequenceId;
+      allow delete: if false;
+    }
+
+    // =================================================================================
+    // 3. MEMBERS & LOANS (গ্রাহক, ঋণ, কিস্তি শিডিউল) — soft delete only
+    // =================================================================================
+
+    match /customers/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update: if !authEnforced() || canWriteBothBranches();
+      allow delete: if false;
+    }
+
+    match /loans/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update: if (!authEnforced() || canWriteBothBranches())
+                    && !changedKeys().hasAny(['loanId', 'customerId']); // loanAccountNo may change (updateLoanAccountNo)
+      allow delete: if false;
+    }
+
+    match /installments/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update: if (!authEnforced() || canWriteBothBranches())
+                    && !changedKeys().hasAny(['installmentId', 'loanId']);
+      allow delete: if false;
+    }
+
+    match /meetings/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create, update: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow delete: if false;
+    }
+
+    match /followUps/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create, update: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow delete: if false;
+    }
+
+    match /insuranceClaims/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create, update: if !authEnforced() || (isBranchAdmin() && canWriteBranch(incomingBranch()));
+      allow delete: if false;
+    }
+
+    // =================================================================================
+    // 4. RECEIPTS (কিস্তি আদায় রসিদ) — never deleted; amounts immutable;
+    //    updates only for reversal (isReversed…) and cash handover / reconciliation fields.
+    // =================================================================================
+
+    match /collections/{receiptId} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update: if (!authEnforced() || canWriteBranch(existingBranch()))
+                    // টাকার অংক, তারিখ ও পরিচিতি কখনো বদলাবে না
+                    && !changedKeys().hasAny([
+                         'receiptId', 'loanId', 'customerId', 'installmentId', 'branchId', 'centerId',
+                         'collectedByUserId', 'collectionDate', 'paymentMethod', 'trxId',
+                         'principalAmountCollected', 'profitAmountCollected', 'savingsAmountCollected',
+                         'fineAmountCollected', 'totalAmountCollected'
+                       ])
+                    // একবার বাতিল (reversed) হলে আর ফেরানো যাবে না
+                    && !(resource.data.get('isReversed', false) == true
+                         && request.resource.data.get('isReversed', false) != true);
+      allow delete: if false;
+    }
+
+    // =================================================================================
+    // 5. CASH, VAULT & CLOSING (ভল্ট ক্যাশ, ক্যাশ ক্লোজিং) — cashier / BM and above
+    // =================================================================================
+
+    match /reconciliations/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create, update: if !authEnforced() || (isVaultHandler() && canWriteBranch(incomingBranch()));
+      allow delete: if false;
+    }
+
+    // দিবস সমাপনী লক — পুনরায় খোলা (REOPENED) আপডেট হিসেবে চলে, মোছা যাবে না
+    match /periodClosings/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || (isVaultHandler() && canWriteBranch(incomingBranch()));
+      allow update: if !authEnforced()
+                    || (isVaultHandler() && canWriteBranch(existingBranch()))
+                    || isAdmin() || role() == 'MANAGING_DIRECTOR';
+      allow delete: if false;
+    }
+
+    match /vaultTransactions/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || (isVaultHandler() && canWriteBranch(incomingBranch()));
+      allow update, delete: if false; // append-only ledger
+    }
+
+    match /expenses/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || (isVaultHandler() && canWriteBranch(incomingBranch()));
+      allow update, delete: if false; // append-only
+    }
+
+    match /dailyBranchSummaries/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create, update: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow delete: if false;
+    }
+
+    match /monthlyPortfolioSnapshots/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create, update: if !authEnforced() || (isSignedIn() && !isReadOnlyRole());
+      allow delete: if false;
+    }
+
+    // =================================================================================
+    // 6. APPEND-ONLY LEDGERS & AUDIT TRAILS (create only; never updated or deleted)
+    // =================================================================================
+
+    match /savingsTransactions/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update, delete: if false;
+    }
+
+    match /loanTransactions/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update, delete: if false;
+    }
+
+    match /feeTransactions/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update, delete: if false;
+    }
+
+    match /journalEntries/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update, delete: if false;
+    }
+
+    match /loanStatusHistory/{id} {
+      allow read: if !authEnforced() || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update, delete: if false;
+    }
+
+    // creditScoreHistory / documentVersions / auditLogs may not carry branchId
+    match /creditScoreHistory/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if !authEnforced() || (isSignedIn() && !isReadOnlyRole());
+      allow update, delete: if false;
+    }
+
+    match /documentVersions/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if !authEnforced() || (isSignedIn() && !isReadOnlyRole());
+      allow update, delete: if false;
+    }
+
+    match /auditLogs/{id} {
+      allow read: if !authEnforced() || isNationwide() || isAreaScoped() || role() == 'BRANCH_MANAGER';
+      allow create: if !authEnforced() || isSignedIn();
+      allow update, delete: if false;
+    }
+
+    match /staffAssignments/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if !authEnforced() || isBranchAdmin();
+      allow update, delete: if false;
+    }
+
+    match /memberTransfers/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if !authEnforced() || isBranchAdmin();
+      allow update, delete: if false;
+    }
+
+    match /savingsInterestPostings/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if !authEnforced() || isAdmin();
+      allow update, delete: if false;
+    }
+
+    // SMS কিউ — তৈরি করা যাবে; পরে শুধু `status` (QUEUED → SENT/FAILED) বদলানো যাবে
+    match /smsLogs/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create: if !authEnforced() || (isSignedIn() && !isReadOnlyRole());
+      allow update: if (!authEnforced() || isSignedIn())
+                    && changedKeys().hasOnly(['status']);
+      allow delete: if false;
+    }
+
+    // =================================================================================
+    // 7. SYSTEM
+    // =================================================================================
+
+    // বকেয়া ইঞ্জিনের দৈনিক মার্কার (overdue-engine.service.ts)
+    match /systemJobs/{id} {
+      allow read: if !authEnforced() || isSignedIn();
+      allow create, update: if !authEnforced() || (isSignedIn() && !isReadOnlyRole());
+      allow delete: if false;
+    }
+
+    // scripts/seed-database.js সংযোগ পরীক্ষা — Auth চালু হলে বন্ধ (Admin SDK নিয়ম মানে না)
+    match /_connection_test/{id} {
+      allow read, write: if !authEnforced();
+    }
+
+    // অন্য (নতুন / অতালিকাভুক্ত) কালেকশন — Auth চালু হলে ডিফল্টভাবে বন্ধ।
+    // ⚠️ Firestore-এ একাধিক match-এর allow পরস্পর OR হয়; তাই উপরে তালিকাভুক্ত কালেকশনগুলো
+    //    এখানে অবশ্যই বাদ দিতে হবে, নইলে এই ক্যাচ-অল উপরের append-only / no-delete নিয়ম ভেঙে দেবে।
+    //    নতুন কালেকশনের জন্য উপরে নিজস্ব match ব্লক লিখুন এবং নামটি এই তালিকায় যোগ করুন।
+    match /{collectionName}/{docPath=**} {
+      allow read, write: if !authEnforced() && !(collectionName in [
+        'branches', 'centers', 'staff', 'roles', 'settings', 'holidays', 'loanProducts',
+        'counters', 'customers', 'loans', 'installments', 'meetings', 'followUps', 'insuranceClaims',
+        'collections', 'reconciliations', 'periodClosings', 'vaultTransactions', 'expenses',
+        'dailyBranchSummaries', 'monthlyPortfolioSnapshots',
+        'savingsTransactions', 'loanTransactions', 'feeTransactions', 'journalEntries',
+        'loanStatusHistory', 'creditScoreHistory', 'documentVersions', 'auditLogs',
+        'staffAssignments', 'memberTransfers', 'savingsInterestPostings', 'smsLogs',
+        'systemJobs', '_connection_test'
+      ]);
+    }
+  }
+}

@@ -7,6 +7,7 @@ import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth
 import { LanguageService } from '../../../core/services/language.service';
 import { StaffRole, UserStaff, Role, Branch, UserCategory } from '../../../core/models/database.models';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { toDhakaDayKey } from '../../../core/finance/dates';
 
 @Component({
   selector: 'app-user-form',
@@ -175,7 +176,7 @@ export class UserFormComponent implements OnInit {
           nidNumber: this.nidNumber.trim() || `19852692518000${Date.now().toString().slice(-3)}`,
           salary: Number(this.salary) || (this.category === 'SYSTEM_ADMIN' ? 70000 : (this.category === 'HEAD_OFFICE' ? 50000 : 25000)),
           status: this.status,
-          joinedDate: now.split('T')[0]
+          joinedDate: toDhakaDayKey(now)
         },
         {
           userId: currentUser.userId,

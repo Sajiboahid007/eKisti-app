@@ -45,7 +45,11 @@
   }
 
   .form-control {
-    height: 38px;
+    height: 40px;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
   }
 }
 
@@ -352,3 +356,77 @@
     margin: 0 auto;
   }
 }
+
+/* ---------- Compact receipt table: fits the page without horizontal scroll ---------- */
+.receipt-table {
+  th, td {
+    padding: 0.65rem 0.75rem;
+  }
+
+  th {
+    font-size: 0.8rem;
+  }
+
+  td {
+    font-size: 0.85rem;
+  }
+
+  .nowrap { white-space: nowrap; }
+
+  .cell-title {
+    display: block;
+    line-height: 1.35;
+    margin-bottom: 0.15rem;
+  }
+
+  .sub-text {
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  .badge { white-space: nowrap; }
+
+  .btn-view {
+    padding: 0.35rem;
+    min-width: 34px;
+    justify-content: center;
+
+    .material-symbols-outlined { font-size: 18px; }
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ছোট স্ক্রিনে বিস্তারিত কলাম লুকানো — সর্বমোট কলামে মোট টাকা থাকে, রসিদে পূর্ণ বিভাজন */
+@media (max-width: 1280px) {
+  .receipt-table .col-optional { display: none; }
+}
+
+.reversed-row td { opacity: 0.55; }
+.reversed-row td .cell-title, .reversed-row .amount-bdt { text-decoration: line-through; }
+.reverse-body { display: flex; flex-direction: column; gap: 0.75rem; }
+.reverse-label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
+
+.voucher-next {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  .material-symbols-outlined { font-size: 18px; }
+}
+
+.type-tag { padding: 0 0.4rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; }
+.t-SAVINGS_DEPOSIT { background: #eff6ff; color: #1d4ed8; }
+.t-FEE { background: #faf5ff; color: #7e22ce; }
+.t-WRITE_OFF_RECOVERY { background: #fff7ed; color: #c2410c; }

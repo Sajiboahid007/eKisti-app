@@ -5,6 +5,7 @@
     "ng": "ng",
     "env:config": "node scripts/set-env.js",
     "db:seed": "node scripts/seed-database.js",
+    "db:migrate-history": "node scripts/migrate-history-to-auditlogs.js",
     "prestart": "node scripts/set-env.js",
     "prebuild": "node scripts/set-env.js",
     "start": "ng serve",

@@ -1,0 +1,371 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <h2>সেটিংস — ঋণ নীতি, ছুটি ও সাধারণ নীতি</h2>
+      <p class="sub-text">ঋণ প্রোডাক্ট, কর্মদিবস ক্যালেন্ডার ও প্রতিষ্ঠানের সাধারণ নীতি — প্রতিটি পরিবর্তন অডিট লগে সংরক্ষিত হয়</p>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-secondary" (click)="load()" [disabled]="loading() || busy()" title="রিফ্রেশ"><span class="material-symbols-outlined">refresh</span></button>
+    </div>
+  </div>
+
+  <div class="tab-bar" role="tablist">
+    <button role="tab" class="tab-btn" [class.active]="tab() === 'PRODUCTS'" (click)="setTab('PRODUCTS')">
+      <span class="material-symbols-outlined">inventory_2</span>ঋণ প্রোডাক্ট ({{ products().length }})
+    </button>
+    <button role="tab" class="tab-btn" [class.active]="tab() === 'HOLIDAYS'" (click)="setTab('HOLIDAYS')">
+      <span class="material-symbols-outlined">event_busy</span>ছুটির ক্যালেন্ডার ({{ holidays().length }})
+    </button>
+    <button role="tab" class="tab-btn" [class.active]="tab() === 'GENERAL'" (click)="setTab('GENERAL')">
+      <span class="material-symbols-outlined">tune</span>সাধারণ নীতি
+    </button>
+  </div>
+
+  @if (notice(); as n) {
+    <div class="flow-alert" [ngClass]="n.kind">
+      <span class="material-symbols-outlined">{{ n.kind === 'success' ? 'check_circle' : n.kind === 'info' ? 'info' : n.kind === 'warning' ? 'warning' : 'error' }}</span>
+      <span class="pre-line">{{ n.text }}</span>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="card"><app-skeleton variant="table" [rows]="5" [columns]="6" /></div>
+  } @else {
+    @switch (tab()) {
+      @case ('PRODUCTS') {
+        <div class="flow-alert warning">
+          <span class="material-symbols-outlined">gavel</span>
+          <span>⚖️ সার্ভিস চার্জ অবশ্যই মাইক্রোক্রেডিট রেগুলেটরি অথরিটি (MRA)-র নির্ধারিত সর্বোচ্চ সীমা মানতে হবে — বহুল উদ্ধৃত সীমা হ্রাসমান পদ্ধতিতে বার্ষিক {{ rateCap }}%। সর্বশেষ MRA সার্কুলার যাচাই করে নিন।
+            ফ্ল্যাট হারের প্রোডাক্টে নিচের "প্রকৃত বার্ষিক হার" (হ্রাসমান সমতুল্য) দেখে সীমা মিলিয়ে নিন।</span>
+        </div>
+
+        @if (!draft()) {
+          <div class="action-row">
+            <button class="btn btn-primary" (click)="newProduct()"><span class="material-symbols-outlined">add</span><span>নতুন ঋণ প্রোডাক্ট</span></button>
+          </div>
+        }
+
+        @if (draft(); as d) {
+          <div class="card">
+            <div class="card-header">
+              <h3>{{ d.productId ? 'প্রোডাক্ট সম্পাদনা — #' + d.productId : 'নতুন ঋণ প্রোডাক্ট' }}</h3>
+            </div>
+            <div class="card-body form-stack">
+              <div class="form-grid">
+                <div class="form-group span-2">
+                  <label>প্রোডাক্টের নাম *</label>
+                  <input class="form-control" [ngModel]="d.productName" (ngModelChange)="patch('productName', $event)" placeholder="যেমন: জাগরণ ক্ষুদ্রঋণ (সাপ্তাহিক)" />
+                </div>
+                <div class="form-group">
+                  <label>কিস্তির ধরন *</label>
+                  <select class="form-control" [ngModel]="d.frequency" (ngModelChange)="patch('frequency', $event)">
+                    @for (f of frequencies; track f) { <option [ngValue]="f">{{ freqLabels[f] }}</option> }
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>কিস্তির সংখ্যা *</label>
+                  <input type="number" min="1" step="1" class="form-control" [ngModel]="d.defaultInstallmentsCount" (ngModelChange)="patch('defaultInstallmentsCount', num($event))" />
+                </div>
+                <div class="form-group">
+                  <label>সার্ভিস চার্জ পদ্ধতি *</label>
+                  <select class="form-control" [ngModel]="d.interestMethod" (ngModelChange)="patch('interestMethod', $event)">
+                    <option ngValue="FLAT">ফ্ল্যাট — মেয়াদের মোট %</option>
+                    <option ngValue="DECLINING">হ্রাসমান — বার্ষিক %</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>সার্ভিস চার্জের হার (%) *</label>
+                  <input type="number" min="0" step="0.01" class="form-control" [ngModel]="d.interestOrServiceChargeRate" (ngModelChange)="patch('interestOrServiceChargeRate', num($event))" />
+                  <small class="sub-text">{{ d.interestMethod === 'DECLINING' ? 'বার্ষিক হ্রাসমান হার' : 'পুরো মেয়াদে আসলের ওপর মোট %' }}</small>
+                </div>
+                <div class="form-group">
+                  <label>সর্বনিম্ন ঋণসীমা (৳) *</label>
+                  <input type="number" min="0" class="form-control" [ngModel]="d.minAmount" (ngModelChange)="patch('minAmount', num($event))" />
+                </div>
+                <div class="form-group">
+                  <label>সর্বোচ্চ ঋণসীমা (৳) *</label>
+                  <input type="number" min="0" class="form-control" [ngModel]="d.maxAmount" (ngModelChange)="patch('maxAmount', num($event))" />
+                </div>
+                <div class="form-group">
+                  <label>বাধ্যতামূলক সঞ্চয় / কিস্তি (৳)</label>
+                  <input type="number" min="0" class="form-control" [ngModel]="d.mandatorySavingsPerInstallment" (ngModelChange)="patch('mandatorySavingsPerInstallment', num($event))" />
+                </div>
+                <div class="form-group">
+                  <label>ফরম / প্রসেসিং ফি (৳)</label>
+                  <input type="number" min="0" class="form-control" [ngModel]="d.formAndProcessingFee" (ngModelChange)="patch('formAndProcessingFee', num($event))" />
+                </div>
+                <div class="form-group">
+                  <label>বীমা / কল্যাণ তহবিল ফি (৳)</label>
+                  <input type="number" min="0" class="form-control" [ngModel]="d.insuranceFee" (ngModelChange)="patch('insuranceFee', num($event))" />
+                </div>
+                <div class="form-group">
+                  <label>গ্রেস পিরিয়ড (দিন)</label>
+                  <input type="number" min="0" step="1" class="form-control" [ngModel]="d.graceDays" (ngModelChange)="patch('graceDays', num($event))" />
+                  <small class="sub-text">বিতরণ থেকে প্রথম কিস্তির আগে বিরতি</small>
+                </div>
+                <div class="form-group">
+                  <label>আগাম পরিশোধ রেয়াত (%)</label>
+                  <input type="number" min="0" max="100" class="form-control" [ngModel]="d.earlySettlementRebatePercent" (ngModelChange)="patch('earlySettlementRebatePercent', num($event))" />
+                  <small class="sub-text">ভবিষ্যৎ লাভের কত % মওকুফ (০–১০০)</small>
+                </div>
+              </div>
+
+              <div class="check-row">
+                <label class="check"><input type="checkbox" [ngModel]="d.allowConcurrentLoans" (ngModelChange)="patch('allowConcurrentLoans', $event)" /> চলমান ঋণ থাকা অবস্থায় নতুন ঋণ অনুমোদিত</label>
+                <label class="check"><input type="checkbox" [ngModel]="d.isActive" (ngModelChange)="patch('isActive', $event)" /> সক্রিয় (বিতরণে দেখাবে)</label>
+              </div>
+
+              <div class="sub-section">
+                <div class="sub-section-head">
+                  <h4>ঋণ চক্র অনুযায়ী সর্বোচ্চ সীমা</h4>
+                  <button class="btn btn-sm btn-secondary" type="button" (click)="addCeiling()"><span class="material-symbols-outlined">add</span>চক্র যোগ</button>
+                </div>
+                <p class="sub-text">ক্রমবর্ধমান হতে হবে এবং সর্বোচ্চ ঋণসীমার বেশি নয়। শেষ চক্রের সীমা পরবর্তী সব চক্রে প্রযোজ্য। খালি রাখলে শুধু সর্বোচ্চ ঋণসীমা প্রযোজ্য।</p>
+                @for (c of ceilings(); track $index) {
+                  <div class="ceiling-row">
+                    <span class="ceiling-label">{{ cycleLabel($index) }}</span>
+                    <input type="number" min="0" class="form-control" [ngModel]="c" (ngModelChange)="setCeiling($index, num($event))" />
+                    <button class="btn btn-sm btn-danger" type="button" (click)="removeCeiling($index)" title="মুছুন"><span class="material-symbols-outlined">delete</span></button>
+                  </div>
+                }
+              </div>
+
+              @if (draftPreview(); as p) {
+                <div class="flow-alert" [class.danger]="p.rate > rateCap" [class.info]="p.rate <= rateCap">
+                  <span class="material-symbols-outlined">calculate</span>
+                  <span>নমুনা ঋণ ৳{{ p.principal | number }} — কিস্তি ৳{{ p.installment | number }}, মোট সার্ভিস চার্জ ৳{{ p.totalProfit | number }}।
+                    প্রকৃত বার্ষিক হার (হ্রাসমান সমতুল্য): <strong>{{ p.rate | number:'1.0-2' }}%</strong>
+                    @if (p.rate > rateCap) { — ⚠️ {{ rateCap }}% সীমার বেশি }
+                  </span>
+                </div>
+              }
+
+              @if (formErrors().length || draftErrors().length) {
+                <div class="flow-alert danger">
+                  <span class="material-symbols-outlined">error</span>
+                  <ul class="err-list">
+                    @for (e of (formErrors().length ? formErrors() : draftErrors()); track $index) { <li>{{ e }}</li> }
+                  </ul>
+                </div>
+              }
+
+              <div class="form-actions">
+                <button class="btn btn-secondary" (click)="cancelProduct()" [disabled]="busy()">বাতিল</button>
+                <button class="btn btn-primary" (click)="saveProduct()" [disabled]="busy() || draftErrors().length > 0">{{ busy() ? 'সংরক্ষণ হচ্ছে...' : 'সংরক্ষণ করুন' }}</button>
+              </div>
+            </div>
+          </div>
+        }
+
+        <div class="card">
+          @if (products().length === 0) {
+            <div class="empty-state"><p>এখনো কোনো ঋণ প্রোডাক্ট নেই।</p></div>
+          } @else {
+            <div class="table-container border-0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th><th>প্রোডাক্ট</th><th>ধরন</th><th class="text-right">কিস্তি</th><th>সার্ভিস চার্জ</th>
+                    <th class="text-right">ঋণসীমা</th><th class="text-right">সঞ্চয়/কিস্তি</th><th>প্রকৃত বার্ষিক হার</th><th>অবস্থা</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of products(); track p.productId) {
+                    @let pv = preview(p);
+                    <tr>
+                      <td>#{{ p.productId }}</td>
+                      <td>
+                        <strong>{{ p.productName }}</strong>
+                        <div class="sub-text">
+                          গ্রেস {{ p.graceDays ?? 0 }} দিন · রেয়াত {{ p.earlySettlementRebatePercent ?? 0 }}%
+                          @if (p.allowConcurrentLoans) { · একাধিক ঋণ }
+                          @if (p.cycleCeilings?.length) { · {{ p.cycleCeilings!.length }} চক্র }
+                        </div>
+                      </td>
+                      <td>{{ freqLabels[p.frequency] }}</td>
+                      <td class="text-right">{{ p.defaultInstallmentsCount }}</td>
+                      <td>{{ p.interestOrServiceChargeRate }}% <span class="sub-text">{{ p.interestMethod === 'DECLINING' ? 'হ্রাসমান/বার্ষিক' : 'ফ্ল্যাট/মেয়াদ' }}</span></td>
+                      <td class="text-right"><span class="amount-bdt">{{ p.minAmount | number }}</span> – <span class="amount-bdt">{{ p.maxAmount | number }}</span></td>
+                      <td class="text-right amount-bdt">{{ p.mandatorySavingsPerInstallment | number }}</td>
+                      <td>
+                        @if (pv) {
+                          <span class="badge" [class.badge-danger]="pv.rate > rateCap" [class.badge-success]="pv.rate <= rateCap" [title]="'নমুনা ঋণ ৳' + pv.principal">
+                            {{ pv.rate | number:'1.0-2' }}%@if (pv.rate > rateCap) { ⚠️ }
+                          </span>
+                        } @else { — }
+                      </td>
+                      <td><span class="badge" [class.badge-success]="p.isActive" [class.badge-secondary]="!p.isActive">{{ p.isActive ? 'সক্রিয়' : 'নিষ্ক্রিয়' }}</span></td>
+                      <td class="text-right">
+                        <button class="btn btn-sm btn-secondary" (click)="editProduct(p)" [disabled]="busy()"><span class="material-symbols-outlined">edit</span>সম্পাদনা</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+
+      @case ('HOLIDAYS') {
+        <div class="flow-alert info">
+          <span class="material-symbols-outlined">info</span>
+          <span>ছুটির দিনে পড়া কিস্তি নতুন শিডিউলে পরের কর্মদিবসে সরে যায়। সাপ্তাহিক ছুটি "সাধারণ নীতি" ট্যাবে নির্ধারণ করুন।</span>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><h3>নতুন ছুটি যোগ</h3></div>
+            <div class="card-body form-stack">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>তারিখ *</label>
+                  <input type="date" class="form-control" [ngModel]="holidayDate()" (ngModelChange)="holidayDate.set($event)" />
+                </div>
+                <div class="form-group">
+                  <label>ছুটির নাম *</label>
+                  <input class="form-control" [ngModel]="holidayName()" (ngModelChange)="holidayName.set($event)" placeholder="যেমন: ঈদুল ফিতর" />
+                </div>
+              </div>
+              <div class="check-row">
+                <label class="check"><input type="radio" name="hscope" [checked]="holidayAllBranches()" (change)="holidayAllBranches.set(true)" /> সকল শাখা</label>
+                <label class="check"><input type="radio" name="hscope" [checked]="!holidayAllBranches()" (change)="holidayAllBranches.set(false)" /> নির্দিষ্ট শাখা</label>
+              </div>
+              @if (!holidayAllBranches()) {
+                <div class="check-grid">
+                  @for (b of branches(); track b.branchId) {
+                    <label class="check">
+                      <input type="checkbox" [checked]="holidayBranchIds().includes(b.branchId)" (change)="toggleHolidayBranch(b.branchId, $any($event.target).checked)" />
+                      {{ b.name }}
+                    </label>
+                  } @empty {
+                    <span class="sub-text">কোনো শাখা পাওয়া যায়নি</span>
+                  }
+                </div>
+              }
+              <div class="form-actions">
+                <button class="btn btn-primary" (click)="addHoliday()" [disabled]="busy() || !holidayDate() || !holidayName().trim()">
+                  <span class="material-symbols-outlined">add</span>ছুটি যোগ করুন
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header quick-head">
+              <h3>সরকারি ছুটি দ্রুত যোগ</h3>
+              <input type="number" class="form-control year-input" min="2000" max="2100" [ngModel]="quickYear()" (ngModelChange)="setQuickYear(+$event)" aria-label="বছর" />
+            </div>
+            <div class="card-body form-stack">
+              <p class="sub-text">শুধু নির্দিষ্ট তারিখের ছুটি। সরকারি প্রজ্ঞাপনের সাথে তারিখ মিলিয়ে নিশ্চিত করুন — সকল শাখায় প্রযোজ্য হবে।
+                ঈদুল ফিতর, ঈদুল আযহা, দুর্গাপূজা, শবে বরাত ইত্যাদির তারিখ প্রতি বছর বদলায় — বাম পাশের ফর্মে হাতে যোগ করুন।</p>
+              @for (r of quickRows(); track $index) {
+                <div class="quick-row">
+                  <input type="date" class="form-control" [ngModel]="r.date" (ngModelChange)="setQuickDate($index, $event)" />
+                  <span class="quick-name">{{ r.name }}</span>
+                  @if (holidayDates().has(r.date)) {
+                    <span class="badge badge-success">যুক্ত আছে</span>
+                  } @else if (confirmQuickIndex() === $index) {
+                    <span class="inline-confirm">
+                      <button class="btn btn-sm btn-primary" (click)="addHoliday(r.date, r.name, true)" [disabled]="busy()">নিশ্চিত</button>
+                      <button class="btn btn-sm btn-secondary" (click)="confirmQuickIndex.set(null)" [disabled]="busy()">না</button>
+                    </span>
+                  } @else {
+                    <button class="btn btn-sm btn-secondary" (click)="confirmQuickIndex.set($index)" [disabled]="busy() || !r.date">যোগ</button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          @if (holidays().length === 0) {
+            <div class="empty-state"><p>কোনো ছুটি যোগ করা হয়নি।</p></div>
+          } @else {
+            <div class="table-container border-0">
+              <table class="data-table">
+                <thead><tr><th>তারিখ</th><th>ছুটির নাম</th><th>প্রযোজ্য</th><th>যোগ করেছেন</th><th></th></tr></thead>
+                <tbody>
+                  @for (h of holidays(); track h.date) {
+                    <tr>
+                      <td><strong>{{ h.date }}</strong><div class="sub-text">{{ h.date | date:'EEEE' }}</div></td>
+                      <td>{{ h.name }}</td>
+                      <td>{{ holidayBranchLabel(h) }}</td>
+                      <td>{{ h.createdBy.name }}</td>
+                      <td class="text-right">
+                        @if (confirmRemoveDate() === h.date) {
+                          <span class="inline-confirm">
+                            <span class="sub-text">বাতিল করবেন?</span>
+                            <button class="btn btn-sm btn-danger" (click)="removeHoliday(h.date)" [disabled]="busy()">হ্যাঁ</button>
+                            <button class="btn btn-sm btn-secondary" (click)="confirmRemoveDate.set(null)" [disabled]="busy()">না</button>
+                          </span>
+                        } @else {
+                          <button class="btn btn-sm btn-danger" (click)="confirmRemoveDate.set(h.date)" [disabled]="busy()" title="ছুটি বাতিল">
+                            <span class="material-symbols-outlined">delete</span>
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+
+      @case ('GENERAL') {
+        <div class="card">
+          <div class="card-body form-stack">
+            <div class="sub-section">
+              <h4>সাপ্তাহিক ছুটির দিন</h4>
+              <p class="sub-text">এই দিনগুলোতে কোনো কিস্তি নির্ধারিত হবে না (দৈনিক কিস্তিতে দিনটি বাদ যাবে)।</p>
+              <div class="check-grid">
+                @for (w of weekDays; track w.value) {
+                  <label class="check">
+                    <input type="checkbox" [checked]="general().weeklyOffDays.includes(w.value)" (change)="toggleOffDay(w.value, $any($event.target).checked)" />
+                    {{ w.label }}
+                  </label>
+                }
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label>সদস্য ভর্তি ফি (৳)</label>
+                <input type="number" min="0" class="form-control" [ngModel]="general().defaultAdmissionFee" (ngModelChange)="patchGeneral('defaultAdmissionFee', num($event))" />
+              </div>
+              <div class="form-group">
+                <label>পাসবই ফি (৳)</label>
+                <input type="number" min="0" class="form-control" [ngModel]="general().defaultPassbookFee" (ngModelChange)="patchGeneral('defaultPassbookFee', num($event))" />
+              </div>
+              <div class="form-group">
+                <label>সঞ্চয়ের বার্ষিক মুনাফা (%)</label>
+                <input type="number" min="0" max="100" step="0.01" class="form-control" [ngModel]="general().savingsInterestAnnualPercent" (ngModelChange)="patchGeneral('savingsInterestAnnualPercent', num($event))" />
+                <small class="sub-text">⚖️ MRA নির্দেশনা অনুযায়ী সঞ্চয়ের ওপর ন্যূনতম মুনাফা দিতে হয় — সর্বশেষ সার্কুলার যাচাই করে হার নির্ধারণ করুন।</small>
+              </div>
+              <div class="form-group">
+                <label>মাঠকর্মীর হাতে নগদ সর্বোচ্চ সীমা (৳)</label>
+                <input type="number" min="0" class="form-control" [ngModel]="general().foCashInHandLimit" (ngModelChange)="patchGeneral('foCashInHandLimit', num($event))" />
+                <small class="sub-text">এর বেশি নগদ হাতে থাকলে সতর্কতা দেখাবে</small>
+              </div>
+            </div>
+
+            <label class="check">
+              <input type="checkbox" [ngModel]="general().lockSavingsWithdrawalWithActiveLoan" (ngModelChange)="patchGeneral('lockSavingsWithdrawalWithActiveLoan', $event)" />
+              চলমান ঋণ থাকলে সঞ্চয় উত্তোলন বন্ধ রাখুন
+            </label>
+
+            <div class="form-actions">
+              @if (general().updatedAt) { <span class="sub-text">শেষ পরিবর্তন: {{ general().updatedAt | date:'dd/MM/yyyy hh:mm a' }}</span> }
+              <button class="btn btn-primary" (click)="saveGeneral()" [disabled]="busy()">
+                <span class="material-symbols-outlined">save</span>{{ busy() ? 'সংরক্ষণ হচ্ছে...' : 'সংরক্ষণ করুন' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    }
+  }
+</div>

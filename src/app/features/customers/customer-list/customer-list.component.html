@@ -19,6 +19,14 @@
     </div>
   </div>
 
+  @if (notice(); as n) {
+  <div class="flow-alert mb-3" [ngClass]="n.type">
+    <span class="material-symbols-outlined">{{ n.type === 'success' ? 'check_circle' : (n.type === 'danger' ? 'error' : 'info') }}</span>
+    <span class="flex-1">{{ n.text }}</span>
+    <button type="button" class="close-btn" (click)="notice.set(null)"><span class="material-symbols-outlined">close</span></button>
+  </div>
+  }
+
   <!-- Search & Filter Bar -->
   <div class="card filter-card">
     <div class="search-box">
@@ -104,6 +112,11 @@
                     title="এডিট করুন">
                     <span class="material-symbols-outlined">edit</span>
                   </a>
+
+                  <!-- Audit History -->
+                  <button class="btn-action-icon btn-view" (click)="openHistory(customer)" title="পরিবর্তনের ইতিহাস (অডিট লগ)">
+                    <span class="material-symbols-outlined">history</span>
+                  </button>
 
                   <!-- Soft Delete Customer -->
                   @if (authService.canApproveLoans()) {
@@ -211,7 +224,11 @@
           </div>
           <div class="stat-pill">
             <span class="stat-label">ক্রেডিট রেটিং</span>
-            <span class="badge badge-paid">{{ selectedCustomerForDetails()!.creditScore || 'GOOD' }}</span>
+            <span class="badge" [ngClass]="getCreditScoreBadgeClass(selectedCustomerForDetails()!.creditScore)">{{
+              getCreditScoreLabel(selectedCustomerForDetails()!.creditScore) }}</span>
+            @if (selectedCustomerForDetails()!.blacklistReason) {
+            <span class="stat-label text-danger">{{ selectedCustomerForDetails()!.blacklistReason }}</span>
+            }
           </div>
         </div>
       </div>
@@ -305,6 +322,85 @@
           </div>
         </div>
       </div>
+
+      <!-- নমিনি, দল ও ভর্তি ফি -->
+      <div class="details-grid-two mt-2">
+        <div class="info-card">
+          <h5>
+            <span class="material-symbols-outlined">family_restroom</span>
+            নমিনি / উত্তরাধিকারী
+          </h5>
+          @if (selectedCustomerForDetails()!.nominees?.length) {
+          <div class="info-list">
+            @for (n of selectedCustomerForDetails()!.nominees!; track $index) {
+            <div class="info-item">
+              <span class="lbl">{{ n.name }} ({{ n.relation }})</span>
+              <span class="val">{{ n.sharePercent }}%@if (n.phone) { • {{ n.phone }} }@if (n.nidNumber) { • NID: {{ n.nidNumber }} }</span>
+            </div>
+            }
+          </div>
+          } @else {
+          <p class="text-muted mb-0">কোনো নমিনি নির্ধারিত নেই।</p>
+          }
+        </div>
+        <div class="info-card">
+          <h5>
+            <span class="material-symbols-outlined">groups</span>
+            দল ও ভর্তি তথ্য
+          </h5>
+          <div class="info-list">
+            <div class="info-item">
+              <span class="lbl">দল নং:</span>
+              <span class="val">{{ selectedCustomerForDetails()!.groupNo ?? '—' }}@if (selectedCustomerForDetails()!.isGroupLeader) { <span class="badge badge-success">দলনেতা</span> }</span>
+            </div>
+            <div class="info-item">
+              <span class="lbl">ভর্তি ফি:</span>
+              <span class="val">৳ {{ (selectedCustomerForDetails()!.admissionFeePaid || 0) | number }}</span>
+            </div>
+            <div class="info-item">
+              <span class="lbl">পাসবুক ফি:</span>
+              <span class="val">৳ {{ (selectedCustomerForDetails()!.passbookFeePaid || 0) | number }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- স্থানান্তর ও ক্রেডিট স্কোর ইতিহাস -->
+      @if (selectedCustomerTransfers().length || selectedCustomerCreditHistory().length) {
+      <div class="details-grid-two mt-2 no-print">
+        <div class="info-card">
+          <h5>
+            <span class="material-symbols-outlined">move_up</span>
+            স্থানান্তর ইতিহাস
+          </h5>
+          @for (t of selectedCustomerTransfers(); track t.transferId) {
+          <div class="info-item">
+            <span class="lbl">{{ t.businessDate }}</span>
+            <span class="val">{{ getCenterName(t.fromCenterId) }} → <strong>{{ getCenterName(t.toCenterId) }}</strong>
+              ({{ getBranchName(t.toBranchId) }}, {{ getFieldOfficerName(t.toFieldOfficerId) }}) — {{ t.reason }}
+              <small class="text-muted">[{{ t.createdBy.name }}]</small></span>
+          </div>
+          } @empty {
+          <p class="text-muted mb-0">কোনো স্থানান্তর হয়নি।</p>
+          }
+        </div>
+        <div class="info-card">
+          <h5>
+            <span class="material-symbols-outlined">credit_score</span>
+            ক্রেডিট স্কোর ইতিহাস
+          </h5>
+          @for (h of selectedCustomerCreditHistory(); track h.timestamp) {
+          <div class="info-item">
+            <span class="lbl">{{ h.timestamp | date:'dd/MM/yy' }}</span>
+            <span class="val">{{ h.from || 'GOOD' }} → <strong>{{ h.to }}</strong> — {{ h.reason }}
+              <small class="text-muted">[{{ h.actor.name }}]</small></span>
+          </div>
+          } @empty {
+          <p class="text-muted mb-0">কোনো পরিবর্তন হয়নি।</p>
+          }
+        </div>
+      </div>
+      }
 
       <!-- ========================================== -->
       <!-- LOANS SECTION: ALL TAKEN LOANS HISTORY -->
@@ -760,6 +856,25 @@
     </div>
 
     <div class="modal-footer no-print py-2">
+      <button class="btn btn-sm btn-outline-secondary" (click)="openHistory(selectedCustomerForDetails()!)"
+        title="পরিবর্তনের ইতিহাস (অডিট লগ)">
+        <span class="material-symbols-outlined">history</span>
+        <span>হিস্ট্রি</span>
+      </button>
+      @if (authService.canTransferMember()) {
+      <button class="btn btn-sm btn-outline-primary" (click)="openTransferModal(selectedCustomerForDetails()!)"
+        title="সদস্যকে অন্য সমিতি / শাখা / মাঠকর্মীর কাছে স্থানান্তর">
+        <span class="material-symbols-outlined">move_up</span>
+        <span>স্থানান্তর</span>
+      </button>
+      }
+      @if (canChangeCreditScore()) {
+      <button class="btn btn-sm btn-outline-secondary" (click)="openCreditModal(selectedCustomerForDetails()!)"
+        title="ক্রেডিট স্কোর / কালো তালিকা">
+        <span class="material-symbols-outlined">credit_score</span>
+        <span>ক্রেডিট স্কোর</span>
+      </button>
+      }
       <span class="me-auto"></span>
       <button class="btn btn-sm btn-secondary" (click)="closeCustomerDetails()">বন্ধ করুন</button>
       <button class="btn btn-sm btn-outline-secondary" (click)="openIdCard(selectedCustomerForDetails()!)"
@@ -977,7 +1092,8 @@
 @if (selectedCustomerForHistory()) {
 <app-history-modal
   [title]="'গ্রাহক #' + selectedCustomerForHistory()!.customerId + ' (' + selectedCustomerForHistory()!.fullName + ') এডিট হিস্ট্রি'"
-  [historyList]="selectedCustomerForHistory()!.history" (close)="closeHistory()">
+  [historyList]="selectedCustomerForHistory()!.history" entityType="customers"
+  [entityId]="selectedCustomerForHistory()!.customerId" (close)="closeHistory()">
 </app-history-modal>
 }
 
@@ -1006,6 +1122,12 @@
           placeholder="যেমন: সদস্য এলাকা পরিবর্তন করেছেন বা ব্যবসা গুটিয়ে নিয়েছেন..."
           [(ngModel)]="deleteReason"></textarea>
       </div>
+      @if (notice()?.type === 'warning') {
+      <div class="flow-alert warning mt-2">
+        <span class="material-symbols-outlined">warning</span>
+        <span>{{ notice()!.text }}</span>
+      </div>
+      }
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" (click)="closeDeleteModal()">বাতিল</button>
@@ -1152,6 +1274,13 @@
             [(ngModel)]="discloseReason"></textarea>
         </div>
       </div>
+
+      @if (discloseError()) {
+      <div class="flow-alert danger">
+        <span class="material-symbols-outlined">error</span>
+        <span>{{ discloseError() }}</span>
+      </div>
+      }
     </div>
 
     <div class="modal-footer">
@@ -1237,6 +1366,17 @@
           placeholder="যেমন: বিশেষ সঞ্চয় জমা, ভুল এন্ট্রি সংশোধন, আংশিক সঞ্চয় উত্তোলন..."
           [(ngModel)]="savingsEditReason"></textarea>
       </div>
+
+      @if (savingsEditAdjustmentType === 'DIRECT') {
+      <p class="help-text mt-2">সরাসরি সংশোধন পার্থক্যের পরিমাণে একটি "সঞ্চয় সমন্বয় (ADJUSTMENT)" লেনদেন হিসেবে খতিয়ানে লেখা হবে।</p>
+      }
+
+      @if (savingsError()) {
+      <div class="flow-alert danger mt-2">
+        <span class="material-symbols-outlined">error</span>
+        <span>{{ savingsError() }}</span>
+      </div>
+      }
     </div>
 
     <div class="modal-footer">
@@ -1250,6 +1390,141 @@
         <span class="material-symbols-outlined">save</span>
         <span>সঞ্চয় ব্যালেন্স সংরক্ষণ করুন</span>
         }
+      </button>
+    </div>
+  </div>
+</div>
+}
+
+<!-- ========================================== -->
+<!-- 5. MEMBER TRANSFER MODAL (সদস্য স্থানান্তর) -->
+<!-- ========================================== -->
+@if (transferCustomer(); as tc) {
+<div class="modal-backdrop no-print" (click)="closeTransferModal()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="header-info">
+        <h3>
+          <span class="material-symbols-outlined title-icon text-primary">move_up</span>
+          <span>সদস্য স্থানান্তর (Member Transfer)</span>
+        </h3>
+        <p class="sub-text">
+          <strong>{{ tc.fullName }}</strong> (#{{ tc.customerId }}) • বর্তমান: {{ getCenterName(tc.centerId) }}, {{
+          getBranchName(tc.branchId) }}, {{ getFieldOfficerName(tc.assignedFieldOfficerId) }}
+        </p>
+      </div>
+      <button class="close-btn" (click)="closeTransferModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group mb-3">
+        <label>নতুন শাখা <span class="required">*</span></label>
+        <select class="form-control" [ngModel]="transferBranchId()" (ngModelChange)="onTransferBranchChange($event)">
+          @for (b of branches(); track b.branchId) {
+          <option [ngValue]="b.branchId">{{ b.name }} ({{ b.branchCode }})</option>
+          }
+        </select>
+      </div>
+      <div class="form-group mb-3">
+        <label>নতুন সমিতি / রুট <span class="required">*</span></label>
+        <select class="form-control" [ngModel]="transferCenterId()" (ngModelChange)="onTransferCenterChange($event)">
+          @for (c of transferCenters(); track c.centerId) {
+          <option [ngValue]="c.centerId">{{ c.name }}{{ c.centerId === tc.centerId ? ' (বর্তমান)' : '' }}</option>
+          } @empty {
+          <option [ngValue]="null" disabled>এই শাখায় কোনো সমিতি নেই</option>
+          }
+        </select>
+      </div>
+      <div class="form-group mb-3">
+        <label>নতুন মাঠকর্মী <span class="required">*</span></label>
+        <select class="form-control" [ngModel]="transferFoId()" (ngModelChange)="transferFoId.set($event)">
+          @if (transferFoId() !== null && !transferOfficers().some(o => o.userId === transferFoId())) {
+          <option [ngValue]="transferFoId()">{{ getFieldOfficerName(transferFoId()!) }} (সমিতির নির্ধারিত)</option>
+          }
+          @for (o of transferOfficers(); track o.userId) {
+          <option [ngValue]="o.userId">{{ o.name }} (#{{ o.userId }})</option>
+          }
+        </select>
+      </div>
+      <div class="form-group">
+        <label>স্থানান্তরের কারণ <span class="required">*</span></label>
+        <textarea class="form-control" rows="2" placeholder="যেমন: সদস্য বাসা পরিবর্তন করেছেন..."
+          [(ngModel)]="transferReason"></textarea>
+      </div>
+      <p class="help-text mt-2">চলমান ঋণ ও অপরিশোধিত কিস্তি নতুন সমিতি/মাঠকর্মীর অধীনে চলে যাবে। মাঠকর্মীর হাতে জমা-না-হওয়া টাকা থাকলে আগে ক্যাশ ক্লোজিং করতে হবে।</p>
+      @if (transferError()) {
+      <div class="flow-alert danger mt-2">
+        <span class="material-symbols-outlined">error</span>
+        <span>{{ transferError() }}</span>
+      </div>
+      }
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeTransferModal()" [disabled]="transferSubmitting()">বাতিল</button>
+      <button class="btn btn-primary" (click)="confirmTransfer()" [disabled]="transferSubmitting()">
+        <span class="material-symbols-outlined">{{ transferSubmitting() ? 'sync' : 'check_circle' }}</span>
+        <span>{{ transferSubmitting() ? 'স্থানান্তর হচ্ছে...' : 'স্থানান্তর নিশ্চিত করুন' }}</span>
+      </button>
+    </div>
+  </div>
+</div>
+}
+
+<!-- ========================================== -->
+<!-- 6. CREDIT SCORE / BLACKLIST MODAL -->
+<!-- ========================================== -->
+@if (creditCustomer(); as cc) {
+<div class="modal-backdrop no-print" (click)="closeCreditModal()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="header-info">
+        <h3>
+          <span class="material-symbols-outlined title-icon text-primary">credit_score</span>
+          <span>ক্রেডিট স্কোর / কালো তালিকা</span>
+        </h3>
+        <p class="sub-text">
+          <strong>{{ cc.fullName }}</strong> (#{{ cc.customerId }}) • বর্তমান:
+          <span class="badge" [ngClass]="getCreditScoreBadgeClass(cc.creditScore)">{{ getCreditScoreLabel(cc.creditScore) }}</span>
+        </p>
+      </div>
+      <button class="close-btn" (click)="closeCreditModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group mb-3">
+        <label>নতুন ক্রেডিট স্কোর <span class="required">*</span></label>
+        <select class="form-control" [(ngModel)]="creditScoreValue">
+          @for (o of creditScoreOptions; track o.value) {
+          <option [ngValue]="o.value">{{ o.label }}</option>
+          }
+        </select>
+      </div>
+      @if (creditScoreValue === 'BLACKLISTED') {
+      <div class="flow-alert warning mb-3">
+        <span class="material-symbols-outlined">block</span>
+        <span>কালো তালিকাভুক্ত সদস্যকে নতুন ঋণ দেওয়া যাবে না। কারণটি সদস্যের প্রোফাইলে দেখানো হবে।</span>
+      </div>
+      }
+      <div class="form-group">
+        <label>কারণ <span class="required">*</span></label>
+        <textarea class="form-control" rows="2" placeholder="যেমন: পরপর ৮ কিস্তি খেলাপি, জামিনদার অসহযোগী..."
+          [(ngModel)]="creditReason"></textarea>
+      </div>
+      @if (creditError()) {
+      <div class="flow-alert danger mt-2">
+        <span class="material-symbols-outlined">error</span>
+        <span>{{ creditError() }}</span>
+      </div>
+      }
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeCreditModal()" [disabled]="creditSubmitting()">বাতিল</button>
+      <button class="btn" [class.btn-danger]="creditScoreValue === 'BLACKLISTED'" [class.btn-primary]="creditScoreValue !== 'BLACKLISTED'"
+        (click)="confirmCreditScore()" [disabled]="creditSubmitting()">
+        <span class="material-symbols-outlined">save</span>
+        <span>{{ creditSubmitting() ? 'সংরক্ষণ হচ্ছে...' : 'স্কোর সংরক্ষণ করুন' }}</span>
       </button>
     </div>
   </div>

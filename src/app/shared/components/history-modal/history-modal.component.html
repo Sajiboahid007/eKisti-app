@@ -11,14 +11,17 @@
     </div>
 
     <div class="modal-body">
-      @if (!historyList || historyList.length === 0) {
+      @if (loadingLogs()) {
+        <p class="text-muted">সম্পূর্ণ অডিট লগ লোড হচ্ছে...</p>
+      }
+      @if (entries().length === 0 && !loadingLogs()) {
         <div class="empty-history">
           <span class="material-symbols-outlined">history_toggle_off</span>
           <p>কোনো পূর্ববর্তী এডিট হিস্ট্রি পাওয়া যায়নি।</p>
         </div>
       } @else {
         <div class="timeline">
-          @for (entry of historyList; track entry.historyId) {
+          @for (entry of entries(); track $index) {
             <div class="timeline-item">
               <div class="timeline-dot"></div>
               <div class="timeline-content">

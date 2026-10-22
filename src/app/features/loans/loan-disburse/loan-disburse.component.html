@@ -4,19 +4,37 @@
       <div class="breadcrumb">
         <a routerLink="/loans">ঋণ হিসাব</a>
         <span class="material-symbols-outlined separator">chevron_right</span>
-        <span>নতুন ঋণ বিতরণ</span>
+        <span>{{ mode() === 'APPLY' ? 'নতুন ঋণ আবেদন' : 'অনুমোদিত ঋণ বিতরণ' }}</span>
       </div>
-      <h2>নতুন ঋণ অনুমোদন ও বিতরণ (Disbursement)</h2>
-      <p class="sub-text">ঋণের শর্তাবলি পূরণ করুন, কিস্তি ক্যালকুলেশন দেখুন এবং অনুমোদনের সাথে সাথে মানি রসিদ প্রিন্ট করুন</p>
+      @if (mode() === 'APPLY') {
+        <h2>নতুন ঋণ আবেদন (Loan Application)</h2>
+        <p class="sub-text">আবেদন জমার পর মাঠ যাচাই → শাখা ব্যবস্থাপকের অনুমোদন → ক্যাশিয়ারের বিতরণ (Maker-Checker)</p>
+      } @else {
+        <h2>অনুমোদিত ঋণ বিতরণ (Disbursement)</h2>
+        <p class="sub-text">ভল্ট থেকে টাকা প্রদান, ছুটি বাদে কিস্তি শিডিউল তৈরি ও বিতরণ ভাউচার প্রিন্ট</p>
+      }
     </div>
     <div class="header-right no-print">
       <button type="button" class="btn btn-secondary" (click)="previewReceipt()">
         <span class="material-symbols-outlined">visibility</span>
         <span>খসড়া রসিদ প্রিভিউ</span>
       </button>
-      <a routerLink="/loans" class="btn btn-secondary">ফিরে যান</a>
+      <a [routerLink]="mode() === 'APPLY' ? '/loans' : '/loans/approvals'" class="btn btn-secondary">ফিরে যান</a>
     </div>
   </div>
+
+  @if (errorMessage()) {
+    <div class="flow-alert danger" role="alert">
+      <span class="material-symbols-outlined">error</span>
+      <span class="pre-line">{{ errorMessage() }}</span>
+    </div>
+  }
+  @if (successMessage()) {
+    <div class="flow-alert success" role="status">
+      <span class="material-symbols-outlined">check_circle</span>
+      <span>{{ successMessage() }}</span>
+    </div>
+  }
 
   @if (loading()) {
     <app-skeleton variant="form" [rows]="8" label="গ্রাহক ও ঋণ প্রোডাক্ট লোড হচ্ছে..." />
@@ -31,7 +49,50 @@
         </div>
       </div>
       <div class="card-body">
-        <form (ngSubmit)="onDisburse()">
+        @if (mode() === 'DISBURSE' && approvedLoan(); as al) {
+          <div class="approval-trail">
+            <div class="trail-head">
+              <strong>{{ al.loanAccountNo }} — {{ al.customerName }}</strong>
+              <span class="badge" [class.badge-paid]="al.status === 'APPROVED'" [class.badge-warning]="al.status !== 'APPROVED'">{{ al.status }}</span>
+            </div>
+            <div class="trail-steps">
+              <div class="trail-step done"><span class="material-symbols-outlined">edit_note</span>আবেদন: {{ al.appliedByName || '—' }} ({{ al.applicationDate }})</div>
+              <div class="trail-step" [class.done]="!!al.verifiedByName"><span class="material-symbols-outlined">fact_check</span>মাঠ যাচাই: {{ al.verifiedByName || '—' }}@if (al.verificationNotes) { — {{ al.verificationNotes }} }</div>
+              <div class="trail-step" [class.done]="!!al.approvedByName"><span class="material-symbols-outlined">verified</span>অনুমোদন: {{ al.approvedByName || '—' }} {{ al.approvedDate || '' }}</div>
+            </div>
+            <div class="trail-terms">
+              ৳{{ al.principalAmount | number }} • {{ al.totalInstallments }} কিস্তি ({{ frequencyLabel() }}) • {{ profitTypeLabel() }} {{ profitRate() }}% • {{ al.loanCycle || 1 }}ম ঋণ চক্র • উদ্দেশ্য: {{ al.purposeOfLoan }}
+            </div>
+          </div>
+          <form (ngSubmit)="onSubmit()">
+            <div class="form-row">
+              <div class="form-group">
+                <label>১ম কিস্তির পরিশোধ তারিখ <span class="required">*</span></label>
+                <input type="date" class="form-control" [ngModel]="firstInstallmentDueDate()" (ngModelChange)="firstInstallmentDueDate.set($event)" name="firstDueDateDisb" required />
+                <div class="form-hint due-day-hint"><strong>{{ firstDueLabel() }}</strong> • {{ scheduleDayLabel() }}</div>
+                @if (meetingDayMismatch()) {
+                  <button type="button" class="link-fix" (click)="alignFirstDueToMeeting()">⚠ {{ meetingDayMismatch() }}</button>
+                }
+                <div class="form-hint">ছুটির দিন হলে স্বয়ংক্রিয়ভাবে পরের কর্মদিবসে সরবে</div>
+              </div>
+              <div class="form-group">
+                <label class="label-with-tag"><span>ঋণ হিসাব নং</span><span class="badge-optional">ঐচ্ছিক</span></label>
+                <input type="text" class="form-control font-mono font-bold" [ngModel]="customLoanAccountNo()" (ngModelChange)="customLoanAccountNo.set($event)" name="customLoanAccountNoDisb" [placeholder]="al.loanAccountNo" />
+              </div>
+            </div>
+            <div class="info-note">
+              <span class="material-symbols-outlined note-icon">account_balance</span>
+              <span>বিতরণে শাখার ভল্ট থেকে ৳{{ al.principalAmount | number }} বের হবে এবং ফি ৳{{ (al.formFeePaid || 0) + (al.insuranceFeePaid || 0) | number }} জমা হবে। ভল্টে পর্যাপ্ত নগদ না থাকলে বিতরণ হবে না।</span>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary btn-lg" [disabled]="submitting() || al.status !== 'APPROVED' || !authService.canDisburseLoan()">
+                <span class="material-symbols-outlined">payments</span>
+                <span>{{ submitting() ? 'বিতরণ প্রক্রিয়াধীন...' : 'বিতরণ নিশ্চিত করুন ও ভাউচার তৈরি' }}</span>
+              </button>
+            </div>
+          </form>
+        } @else {
+        <form (ngSubmit)="onSubmit()">
           <div class="form-row">
             <!-- Select Customer -->
             <div class="form-group flex-2">
@@ -46,23 +107,34 @@
               <div class="form-hint">গ্রাহকের নাম বা আইডি দেখে নির্বাচন করুন</div>
             </div>
 
-            <!-- Custom / Set Loan Account Number -->
+            <!-- Loan product -->
             <div class="form-group flex-1">
-              <label class="label-with-tag">
-                <span>ঋণ হিসাব নং (Loan No)</span>
-                <span class="badge-optional">ঐচ্ছিক</span>
-              </label>
-              <input 
-                type="text" 
-                class="form-control font-mono font-bold" 
-                [ngModel]="customLoanAccountNo()" 
-                (ngModelChange)="customLoanAccountNo.set($event)" 
-                name="customLoanAccountNo" 
-                [placeholder]="'LN-' + estimatedNextLoanId() + ' (Auto)'" 
-              />
-              <div class="form-hint">ফাঁকা রাখলে স্বয়ংক্রিয়ভাবে তৈরি হবে</div>
+              <label>ঋণ প্রোডাক্ট <span class="required">*</span></label>
+              <select class="form-control" [ngModel]="selectedProductId()" (ngModelChange)="onProductChange($event)" name="productSelect">
+                @for (p of products(); track p.productId) {
+                  <option [ngValue]="p.productId">{{ p.productName }}</option>
+                }
+              </select>
+              @if (selectedProduct(); as sp) {
+                <div class="form-hint">৳{{ sp.minAmount | number }}–৳{{ sp.maxAmount | number }}@if (sp.graceDays) { • গ্রেস {{ sp.graceDays }} দিন }</div>
+              }
             </div>
           </div>
+
+          <!-- Eligibility: loan cycle, ceiling, active / overlapping loans -->
+          @if (eligibility(); as el) {
+            <div class="eligibility-box" [class.blocked]="el.blockers.length > 0">
+              <div class="elig-head">
+                <span class="material-symbols-outlined">{{ el.blockers.length ? 'block' : 'verified_user' }}</span>
+                <strong>{{ el.loanCycle }}ম ঋণ চক্র</strong>
+                <span>সর্বোচ্চ সীমা: ৳{{ el.ceiling | number }}</span>
+                @if (checkingEligibility()) { <span class="text-muted">যাচাই হচ্ছে...</span> }
+              </div>
+              @for (b of el.blockers; track b) { <div class="elig-line danger">✗ {{ b }}</div> }
+              @for (w of el.warnings; track w) { <div class="elig-line warning">⚠ {{ w }}</div> }
+              @if (principalAmount() > el.ceiling) { <div class="elig-line danger">✗ আবেদিত টাকা এই চক্রের সীমার বেশি</div> }
+            </div>
+          }
 
           <!-- Core Loan Configuration (Principal & Installment Tenure - Up / Down Stacked Hero Layout) -->
           <div class="loan-core-box">
@@ -200,15 +272,21 @@
                   <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'ANNUAL'" (click)="setProfitType('ANNUAL')">
                     বাৎসরিক লাভ
                   </button>
+                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'DECLINING'" (click)="setProfitType('DECLINING')">
+                    হ্রাসমান
+                  </button>
                 </div>
               </div>
               <input type="number" class="form-control" [ngModel]="profitRate()" (ngModelChange)="setProfitRate($event)" name="profitRate" step="0.5" min="0" />
               <div class="form-hint">
                 @if (profitCalculationType() === 'FLAT') {
                   মোট এককালীন ফ্ল্যাট লাভ: <strong>{{ effectiveProfitRate() | number:'1.1-2' }}%</strong> (৳{{ profitAmount() | number }})
-                } @else {
+                } @else if (profitCalculationType() === 'ANNUAL') {
                   বাৎসরিক {{ profitRate() }}% হারে {{ totalInstallments() }} কিস্তির কার্যকর লাভ: <strong>{{ effectiveProfitRate() | number:'1.1-2' }}%</strong> (৳{{ profitAmount() | number }})
+                } @else {
+                  বার্ষিক {{ profitRate() }}% হ্রাসমান স্থিতির ওপর — মোট লাভ ৳{{ profitAmount() | number }}
                 }
+                <div>সমতুল্য বার্ষিক হ্রাসমান হার (ডিসক্লোজার): <strong>{{ effectiveAnnualRate() | number:'1.1-2' }}%</strong></div>
               </div>
             </div>
 
@@ -225,12 +303,22 @@
             <div class="form-group">
               <label>১ম কিস্তির পরিশোধ তারিখ <span class="required">*</span></label>
               <input type="date" class="form-control" [ngModel]="firstInstallmentDueDate()" (ngModelChange)="firstInstallmentDueDate.set($event)" name="firstDueDate" required />
+              <div class="form-hint due-day-hint"><strong>{{ firstDueLabel() }}</strong> • {{ scheduleDayLabel() }}</div>
+              @if (meetingDayMismatch()) {
+                <button type="button" class="link-fix" (click)="alignFirstDueToMeeting()">⚠ {{ meetingDayMismatch() }}</button>
+              }
             </div>
 
             <!-- Form Fee -->
             <div class="form-group">
-              <label>ভর্তি ও ফরম ফি (টাকা)</label>
-              <input type="number" class="form-control" [ngModel]="formFeePaid()" (ngModelChange)="formFeePaid.set(+$event)" name="formFee" />
+              <label>ঋণ ফরম ফি (টাকা)</label>
+              <input type="number" class="form-control" [ngModel]="formFeePaid()" (ngModelChange)="formFeePaid.set(+$event)" name="formFee" min="0" />
+            </div>
+
+            <!-- Insurance / risk fund -->
+            <div class="form-group">
+              <label>বীমা / ঋণ ঝুঁকি তহবিল (টাকা)</label>
+              <input type="number" class="form-control" [ngModel]="insuranceFeePaid()" (ngModelChange)="insuranceFeePaid.set(+$event)" name="insuranceFee" min="0" />
             </div>
           </div>
 
@@ -241,12 +329,14 @@
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary btn-lg" [disabled]="submitting()">
+            <button type="submit" class="btn btn-primary btn-lg"
+                    [disabled]="submitting() || !authService.canApplyLoan() || (eligibility()?.blockers?.length || 0) > 0 || principalAmount() > (eligibility()?.ceiling ?? principalAmount())">
               <span class="material-symbols-outlined">send</span>
-              <span>{{ submitting() ? 'বিতরণ প্রক্রিয়াধীন...' : 'ঋণ অনুমোদন ও বিতরণ সম্পন্ন করুন' }}</span>
+              <span>{{ submitting() ? 'জমা হচ্ছে...' : 'ঋণ আবেদন জমা দিন' }}</span>
             </button>
           </div>
         </form>
+        }
       </div>
     </div>
 
@@ -267,7 +357,7 @@
           </div>
 
           <div class="calc-row">
-            <span class="calc-label">মোট সার্ভিস চার্জ / লাভ ({{ effectiveProfitRate() | number:'1.1-2' }}% - {{ profitCalculationType() === 'FLAT' ? 'ফ্ল্যাট' : 'বাৎসরিক' }}):</span>
+            <span class="calc-label">মোট সার্ভিস চার্জ / লাভ ({{ effectiveProfitRate() | number:'1.1-2' }}% - {{ profitTypeLabel() }}):</span>
             <span class="calc-val amount-bdt text-primary font-bold">{{ profitAmount() | number }}</span>
           </div>
 
@@ -276,6 +366,17 @@
           <div class="calc-row highlight-row">
             <span class="calc-label font-bold">মোট পরিশোধযোগ্য টাকা:</span>
             <span class="calc-val amount-bdt font-bold text-success">{{ totalRepayable() | number }}</span>
+          </div>
+
+          @if (lastInstallmentAmount() !== installmentAmount()) {
+            <div class="calc-row">
+              <span class="calc-label">শেষ কিস্তি (রাউন্ডিং সমন্বয়):</span>
+              <span class="calc-val amount-bdt">{{ lastInstallmentAmount() | number }}</span>
+            </div>
+          }
+          <div class="calc-row">
+            <span class="calc-label">সমতুল্য বার্ষিক হার (হ্রাসমান):</span>
+            <span class="calc-val font-bold">{{ effectiveAnnualRate() | number:'1.1-2' }}%</span>
           </div>
 
           <div class="calc-row">
@@ -315,21 +416,22 @@
               <span class="material-symbols-outlined meta-icon">event</span>
               <div>
                 <div class="meta-label">১ম কিস্তির তারিখ:</div>
-                <div class="meta-val">{{ firstInstallmentDueDate() }}</div>
+                <div class="meta-val">{{ firstDueLabel() }}</div>
+                <div class="meta-sub">{{ scheduleDayLabel() }}</div>
               </div>
             </div>
             <div class="meta-item">
               <span class="material-symbols-outlined meta-icon">event_available</span>
               <div>
                 <div class="meta-label">সমাপ্তির সম্ভাব্য তারিখ:</div>
-                <div class="meta-val">{{ expectedClosingDate() }}</div>
+                <div class="meta-val">{{ closingLabel() }}</div>
               </div>
             </div>
           </div>
 
           <div class="info-note">
             <span class="material-symbols-outlined note-icon">info</span>
-            <span>অনুমোদন বাটনে চাপলে সিস্টেমে স্বয়ংক্রিয়ভাবে {{ totalInstallments() }} টি কিস্তির শিডিউল তৈরি হবে এবং প্রিন্ট করার জন্য অফিশিয়াল মানি রসিদ পাওয়া যাবে।</span>
+            <span>সাপ্তাহিক ছুটি ও সরকারি ছুটির দিন বাদ দিয়ে কিস্তির তারিখ নির্ধারিত হয়। বিতরণের সময় {{ totalInstallments() }} টি কিস্তির শিডিউল তৈরি হবে ও ভাউচার প্রিন্ট করা যাবে।</span>
           </div>
         </div>
       </div>
@@ -468,19 +570,19 @@
 
             <div class="vf-row">
               <span class="col-desc">বিতরণকৃত মূল ঋণ (আসল টাকা)</span>
-              <span class="col-val amount-bdt text-right font-bold">৳ {{ selectedReceiptForPrint()!.principalAmount | number }}</span>
+              <span class="col-val amount-bdt text-right font-bold">{{ selectedReceiptForPrint()!.principalAmount | number }}</span>
             </div>
 
             <div class="vf-row">
               <span class="col-desc">
-                সার্ভিস চার্জ / লাভ ({{ selectedReceiptForPrint()!.effectiveProfitRate | number:'1.1-2' }}% - {{ selectedReceiptForPrint()!.profitType === 'FLAT' ? 'ফ্ল্যাট লাভ' : 'বাৎসরিক হার' }})
+                সার্ভিস চার্জ / লাভ ({{ selectedReceiptForPrint()!.effectiveProfitRate | number:'1.1-2' }}% - {{ selectedReceiptForPrint()!.profitType === 'FLAT' ? 'ফ্ল্যাট লাভ' : selectedReceiptForPrint()!.profitType === 'ANNUAL' ? 'বাৎসরিক হার' : 'হ্রাসমান স্থিতি' }}; সমতুল্য বার্ষিক হার {{ selectedReceiptForPrint()!.effectiveAnnualRate | number:'1.1-2' }}%)
               </span>
-              <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.profitAmount | number }}</span>
+              <span class="col-val amount-bdt text-right">{{ selectedReceiptForPrint()!.profitAmount | number }}</span>
             </div>
 
             <div class="vf-row highlight-sum-row">
               <span class="col-desc font-bold">মোট পরিশোধযোগ্য ঋণের টাকা (আসল + লাভ)</span>
-              <span class="col-val amount-bdt text-right font-bold text-success">৳ {{ selectedReceiptForPrint()!.totalRepayable | number }}</span>
+              <span class="col-val amount-bdt text-right font-bold text-success">{{ selectedReceiptForPrint()!.totalRepayable | number }}</span>
             </div>
 
             <div class="vf-row">
@@ -491,13 +593,13 @@
             </div>
 
             <div class="vf-row">
-              <span class="col-desc">প্রতি কিস্তির মূল টাকা (আসল + লাভ)</span>
-              <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.installmentAmount | number }}</span>
+              <span class="col-desc">প্রতি কিস্তির মূল টাকা (আসল + লাভ)@if (selectedReceiptForPrint()!.lastInstallmentAmount !== selectedReceiptForPrint()!.installmentAmount) { — শেষ কিস্তি ৳{{ selectedReceiptForPrint()!.lastInstallmentAmount | number }} }</span>
+              <span class="col-val amount-bdt text-right">{{ selectedReceiptForPrint()!.installmentAmount | number }}</span>
             </div>
 
             <div class="vf-row">
               <span class="col-desc">প্রতি কিস্তির বাধ্যতামূলক সঞ্চয় জমা</span>
-              <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.savingsPerInstallment | number }}</span>
+              <span class="col-val amount-bdt text-right">{{ selectedReceiptForPrint()!.savingsPerInstallment | number }}</span>
             </div>
 
             <div class="vf-row total-collection-row">
@@ -505,18 +607,19 @@
                 <strong>প্রতি কিস্তিতে মোট আদায়যোগ্য টাকা (কিস্তি + সঞ্চয়)</strong>
                 <span class="sub-caption">গ্রাহক মাঠ কর্মকর্তার নিকট প্রতি কিস্তিতে এই পরিমাণ টাকা জমা দিবেন</span>
               </span>
-              <span class="col-val amount-bdt text-right big-amount">৳ {{ selectedReceiptForPrint()!.totalCollectionPerCycle | number }}</span>
+              <span class="col-val amount-bdt text-right big-amount">{{ selectedReceiptForPrint()!.totalCollectionPerCycle | number }}</span>
             </div>
 
             <div class="vf-row meta-dates-row">
-              <span class="col-desc">১ম কিস্তির পরিশোধ তারিখ: <strong>{{ selectedReceiptForPrint()!.firstInstallmentDueDate }}</strong></span>
+              <span class="col-desc">১ম কিস্তি: <strong>{{ selectedReceiptForPrint()!.firstInstallmentDayLabel || selectedReceiptForPrint()!.firstInstallmentDueDate }}</strong>
+                — এরপর <strong>{{ selectedReceiptForPrint()!.scheduleDayLabel }}</strong>@if (selectedReceiptForPrint()!.centerMeetingInfo) { <br><span class="voucher-sub">{{ selectedReceiptForPrint()!.centerMeetingInfo }}</span> }</span>
               <span class="col-val text-right">সমাপ্তির সম্ভাব্য তারিখ: <strong>{{ selectedReceiptForPrint()!.expectedClosingDate }}</strong></span>
             </div>
 
             @if (selectedReceiptForPrint()!.formFeePaid > 0) {
               <div class="vf-row">
                 <span class="col-desc">ভর্তি ও ফরম ফি বাবদ গ্রহণ</span>
-                <span class="col-val amount-bdt text-right">৳ {{ selectedReceiptForPrint()!.formFeePaid | number }}</span>
+                <span class="col-val amount-bdt text-right">{{ selectedReceiptForPrint()!.formFeePaid | number }}</span>
               </div>
             }
 
@@ -532,7 +635,7 @@
           <div class="voucher-notice">
             <span class="material-symbols-outlined notice-icon">verified_user</span>
             <p>
-              <strong>ঘোষণা ও নির্দেশিকা:</strong> আমি উপরোক্ত শর্তাবলি ও কিস্তির হিসাব সম্পূর্ণরূপে বুঝিয়া নগদ ঋণ গ্রহণ করিলাম। প্রতি {{ selectedReceiptForPrint()!.frequencyLabel }}-র নির্ধারিত তারিখে দায়িত্বপ্রাপ্ত মাঠ কর্মকর্তা <strong>{{ selectedReceiptForPrint()!.fieldOfficerName }}</strong> (মোবাইল: <strong>{{ selectedReceiptForPrint()!.fieldOfficerPhone }}</strong>) এর নিকট কিস্তি ও সঞ্চয় বাবদ মোট <strong>৳{{ selectedReceiptForPrint()!.totalCollectionPerCycle | number }}</strong> রসিদের মাধ্যমে যথাসময়ে পরিশোধ করিতে বাধ্য থাকিব।
+              <strong>ঘোষণা ও নির্দেশিকা:</strong> আমি উপরোক্ত শর্তাবলি ও কিস্তির হিসাব সম্পূর্ণরূপে বুঝিয়া নগদ ঋণ গ্রহণ করিলাম। {{ selectedReceiptForPrint()!.scheduleDayLabel || ('প্রতি ' + selectedReceiptForPrint()!.frequencyLabel + '-র নির্ধারিত তারিখে') }}দায়িত্বপ্রাপ্ত মাঠ কর্মকর্তা <strong>{{ selectedReceiptForPrint()!.fieldOfficerName }}</strong> (মোবাইল: <strong>{{ selectedReceiptForPrint()!.fieldOfficerPhone }}</strong>) এর নিকট কিস্তি ও সঞ্চয় বাবদ মোট <strong>৳{{ selectedReceiptForPrint()!.totalCollectionPerCycle | number }}</strong> রসিদের মাধ্যমে যথাসময়ে পরিশোধ করিতে বাধ্য থাকিব।
             </p>
           </div>
 

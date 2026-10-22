@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -15,6 +15,31 @@ import { LanguageService } from '../../../core/services/language.service';
 export class NavbarComponent {
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+
+  /** ব্রাউজারের সংযোগ অবস্থা — অফলাইনে পড়া ক্যাশ থেকে চলে, কিন্তু আদায়/বিতরণ (ট্রানজ্যাকশন) চলে না */
+  readonly isOnline = signal<boolean>(typeof navigator === 'undefined' ? true : navigator.onLine);
+
+  constructor() {
+    if (typeof window === 'undefined') return;
+    const update = () => this.isOnline.set(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    inject(DestroyRef).onDestroy(() => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    });
+  }
+
+  connectivityTooltip(): string {
+    if (this.lang.isBangla()) {
+      return this.isOnline()
+        ? 'অনলাইন — সব লেনদেন সক্রিয়। মনে রাখুন: আদায়/বিতরণ লেনদেনের জন্য ইন্টারনেট প্রয়োজন।'
+        : 'অফলাইন — তথ্য দেখা যাবে (লোকাল ক্যাশ), কিন্তু আদায়/বিতরণ লেনদেনের জন্য ইন্টারনেট প্রয়োজন।';
+    }
+    return this.isOnline()
+      ? 'Online — transactions (collection/disbursement) require internet.'
+      : 'Offline — viewing cached data only; transactions (collection/disbursement) require internet.';
+  }
 
   onUserSelect(event: Event) {
     const target = event.target as HTMLSelectElement;

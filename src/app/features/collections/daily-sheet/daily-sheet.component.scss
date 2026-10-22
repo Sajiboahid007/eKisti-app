@@ -177,15 +177,15 @@
   margin: 0;
 
   // Exact column width distributions (Sum = 100%)
-  .col-id { width: 8%; }
-  .col-name { width: 14%; }
+  /* ৯টি কলাম — মোট ১০০% */
+  .col-present { width: 11%; text-align: center; }
+  .col-name { width: 16%; }
   .col-account { width: 10%; }
-  .col-inst-no { width: 8%; }
-  .col-date { width: 9%; }
+  .col-inst-no { width: 12%; }
   .col-inst-amount { width: 10%; }
-  .col-savings { width: 9%; }
-  .col-total { width: 10%; }
-  .col-status { width: 10%; }
+  .col-savings { width: 8%; }
+  .col-total { width: 9%; }
+  .col-status { width: 12%; }
   .col-action { width: 12%; }
 
   th {
@@ -475,4 +475,178 @@
     color: #047857;
     font-weight: 800;
   }
+}
+
+/* ---------- Attendance, tools & advance ---------- */
+/* ---------- Toolbar (সদস্য সংখ্যা, হাজিরা, প্রিন্ট) — এক লাইনে ডানদিকে ---------- */
+.status-summary-bar { flex-wrap: wrap; }
+
+.sheet-tools {
+  margin-left: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 34px;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  background: var(--primary-subtle, #f0fdfa);
+  color: var(--primary, #0f766e);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+
+  .material-symbols-outlined { font-size: 18px; }
+  &.ok { background: var(--success-bg); color: #065f46; }
+}
+
+.tool-btn {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  background: #fff;
+  border: 1px solid var(--border-color, #e2e8f0);
+  color: var(--text-primary);
+
+  .material-symbols-outlined { font-size: 18px; }
+  &:hover:not(:disabled) { background: #f8fafc; }
+  &.saved, &.saved:disabled {
+    opacity: 1;
+    border-color: var(--success-border);
+    background: var(--success-bg);
+    color: #065f46;
+    cursor: default;
+  }
+}
+
+/* ---------- হাজিরা টগল ---------- */
+.attend-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 96px;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  .material-symbols-outlined { font-size: 17px; }
+
+  &.present {
+    background: var(--success-bg);
+    border-color: var(--success-border);
+    color: #047857;
+    &:hover { background: #d1fae5; }
+  }
+
+  &.absent {
+    background: var(--danger-bg);
+    border-color: var(--danger-border);
+    color: #b91c1c;
+    &:hover { background: #fee2e2; }
+  }
+
+  &:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+}
+
+@media (max-width: 900px) {
+  .sheet-tools { margin-left: 0; width: 100%; justify-content: flex-start; }
+  .attend-toggle { min-width: 0; span:not(.material-symbols-outlined) { display: none; } }
+}
+.advance-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin: 0.5rem 0; cursor: pointer; }
+
+/* ---------- Printable collection sheet (screen: hidden behind backdrop) ---------- */
+.print-sheet-host { background: #fff; align-items: flex-start; overflow: auto; }
+.collection-print-sheet {
+  width: 100%;
+  max-width: 1100px;
+  background: #fff;
+  padding: 1rem;
+  font-size: 12px;
+
+  .cps-head { margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; }
+  .cps-org { font-weight: 800; font-size: 15px; }
+  .cps-table {
+    width: 100%;
+    border-collapse: collapse;
+    th, td { border: 1px solid #334155; padding: 4px 6px; text-align: left; }
+    th { background: #f1f5f9; }
+    td:nth-child(9), td:nth-child(11) { min-width: 70px; }
+  }
+  .cps-signs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    margin-top: 3rem;
+    text-align: center;
+    > div { border-top: 1px solid #0f172a; padding-top: 0.25rem; }
+  }
+}
+
+/* দেয় কিস্তির নম্বর (সংক্ষিপ্ত রেঞ্জ) */
+.due-nos {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+
+  &.overdue { background: var(--danger-bg); color: #b91c1c; }
+}
+
+/* পরবর্তী কিস্তির বার ও তারিখ */
+.next-due {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  .material-symbols-outlined { font-size: 14px; }
+}
+
+.next-after {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.82rem;
+  .material-symbols-outlined { font-size: 18px; }
+  &.overdue { background: var(--warning-bg); color: #92400e; }
+  &.done { background: var(--success-bg); color: #065f46; }
+}
+
+.btn-savings-only {
+  margin-left: 0.3rem;
+  padding: 0.3rem 0.45rem;
+  .material-symbols-outlined { font-size: 18px; }
 }

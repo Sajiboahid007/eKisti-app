@@ -1,23 +1,30 @@
 import { Component, inject, OnInit, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
-import { Firestore, collection, getDocs, query, where } from '@angular/fire/firestore';
-import { Loan, InstallmentSchedule, CenterOrSamity, Branch } from '../../../core/models/database.models';
+import { ActivatedRoute, RouterModule } from '@angular/router';
+import { Loan, InstallmentSchedule, CenterOrSamity, Branch, Customer } from '../../../core/models/database.models';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
+import { FinanceService, PaymentMethod } from '../../../core/services/finance.service';
+import { CashService } from '../../../core/services/cash.service';
+import { MemberService } from '../../../core/services/member.service';
+import { CollectionView, amountForInstallments, collectionView, describeAllocation, nextOpenAfterPayment, upcomingInstallment } from '../../../core/finance/allocation';
+import { formatBnDate, todayDhaka, toDhakaDayKey } from '../../../core/finance/dates';
 import { AuthStateService, ActiveUserSession } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
+/**
+ * মাঠ শিটের একটি সারি — কিস্তির নির্ধারিত তারিখ অনুযায়ী (দৈনিক/সাপ্তাহিক/মাসিক সব ঋণে সঠিক),
+ * "শেষ আদায়ের পর ৭ দিন" নিয়ম নয়।
+ */
 export interface DailySheetItem {
   loan: Loan;
-  nextInstallment: InstallmentSchedule;
-  isCollectedToday: boolean;
-  isLockedForWeek: boolean;
-  daysRemainingForNext: number;
-  nextEligibleDate: string;
-  nextPendingInstallmentNo?: number;
-  lastPaidDateFormatted?: string;
+  customer?: Customer;
+  view: CollectionView;
+  installments: InstallmentSchedule[];
+  collectedTodayAmount: number;
+  /** আজকের পরের প্রথম কিস্তি (পরবর্তী কিস্তি কবে) */
+  upcoming: InstallmentSchedule | null;
 }
 
 @Component({
@@ -28,8 +35,11 @@ export interface DailySheetItem {
   styleUrl: './daily-sheet.component.scss'
 })
 export class DailySheetComponent implements OnInit {
-  private firestore = inject(Firestore);
   private kistiService = inject(KistiDatabaseService);
+  private finance = inject(FinanceService);
+  private cashService = inject(CashService);
+  private memberService = inject(MemberService);
+  private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
 
@@ -43,16 +53,40 @@ export class DailySheetComponent implements OnInit {
   }
   readonly allCenters = signal<CenterOrSamity[]>([]);
   readonly filteredCenters = signal<CenterOrSamity[]>([]);
-  readonly selectedCenterId = signal<number>(101);
+  readonly selectedCenterId = signal<number>(0);
   readonly sheetItems = signal<DailySheetItem[]>([]);
   readonly loading = signal<boolean>(true);
 
+  readonly today = todayDhaka();
+  readonly notice = signal<{ kind: 'success' | 'danger'; text: string } | null>(null);
+
   // Quick Collect Modal state
-  activeItemForCollect = signal<DailySheetItem | null>(null);
-  collectAmount: number = 600;
-  collectSavings: number = 50;
-  collectMethod: 'CASH' | 'BKASH' | 'NAGAD' = 'CASH';
-  isProcessing: boolean = false;
+  readonly activeItemForCollect = signal<DailySheetItem | null>(null);
+  readonly collectAmount = signal<number>(0);
+  readonly collectSavings = signal<number>(0);
+  readonly collectMethod = signal<PaymentMethod>('CASH');
+  readonly collectTrxId = signal<string>('');
+  readonly allowAdvance = signal<boolean>(false);
+  readonly isProcessing = signal<boolean>(false);
+  readonly collectError = signal<string>('');
+  readonly selectedCount = signal<number>(1);
+
+  // সাপ্তাহিক মিটিং হাজিরা
+  // শুধু সঞ্চয় জমা (কিস্তি ছাড়া) — মাঠ রসিদ, টাকা মাঠকর্মীর হাতে
+  readonly savingsItem = signal<DailySheetItem | null>(null);
+  readonly savingsAmount = signal<number>(0);
+  readonly savingsMethod = signal<PaymentMethod>('CASH');
+  readonly savingsBusy = signal<boolean>(false);
+  readonly savingsError = signal<string>('');
+
+  readonly present = signal<Set<number>>(new Set());
+  readonly attendanceSaved = signal<boolean>(false);
+  readonly printing = signal<boolean>(false);
+  readonly memberCount = computed(() => new Set(this.sheetItems().map(i => i.loan.customerId)).size);
+  readonly presentCount = computed(() => {
+    const present = this.present();
+    return new Set(this.sheetItems().map(i => i.loan.customerId).filter(id => present.has(id))).size;
+  });
 
   readonly userScopeInfo = computed(() => {
     const user = this.authService.currentUser();
@@ -114,6 +148,9 @@ export class DailySheetComponent implements OnInit {
       this.allBranches.set(branches);
       this.allCenters.set(centers);
 
+      // ড্যাশবোর্ডের "আজকের রুট" থেকে নির্দিষ্ট সমিতি খোলা
+      const requested = Number(this.route.snapshot.queryParamMap.get('centerId'));
+      if (requested) this.selectedCenterId.set(requested);
       this.applyRoleFiltering(this.authService.currentUser());
     } catch (err) {
       console.error('Error initializing daily sheet:', err);
@@ -172,20 +209,27 @@ export class DailySheetComponent implements OnInit {
     const currentUser = this.authService.currentUser();
 
     try {
-      // 1. Load loans via kistiService (handles local seeding and Firestore data)
-      const allLoans = await this.kistiService.getLoans();
+      const [allLoans, allCustomers, attendance, todaysReceipts] = await Promise.all([
+        this.kistiService.getLoans(),
+        this.kistiService.getCustomers(),
+        this.memberService.getAttendance(centerId, this.today),
+        this.cashService.receiptsBetween(this.today, this.today)
+      ]);
+      const collectedByLoan = new Map<number, number>();
+      todaysReceipts.filter(r => !r.isReversed && r.centerId === centerId).forEach(r =>
+        collectedByLoan.set(r.loanId, (collectedByLoan.get(r.loanId) || 0) + (r.totalAmountCollected || 0)));
 
-      // Filter active loans for the selected center
-      let activeLoans = allLoans.filter(l => 
-        l.centerId === centerId && 
-        (l.status === 'DISBURSED' || l.status === 'OVERDUE') && 
+      // সমিতির চলমান ঋণ (অনুমোদন প্রবাহের ঋণ বাদ)
+      let activeLoans = allLoans.filter(l =>
+        l.centerId === centerId &&
+        (l.status === 'DISBURSED' || l.status === 'OVERDUE') &&
         !l.isDeleted
       );
 
       // Enforce role-based isolation on loans
       if (currentUser.role === 'FIELD_OFFICER') {
-        activeLoans = activeLoans.filter(l => 
-          l.fieldOfficerUserId === currentUser.userId || 
+        activeLoans = activeLoans.filter(l =>
+          l.fieldOfficerUserId === currentUser.userId ||
           (currentUser.assignedCenterIds && currentUser.assignedCenterIds.includes(l.centerId))
         );
       } else if (currentUser.role === 'BRANCH_MANAGER' || currentUser.role === 'CASHIER') {
@@ -194,103 +238,34 @@ export class DailySheetComponent implements OnInit {
         activeLoans = activeLoans.filter(l => this.authService.canAccessBranch(l.branchId));
       }
 
-      const items: DailySheetItem[] = [];
-
-      for (const loan of activeLoans) {
-        // Fetch installments for this loan
-        let nextInst: InstallmentSchedule | null = null;
-        let isLockedForWeek = false;
-        let isCollectedToday = false;
-        let daysRemainingForNext = 0;
-        let nextEligibleDate = '';
-        let nextPendingInstallmentNo: number | undefined;
-        let lastPaidDateFormatted: string | undefined;
-
-        try {
-          const instRef = collection(this.firestore, 'installments');
-          const instQ = query(instRef, where('loanId', '==', loan.loanId));
-          const instSnap = await getDocs(instQ);
-          const instList: InstallmentSchedule[] = [];
-          instSnap.forEach(idoc => instList.push(idoc.data() as InstallmentSchedule));
-          instList.sort((a, b) => a.installmentNo - b.installmentNo);
-
-          if (instList.length > 0) {
-            const paidList = instList.filter(i => i.status === 'PAID');
-            const pendingList = instList.filter(i => i.status === 'PENDING');
-            const pendingInst = pendingList.length > 0 ? pendingList[0] : null;
-
-            if (pendingInst) {
-              nextPendingInstallmentNo = pendingInst.installmentNo;
-            }
-
-            // Find latest paid installment
-            let latestPaid: InstallmentSchedule | null = null;
-            if (paidList.length > 0) {
-              latestPaid = paidList.reduce((prev, curr) => {
-                const prevTime = prev.paidDate ? new Date(prev.paidDate).getTime() : 0;
-                const currTime = curr.paidDate ? new Date(curr.paidDate).getTime() : 0;
-                if (currTime !== prevTime) {
-                  return currTime > prevTime ? curr : prev;
-                }
-                return curr.installmentNo > prev.installmentNo ? curr : prev;
-              });
-            }
-
-            // 7-day weekly lockout check
-            if (latestPaid && latestPaid.paidDate) {
-              const lastPaidTime = new Date(latestPaid.paidDate).getTime();
-              const now = Date.now();
-              const diffMs = now - lastPaidTime;
-              const daysSinceLast = diffMs / (1000 * 60 * 60 * 24);
-
-              if (daysSinceLast < 7) {
-                // Collected within the last 7 days!
-                isLockedForWeek = true;
-                isCollectedToday = true;
-                daysRemainingForNext = Math.max(1, Math.ceil(7 - daysSinceLast));
-                const nextTime = lastPaidTime + 7 * 24 * 60 * 60 * 1000;
-                nextEligibleDate = new Date(nextTime).toISOString().split('T')[0];
-                lastPaidDateFormatted = new Date(latestPaid.paidDate).toLocaleDateString('bn-BD');
-
-                // For the sheet row, display the collected installment for this week
-                nextInst = latestPaid;
-              }
-            }
-
-            if (!nextInst) {
-              if (pendingInst) {
-                nextInst = pendingInst;
-                isCollectedToday = false;
-                isLockedForWeek = false;
-              } else {
-                // All installments paid
-                nextInst = instList[instList.length - 1];
-                isCollectedToday = true;
-                isLockedForWeek = true;
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Error loading installments for loan:', loan.loanId, err);
-        }
-
-        if (nextInst) {
-          items.push({
-            loan,
-            nextInstallment: nextInst,
-            isCollectedToday,
-            isLockedForWeek,
-            daysRemainingForNext,
-            nextEligibleDate,
-            nextPendingInstallmentNo,
-            lastPaidDateFormatted
-          });
-        }
+      // সমিতির সব ঋণের কিস্তি একবারে লোড (প্রতি ঋণে আলাদা কুয়েরি নয়)
+      const allInstallments = await this.kistiService.getInstallmentsByLoanIds(activeLoans.map(l => l.loanId));
+      const installmentsByLoan = new Map<number, InstallmentSchedule[]>();
+      for (const inst of allInstallments) {
+        const list = installmentsByLoan.get(inst.loanId) || [];
+        list.push(inst);
+        installmentsByLoan.set(inst.loanId, list);
       }
+      const customers = new Map(allCustomers.map(c => [c.customerId, c]));
+
+      const items: DailySheetItem[] = activeLoans.map(loan => ({
+        loan,
+        customer: customers.get(loan.customerId),
+        view: collectionView(installmentsByLoan.get(loan.loanId) || [], this.today, toDhakaDayKey),
+        installments: installmentsByLoan.get(loan.loanId) || [],
+        collectedTodayAmount: collectedByLoan.get(loan.loanId) || 0,
+        upcoming: upcomingInstallment(installmentsByLoan.get(loan.loanId) || [], this.today)
+      })).sort((a, b) => (a.customer?.groupNo || 999) - (b.customer?.groupNo || 999) || a.loan.customerName.localeCompare(b.loan.customerName));
 
       this.sheetItems.set(items);
+
+      // হাজিরা: আগে সংরক্ষিত থাকলে সেটি, না হলে সবাই উপস্থিত ধরে শুরু
+      const memberIds = [...new Set(items.map(i => i.loan.customerId))];
+      this.attendanceSaved.set(!!attendance);
+      this.present.set(new Set(attendance ? attendance.presentCustomerIds : memberIds));
     } catch (err) {
       console.error('Error loading daily sheet loans:', err);
+      this.notice.set({ kind: 'danger', text: 'কালেকশন শিট লোড করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।' });
     } finally {
       this.loading.set(false);
     }
@@ -302,86 +277,226 @@ export class DailySheetComponent implements OnInit {
     this.loadSheetData();
   }
 
-  openCollectModal(item: DailySheetItem) {
-    if (item.isLockedForWeek || item.isCollectedToday) {
-      alert(`সতর্কতা: এই গ্রাহকের (${item.loan.customerName}) এই সপ্তাহের কিস্তি ইতিমধ্যে আদায় হয়েছে। নিয়ম অনুযায়ী ৭ দিন পর (${item.nextEligibleDate}) পরবর্তী কিস্তি গ্রহণ করা যাবে।`);
-      return;
-    }
-    this.activeItemForCollect.set(item);
-    this.collectAmount = item.nextInstallment.expectedPrincipal + item.nextInstallment.expectedProfit;
-    this.collectSavings = item.nextInstallment.expectedSavings;
+  rowState(item: DailySheetItem): { cls: string; label: string } {
+    const v = item.view;
+    if (item.collectedTodayAmount > 0 && !v.hasDue) return { cls: 'badge-paid', label: 'আজ আদায় সম্পন্ন' };
+    if (v.overdueCount > 0) return { cls: 'badge-danger', label: `${v.overdueCount}টি বকেয়া` };
+    if (v.hasDue) return { cls: 'badge-warning', label: 'আজ দেয়' };
+    return { cls: 'badge-secondary', label: 'আজ দেয় নেই' };
   }
 
-  closeCollectModal() {
-    this.activeItemForCollect.set(null);
+  openCollectModal(item: DailySheetItem) {
+    this.activeItemForCollect.set(item);
+    this.collectError.set('');
+    this.collectMethod.set('CASH');
+    this.collectTrxId.set('');
+    this.allowAdvance.set(false);
+    // মাঠে সাধারণত একবারে একটি কিস্তি — পুরাতনতম অপরিশোধিত কিস্তি দিয়ে শুরু
+    this.pickInstallments(1);
   }
+
+  /** দ্রুত নির্বাচন: পুরাতন থেকে n টি কিস্তি (0 = আজ পর্যন্ত সব দেয়) */
+  pickInstallments(n: number) {
+    const item = this.activeItemForCollect();
+    if (!item) return;
+    const count = n === 0 ? item.view.dueInstallments.length : n;
+    const pick = amountForInstallments(item.installments, count);
+    this.selectedCount.set(n);
+    this.collectAmount.set(pick.amount);
+    this.collectSavings.set(pick.savings);
+  }
+
+  setCollectAmount(value: number) {
+    this.collectAmount.set(value);
+    this.selectedCount.set(-1); // নিজে লেখা পরিমাণ
+  }
+
+  /** আজ পর্যন্ত দেয় কিস্তির সংখ্যা অনুযায়ী দ্রুত বাটন */
+  readonly quickPicks = computed(() => {
+    const item = this.activeItemForCollect();
+    if (!item) return [];
+    const due = item.view.dueInstallments.length;
+    const picks: { n: number; label: string; amount: number }[] = [];
+    for (const n of [1, 2, 3]) {
+      if (n > 1 && n >= due) break;
+      const p = amountForInstallments(item.installments, n);
+      if (p.count < n) break;
+      picks.push({ n, label: `${this.bn(n)}টি কিস্তি`, amount: p.amount });
+    }
+    if (due > 1) picks.push({ n: 0, label: `সব দেয় (${this.bn(due)}টি)`, amount: item.view.dueAmount });
+    return picks;
+  });
+
+  /** এই আদায়ের পর যে কিস্তি বাকি থাকবে — "পরবর্তী কিস্তি কবে" */
+  readonly nextAfterPayment = computed(() => {
+    const item = this.activeItemForCollect();
+    if (!item) return null;
+    const next = nextOpenAfterPayment(item.installments, Number(this.collectAmount()) || 0, this.today);
+    return next ? { no: next.installment.installmentNo, date: next.installment.dueDate, label: formatBnDate(next.installment.dueDate), remaining: next.remaining, overdue: next.installment.dueDate < this.today } : null;
+  });
+
+  dayLabel(key: string | undefined | null, short = true): string {
+    return formatBnDate(key, short);
+  }
+
+  /** প্রবেশ করা টাকায় কোন কিস্তি পূর্ণ / আংশিক হবে */
+  readonly allocationPreview = computed(() => {
+    const item = this.activeItemForCollect();
+    return item ? describeAllocation(item.installments, Number(this.collectAmount()) || 0, this.today) : [];
+  });
+
+  closeCollectModal() {
+    if (!this.isProcessing()) this.activeItemForCollect.set(null);
+  }
+
+  readonly advanceNeeded = computed(() => {
+    const item = this.activeItemForCollect();
+    return !!item && this.collectAmount() > item.view.dueAmount;
+  });
 
   async confirmCollection() {
     const item = this.activeItemForCollect();
     if (!item) return;
 
-    this.isProcessing = true;
+    this.isProcessing.set(true);
+    this.collectError.set('');
     const currentUser = this.authService.currentUser();
-    const totalCollected = this.collectAmount + this.collectSavings;
 
     try {
-      await this.kistiService.collectPayment(
-        {
-          loanId: item.loan.loanId,
-          customerId: item.loan.customerId,
-          customerName: item.loan.customerName,
-          installmentId: item.nextInstallment.installmentId,
-          installmentNo: item.nextInstallment.installmentNo,
-          branchId: item.loan.branchId,
-          centerId: item.loan.centerId,
-          collectedByUserId: currentUser.userId,
-          collectedByName: currentUser.name,
-          principalAmountCollected: item.nextInstallment.expectedPrincipal,
-          profitAmountCollected: item.nextInstallment.expectedProfit,
-          savingsAmountCollected: this.collectSavings,
-          fineAmountCollected: 0,
-          totalAmountCollected: totalCollected,
-          paymentMethod: this.collectMethod,
-          collectionDate: new Date().toISOString()
-        },
-        { userId: currentUser.userId, name: currentUser.name, role: currentUser.role },
-        `মাঠপর্যায়ে কিস্তি আদায় (সমিতি রুট ${this.selectedCenterId()})`
-      );
+      // রসিদ + কিস্তি + ঋণ + সঞ্চয় + খতিয়ান একটি ট্রানজ্যাকশনে
+      const receipt = await this.finance.collectPayment({
+        loanId: item.loan.loanId,
+        loanAmount: Number(this.collectAmount()) || 0,
+        savingsAmount: Number(this.collectSavings()) || 0,
+        paymentMethod: this.collectMethod(),
+        trxId: this.collectTrxId(),
+        allowAdvance: this.allowAdvance(),
+        reason: `মাঠপর্যায়ে কিস্তি আদায় (সমিতি ${this.selectedCenterId()})`
+      }, { userId: currentUser.userId, name: currentUser.name, role: currentUser.role });
 
-      // Update installment status
-      await this.kistiService.editRecord(
-        'installments',
-        item.nextInstallment.installmentId,
-        {
-          paidPrincipal: item.nextInstallment.expectedPrincipal,
-          paidProfit: item.nextInstallment.expectedProfit,
-          paidSavings: this.collectSavings,
-          paidTotalAmount: totalCollected,
-          status: 'PAID',
-          paidDate: new Date().toISOString()
-        },
-        { userId: currentUser.userId, name: currentUser.name, role: currentUser.role },
-        'মাঠপর্যায়ে কিস্তি আদায় সম্পন্ন'
-      );
-
-      this.closeCollectModal();
+      const next = this.nextAfterPayment();
+      this.activeItemForCollect.set(null);
+      const nextText = next
+        ? ` • পরবর্তী কিস্তি #${next.no}: ${next.label}, ৳${next.remaining.toLocaleString('en-IN')}${next.overdue ? ' (বকেয়া)' : ''}`
+        : ' • ঋণ সম্পূর্ণ পরিশোধিত';
+      this.notice.set({ kind: 'success', text: `রসিদ #${receipt.receiptId}: ${item.loan.customerName}-এর ৳${receipt.totalAmountCollected} আদায় হয়েছে${nextText}` });
       await this.loadSheetData();
-      alert(`সফল! ${item.loan.customerName}-এর কিস্তি ও সঞ্চয় সফলভাবে আদায় হয়েছে`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error collecting in daily sheet:', err);
-      alert('কালেকশন সম্পন্ন করতে সমস্যা হয়েছে');
+      this.collectError.set(err?.message || 'কালেকশন সম্পন্ন করতে সমস্যা হয়েছে');
     } finally {
-      this.isProcessing = false;
+      this.isProcessing.set(false);
     }
   }
 
+  // ---------- হাজিরা ----------
+
+  // ---------- শুধু সঞ্চয় জমা ----------
+
+  openSavingsModal(item: DailySheetItem) {
+    this.savingsItem.set(item);
+    this.savingsAmount.set(item.loan.savingsPerInstallment || 0);
+    this.savingsMethod.set('CASH');
+    this.savingsError.set('');
+  }
+
+  closeSavingsModal() {
+    if (!this.savingsBusy()) this.savingsItem.set(null);
+  }
+
+  async confirmSavingsDeposit() {
+    const item = this.savingsItem();
+    const amount = Number(this.savingsAmount()) || 0;
+    if (!item || amount <= 0) {
+      this.savingsError.set('সঠিক পরিমাণ দিন');
+      return;
+    }
+    const u = this.authService.currentUser();
+    this.savingsBusy.set(true);
+    this.savingsError.set('');
+    try {
+      const txn = await this.cashService.recordSavings({
+        customerId: item.loan.customerId, type: 'DEPOSIT', amount, isCredit: true,
+        paymentMethod: this.savingsMethod(), channel: 'FIELD',
+        reason: `মাঠে সঞ্চয় জমা (সমিতি ${this.centerName()})`
+      }, { userId: u.userId, name: u.name, role: u.role });
+      this.savingsItem.set(null);
+      this.notice.set({ kind: 'success', text: `${txn.receiptNo}: ${item.loan.customerName}-এর সঞ্চয় ৳${amount.toLocaleString('en-IN')} জমা হয়েছে (নতুন স্থিতি ৳${txn.newBalance.toLocaleString('en-IN')}) — টাকা আপনার হাতে, ক্যাশিয়ারকে জমা দিন` });
+      await this.loadSheetData();
+    } catch (err: any) {
+      this.savingsError.set(err?.message || 'সঞ্চয় জমা করা যায়নি');
+    } finally {
+      this.savingsBusy.set(false);
+    }
+  }
+
+  togglePresent(customerId: number) {
+    const next = new Set(this.present());
+    if (next.has(customerId)) next.delete(customerId); else next.add(customerId);
+    this.present.set(next);
+    this.attendanceSaved.set(false);
+  }
+
+  async saveAttendance() {
+    const center = this.filteredCenters().find(c => c.centerId === this.selectedCenterId());
+    if (!center) return;
+    const memberIds = [...new Set(this.sheetItems().map(i => i.loan.customerId))];
+    const present = this.present();
+    const user = this.authService.currentUser();
+    try {
+      await this.memberService.saveAttendance({
+        centerId: center.centerId, branchId: center.branchId, date: this.today,
+        presentCustomerIds: memberIds.filter(id => present.has(id)),
+        absentCustomerIds: memberIds.filter(id => !present.has(id))
+      }, { userId: user.userId, name: user.name, role: user.role });
+      this.attendanceSaved.set(true);
+      this.notice.set({ kind: 'success', text: `হাজিরা সংরক্ষিত: ${memberIds.filter(id => present.has(id)).length}/${memberIds.length} জন উপস্থিত` });
+    } catch (err: any) {
+      this.notice.set({ kind: 'danger', text: err?.message || 'হাজিরা সংরক্ষণ করা যায়নি' });
+    }
+  }
+
+  printSheet() {
+    this.printing.set(true);
+    setTimeout(() => {
+      window.print();
+      this.printing.set(false);
+    }, 50);
+  }
+
+  /** দেয় কিস্তির নম্বর সংক্ষেপে: ধারাবাহিক হলে "#৩–#৩২", না হলে "#৩, #৫"; সাথে মোট সংখ্যা */
+  dueNos(item: DailySheetItem): string {
+    const nos = item.view.dueInstallments.map(i => i.installmentNo).sort((a, b) => a - b);
+    if (nos.length === 0) return '';
+    const ranges: string[] = [];
+    let start = nos[0], prev = nos[0];
+    for (const n of [...nos.slice(1), Number.NaN]) {
+      if (n === prev + 1) { prev = n; continue; }
+      ranges.push(start === prev ? `#${this.bn(start)}` : `#${this.bn(start)}–#${this.bn(prev)}`);
+      start = prev = n;
+    }
+    const text = ranges.length > 2 ? `${ranges.slice(0, 2).join(', ')} …` : ranges.join(', ');
+    return nos.length > 1 ? `${text} (${this.bn(nos.length)}টি)` : text;
+  }
+
+  /** হোভারে পূর্ণ তালিকা */
+  dueNosFull(item: DailySheetItem): string {
+    return 'দেয় কিস্তি নং: ' + item.view.dueInstallments.map(i => i.installmentNo).sort((a, b) => a - b).join(', ');
+  }
+
+  private bn(n: number): string {
+    return String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]);
+  }
+
+  centerName(): string {
+    return this.filteredCenters().find(c => c.centerId === this.selectedCenterId())?.name || '';
+  }
+
   getTotalExpectedToday(): number {
-    return this.sheetItems().reduce((sum, item) => sum + (item.nextInstallment?.expectedTotalAmount || 0), 0);
+    return this.sheetItems().reduce((sum, item) => sum + item.view.dueAmount + item.view.dueSavings, 0);
   }
 
   getTotalCollectedToday(): number {
-    return this.sheetItems()
-      .filter(item => item.isCollectedToday)
-      .reduce((sum, item) => sum + (item.nextInstallment?.paidTotalAmount || item.nextInstallment?.expectedTotalAmount || 0), 0);
+    return this.sheetItems().reduce((sum, item) => sum + item.collectedTodayAmount, 0);
   }
 }

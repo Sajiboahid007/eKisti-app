@@ -5,6 +5,7 @@ import { PaymentCollection, Branch, DailyReconciliation } from '../../../core/mo
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { FieldCashBreakdown, RECEIPT_TYPE_LABELS, fieldCashBreakdown, receiptTypeOf } from '../../../core/finance/field-cash';
 
 /** একজন মাঠকর্মীর কাছে জমা বাকি থাকা রসিদের গুচ্ছ */
 interface OfficerHandoverGroup {
@@ -16,6 +17,8 @@ interface OfficerHandoverGroup {
   totalAmount: number;
   oldestDate: string;
   isOverdue: boolean;     // আজকের আগের আদায় এখনো জমা হয়নি
+  /** কিস্তি / সঞ্চয় / ফি / অবলোপিত আদায় — মাঠকর্মীর হাতে কোন খাতের কত টাকা */
+  breakdown: FieldCashBreakdown;
 }
 
 type Tab = 'pending' | 'history';
@@ -89,6 +92,7 @@ export class CashClosingComponent implements OnInit {
     const user = this.authService.currentUser();
     return this.collections().filter(c =>
       !c.isHandedOverToBranch &&
+      !c.isReversed &&
       Number(c.branchId) === branchId &&
       (!this.authService.isFieldOfficer() || c.collectedByUserId === user.userId)
     );
@@ -103,7 +107,7 @@ export class CashClosingComponent implements OnInit {
           userId: c.collectedByUserId,
           name: c.collectedByName || `কর্মী #${c.collectedByUserId}`,
           receipts: [], cashAmount: 0, digitalAmount: 0, totalAmount: 0,
-          oldestDate: c.collectionDate, isOverdue: false
+          oldestDate: c.collectionDate, isOverdue: false, breakdown: fieldCashBreakdown([])
         };
         map.set(c.collectedByUserId, g);
       }
@@ -117,7 +121,8 @@ export class CashClosingComponent implements OnInit {
       .map(g => ({
         ...g,
         receipts: g.receipts.sort((a, b) => a.receiptId - b.receiptId),
-        isOverdue: toLocalDayKey(g.oldestDate) < this.today
+        isOverdue: toLocalDayKey(g.oldestDate) < this.today,
+        breakdown: fieldCashBreakdown(g.receipts)
       }))
       .sort((a, b) => Number(b.isOverdue) - Number(a.isOverdue) || b.totalAmount - a.totalAmount);
   });
@@ -156,6 +161,18 @@ export class CashClosingComponent implements OnInit {
     const ids = this.selectedReceiptIds();
     return (this.closingGroup()?.receipts || []).filter(r => ids.has(r.receiptId));
   });
+
+  /** নির্বাচিত রসিদের খাতভিত্তিক বিভাজন (মডালে) */
+  readonly selectedBreakdown = computed(() => fieldCashBreakdown(this.selectedReceipts()));
+
+  /** শাখার সব মাঠকর্মীর হাতে মোট (খাতভিত্তিক) */
+  readonly fieldTotals = computed(() => fieldCashBreakdown(this.pendingReceipts()));
+
+  readonly receiptTypeLabels = RECEIPT_TYPE_LABELS;
+
+  typeOf(r: PaymentCollection) {
+    return receiptTypeOf(r);
+  }
 
   readonly expectedCash = computed(() =>
     this.selectedReceipts().filter(r => r.paymentMethod === 'CASH').reduce((s, r) => s + (r.totalAmountCollected || 0), 0)

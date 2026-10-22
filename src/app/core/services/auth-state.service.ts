@@ -240,9 +240,29 @@ export class AuthStateService {
   // Permission checks
   readonly canManageUsers = computed(() => this.isSuperAdmin() || this.isAdmin());
   readonly canApproveLoans = computed(() => ['BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
-  readonly canDisburseLoan = computed(() => ['BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
+  readonly canDisburseLoan = computed(() => ['BRANCH_MANAGER', 'CASHIER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
   readonly canCollectKisti = computed(() => ['FIELD_OFFICER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER'].includes(this.currentUser().role));
   readonly canVerifyCash = computed(() => ['CASHIER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+
+  // ঋণ অনুমোদন প্রবাহ (Maker-Checker)
+  readonly canApplyLoan = computed(() => ['FIELD_OFFICER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
+  readonly canVerifyLoan = computed(() => ['FIELD_OFFICER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'REGIONAL_MANAGER'].includes(this.currentUser().role));
+  readonly canSeeLoanPipeline = computed(() => this.canApplyLoan() || this.canVerifyLoan() || this.canApproveLoans() || this.canDisburseLoan());
+
+  // হিসাব, ভল্ট ও সমাপনী
+  readonly canManageAccounts = computed(() => ['CASHIER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+  readonly canReopenDay = computed(() => ['SUPER_ADMIN', 'ADMIN', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
+  readonly canReverseReceipt = computed(() => ['BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER'].includes(this.currentUser().role));
+
+  // বিশেষ ঋণ সিদ্ধান্ত
+  readonly canReschedule = computed(() => ['BRANCH_MANAGER', 'AREA_MANAGER', 'REGIONAL_MANAGER', 'MANAGING_DIRECTOR', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+  readonly canWriteOff = computed(() => ['MANAGING_DIRECTOR', 'REGIONAL_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+  readonly canSettleLoan = computed(() => ['BRANCH_MANAGER', 'CASHIER', 'AREA_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+
+  // সদস্য ও সেটিংস
+  readonly canTransferMember = computed(() => ['BRANCH_MANAGER', 'AREA_MANAGER', 'REGIONAL_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+  readonly canManageSettings = computed(() => ['SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+  readonly canManageBranches = computed(() => this.canManageUsers() || ['MANAGING_DIRECTOR', 'AREA_MANAGER', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'].includes(this.currentUser().role));
 
   // ==========================================
   // BRANCH ACCESS SCOPE (কে কোন শাখার তথ্য দেখতে ও হালনাগাদ করতে পারবেন)

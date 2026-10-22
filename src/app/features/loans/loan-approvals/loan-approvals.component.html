@@ -1,0 +1,163 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <h2>ঋণ আবেদন ও অনুমোদন (Maker-Checker)</h2>
+      <p class="sub-text">আবেদন → মাঠ যাচাই → শাখা ব্যবস্থাপকের অনুমোদন → ক্যাশিয়ারের বিতরণ। আবেদনকারী নিজের আবেদন অনুমোদন করতে পারেন না।</p>
+    </div>
+    <div class="header-right">
+      @if (authService.canApplyLoan()) {
+        <a routerLink="/loans/disburse" class="btn btn-primary">
+          <span class="material-symbols-outlined">add_circle</span>
+          <span>নতুন ঋণ আবেদন</span>
+        </a>
+      }
+      <button class="btn btn-secondary btn-icon-only" (click)="load()" [disabled]="loading()" title="রিফ্রেশ" aria-label="রিফ্রেশ">
+        <span class="material-symbols-outlined">refresh</span>
+      </button>
+    </div>
+  </div>
+
+  @if (success()) {
+    <div class="flow-alert success" role="status">
+      <span class="material-symbols-outlined">check_circle</span>
+      <span>{{ success() }}</span>
+    </div>
+  }
+  @if (error()) {
+    <div class="flow-alert danger" role="alert">
+      <span class="material-symbols-outlined">error</span>
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  <div class="stage-tabs" role="tablist">
+    @for (s of stages; track s.key) {
+      <button role="tab" class="stage-tab" [class.active]="stage() === s.key" (click)="stage.set(s.key)">
+        <span class="material-symbols-outlined">{{ s.icon }}</span>
+        <span class="stage-label">{{ s.label }}</span>
+        <span class="stage-count">{{ counts()[s.key] }}</span>
+      </button>
+    }
+  </div>
+  <p class="stage-hint">
+    <span class="material-symbols-outlined">info</span>
+    <span [textContent]="currentStage().hint"></span>
+  </p>
+
+  <div class="card">
+    @if (loading()) {
+      <app-skeleton variant="table" [rows]="5" [columns]="6" label="ঋণ আবেদন লোড হচ্ছে..." />
+    } @else if (stageLoans().length === 0) {
+      <div class="empty-state approvals-empty">
+        <span class="material-symbols-outlined">inbox</span>
+        <p [textContent]="'এই ধাপে (' + currentStage().label + ') কোনো ঋণ আবেদন নেই।'"></p>
+      </div>
+    } @else {
+      <div class="table-container border-0">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ঋণ / গ্রাহক</th>
+              <th class="text-right">আসল</th>
+              <th>শর্ত</th>
+              <th>আবেদন</th>
+              <th>যাচাই / অনুমোদন</th>
+              <th class="text-right">অ্যাকশন</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (l of stageLoans(); track l.loanId) {
+              <tr>
+                <td>
+                  <strong>{{ l.customerName }}</strong>
+                  <div class="sub-text">{{ l.loanAccountNo }} • {{ l.loanCycle || 1 }}ম চক্র</div>
+                </td>
+                <td class="text-right"><strong class="amount-bdt">{{ l.principalAmount | number }}</strong></td>
+                <td>
+                  <div>{{ l.totalInstallments }} কিস্তি • {{ l.installmentFrequency === 'WEEKLY' ? 'সাপ্তাহিক' : l.installmentFrequency === 'DAILY' ? 'দৈনিক' : 'মাসিক' }}</div>
+                  <div class="sub-text">কিস্তি ৳{{ l.installmentAmount | number }} • {{ l.interestMethod === 'DECLINING' ? 'হ্রাসমান' : 'ফ্ল্যাট' }} {{ l.ratePercent }}% (বার্ষিক সমতুল্য {{ l.effectiveAnnualRate }}%)</div>
+                </td>
+                <td>
+                  <div>{{ l.appliedByName || '—' }}</div>
+                  <div class="sub-text">{{ l.applicationDate }} • {{ l.purposeOfLoan }}</div>
+                </td>
+                <td>
+                  @if (l.verifiedByName) { <div class="sub-text">যাচাই: {{ l.verifiedByName }}</div> }
+                  @if (l.approvedByName) { <div class="sub-text">অনুমোদন: {{ l.approvedByName }}</div> }
+                  @if (!l.verifiedByName && !l.approvedByName) { <span class="sub-text">—</span> }
+                </td>
+                <td class="text-right actions-cell">
+                  @if (l.status === 'APPLIED' && canAct('VERIFY', l)) {
+                    <button class="btn btn-sm btn-primary" (click)="openAction('VERIFY', l)">মাঠ যাচাই</button>
+                  }
+                  @if (l.status === 'FIELD_VERIFIED') {
+                    @if (canAct('APPROVE', l)) {
+                      <button class="btn btn-sm btn-success" (click)="openAction('APPROVE', l)">অনুমোদন</button>
+                    } @else if (authService.canApproveLoans()) {
+                      <span class="sub-text" title="Maker-Checker">নিজের আবেদন — অন্য কেউ অনুমোদন দেবেন</span>
+                    }
+                  }
+                  @if (l.status === 'APPROVED' && authService.canDisburseLoan()) {
+                    <button class="btn btn-sm btn-success" (click)="disburse(l)">বিতরণ করুন</button>
+                  }
+                  @if (canAct('REJECT', l)) {
+                    <button class="btn btn-sm btn-danger" (click)="openAction('REJECT', l)">প্রত্যাখ্যান</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>
+
+@if (action(); as a) {
+  <div class="modal-backdrop" (click)="closeAction()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>
+          @switch (a.kind) {
+            @case ('VERIFY') { মাঠ যাচাই — {{ a.loan.loanAccountNo }} }
+            @case ('APPROVE') { ঋণ অনুমোদন — {{ a.loan.loanAccountNo }} }
+            @case ('REJECT') { আবেদন প্রত্যাখ্যান — {{ a.loan.loanAccountNo }} }
+          }
+        </h3>
+        <button class="close-btn" (click)="closeAction()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body action-body">
+        <div class="loan-mini">
+          <strong>{{ a.loan.customerName }}</strong> • ৳{{ a.loan.principalAmount | number }} • {{ a.loan.totalInstallments }} কিস্তি • {{ a.loan.loanCycle || 1 }}ম চক্র
+          @if (a.loan.verificationNotes) { <div class="sub-text">যাচাই মন্তব্য: {{ a.loan.verificationNotes }}</div> }
+        </div>
+
+        @if (a.kind === 'VERIFY') {
+          <div class="checklist">
+            @for (item of checklist; track $index) {
+              <label class="check-row">
+                <input type="checkbox" [checked]="checked().has($index)" (change)="toggleCheck($index)" />
+                <span>{{ item }}</span>
+              </label>
+            }
+          </div>
+        }
+
+        <label class="form-label">
+          {{ a.kind === 'REJECT' ? 'প্রত্যাখ্যানের কারণ *' : a.kind === 'VERIFY' ? 'যাচাইয়ের মন্তব্য *' : 'অনুমোদনের মন্তব্য (ঐচ্ছিক)' }}
+        </label>
+        <textarea class="form-control" rows="3" [ngModel]="notes()" (ngModelChange)="notes.set($event)"></textarea>
+
+        @if (actionError()) {
+          <div class="flow-alert danger mt-2"><span class="material-symbols-outlined">error</span><span class="pre-line">{{ actionError() }}</span></div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeAction()" [disabled]="busy()">বাতিল</button>
+        <button class="btn" [class.btn-danger]="a.kind === 'REJECT'" [class.btn-primary]="a.kind !== 'REJECT'" (click)="submitAction()" [disabled]="busy() || !actionReady()">
+          {{ busy() ? 'সংরক্ষণ হচ্ছে...' : a.kind === 'VERIFY' ? 'যাচাই সম্পন্ন' : a.kind === 'APPROVE' ? 'অনুমোদন দিন' : 'প্রত্যাখ্যান করুন' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

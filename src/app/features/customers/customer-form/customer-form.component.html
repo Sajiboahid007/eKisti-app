@@ -16,10 +16,46 @@
     </div>
   </div>
 
+  <!-- ইনলাইন বার্তা (alert এর পরিবর্তে) -->
+  @for (m of messages(); track $index) {
+    <div class="flow-alert mb-3" [ngClass]="m.type">
+      <span class="material-symbols-outlined">{{ m.type === 'success' ? 'check_circle' : (m.type === 'danger' ? 'error' : (m.type === 'warning' ? 'warning' : 'info')) }}</span>
+      <span class="msg-text">{{ m.text }}</span>
+      <button type="button" class="msg-close" (click)="dismissMessage($index)" title="বন্ধ করুন">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  }
+
   @if (loading()) {
     <app-skeleton variant="form" [rows]="9" label="গ্রাহকের ডেটা লোড হচ্ছে..." />
+  } @else if (createdCustomerId()) {
+    <!-- নতুন সদস্য তৈরি সম্পন্ন -->
+    <div class="card mb-3">
+      <div class="card-body created-panel">
+        <span class="material-symbols-outlined text-success created-icon">how_to_reg</span>
+        <div>
+          <h3>সদস্য #{{ createdCustomerId() }} নিবন্ধন সম্পন্ন</h3>
+          <p class="hint-text">এখন সদস্যের ছবি, NID ও স্বাক্ষর আপলোড করতে "এডিট ও KYC আপলোড" এ যান।</p>
+        </div>
+        <div class="created-actions">
+          <a [routerLink]="['/customers/edit', createdCustomerId()]" class="btn btn-primary">
+            <span class="material-symbols-outlined">upload_file</span>
+            <span>এডিট ও KYC আপলোড</span>
+          </a>
+          <button type="button" class="btn btn-secondary" (click)="registerAnother()">
+            <span class="material-symbols-outlined">person_add</span>
+            <span>আরেকজন নিবন্ধন</span>
+          </button>
+          <a routerLink="/customers" class="btn btn-secondary">
+            <span class="material-symbols-outlined">list</span>
+            <span>সদস্য তালিকা</span>
+          </a>
+        </div>
+      </div>
+    </div>
   } @else {
-    <form (ngSubmit)="onSubmit()" class="form-layout">
+    <form (ngSubmit)="onSubmit()" class="form-layout" novalidate>
       <!-- Mandatory reason box when editing -->
       @if (isEditMode()) {
         <div class="card alert-card-edit mb-3">
@@ -37,8 +73,10 @@
                 class="form-control" 
                 placeholder="যেমন: গ্রাহক নতুন মোবাইল নম্বর দিয়েছেন বা স্থায়ী ঠিকানা সংশোধন করা হয়েছে..."
                 [(ngModel)]="updateReason" 
-                name="updateReason" 
+                [class.is-invalid]="fieldError('updateReason')"
+                name="updateReason"
                 required />
+              @if (fieldError('updateReason')) { <small class="field-error">{{ fieldError('updateReason') }}</small> }
             </div>
           </div>
         </div>
@@ -86,6 +124,21 @@
                   }
                 </select>
               </div>
+
+              <div class="form-group">
+                <label>দল নং (Group No)</label>
+                <input type="number" min="1" step="1" class="form-control" [class.is-invalid]="fieldError('groupNo')"
+                  [(ngModel)]="customer.groupNo" name="groupNo" placeholder="যেমন: ১, ২, ৩" />
+                @if (fieldError('groupNo')) { <small class="field-error">{{ fieldError('groupNo') }}</small> }
+              </div>
+
+              <div class="form-group">
+                <label>দলনেতা (Group Leader)</label>
+                <label class="check-row">
+                  <input type="checkbox" [(ngModel)]="customer.isGroupLeader" name="isGroupLeader" />
+                  <span>এই সদস্য দলনেতা</span>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -100,22 +153,34 @@
             <div class="card-body form-grid">
               <div class="form-group span-2">
                 <label>গ্রাহকের পূর্ণ নাম <span class="required">*</span></label>
-                <input type="text" class="form-control" [(ngModel)]="customer.fullName" name="fullName" required placeholder="যেমন: রহিমা বেগম" />
+                <input type="text" class="form-control" [class.is-invalid]="fieldError('fullName')" [(ngModel)]="customer.fullName" name="fullName" required placeholder="যেমন: রহিমা বেগম" />
+                @if (fieldError('fullName')) { <small class="field-error">{{ fieldError('fullName') }}</small> }
               </div>
 
               <div class="form-group">
                 <label>প্রাথমিক মোবাইল নম্বর <span class="required">*</span></label>
-                <input type="tel" class="form-control" [(ngModel)]="customer.phonePrimary" name="phonePrimary" required placeholder="017XXXXXXXX" />
+                <input type="tel" class="form-control" [class.is-invalid]="fieldError('phonePrimary')" [(ngModel)]="customer.phonePrimary" name="phonePrimary" required placeholder="017XXXXXXXX" />
+                @if (fieldError('phonePrimary')) { <small class="field-error">{{ fieldError('phonePrimary') }}</small> }
               </div>
 
               <div class="form-group">
                 <label>বিকল্প মোবাইল নম্বর</label>
-                <input type="tel" class="form-control" [(ngModel)]="customer.phoneSecondary" name="phoneSecondary" placeholder="018XXXXXXXX" />
+                <input type="tel" class="form-control" [class.is-invalid]="fieldError('phoneSecondary')" [(ngModel)]="customer.phoneSecondary" name="phoneSecondary" placeholder="018XXXXXXXX" />
+                @if (fieldError('phoneSecondary')) { <small class="field-error">{{ fieldError('phoneSecondary') }}</small> }
               </div>
 
               <div class="form-group span-2">
                 <label>জাতীয় পরিচয়পত্র নম্বর (NID) <span class="required">*</span></label>
-                <input type="text" class="form-control" [(ngModel)]="customer.nidNumber" name="nidNumber" required placeholder="১০ বা ১৭ ডিজিটের এনআইডি" />
+                <input type="text" class="form-control" [class.is-invalid]="fieldError('nidNumber')" [(ngModel)]="customer.nidNumber" name="nidNumber" required
+                  (blur)="onNidBlur()" placeholder="১০, ১৩ বা ১৭ ডিজিটের এনআইডি (বাংলা অংকও গ্রহণযোগ্য)" />
+                @if (fieldError('nidNumber')) { <small class="field-error">{{ fieldError('nidNumber') }}</small> }
+                @if (checkingNid()) { <small class="hint-text">NID যাচাই হচ্ছে...</small> }
+                @if (duplicateNidWarning()) {
+                  <div class="flow-alert warning mt-1">
+                    <span class="material-symbols-outlined">person_alert</span>
+                    <span>{{ duplicateNidWarning() }}</span>
+                  </div>
+                }
               </div>
 
               <div class="form-group">
@@ -239,12 +304,14 @@
 
               <div class="form-group">
                 <label>জামিনদারের মোবাইল</label>
-                <input type="tel" class="form-control" [(ngModel)]="customer.primaryGuarantor.phone" name="gPhone" placeholder="017XXXXXXXX" />
+                <input type="tel" class="form-control" [class.is-invalid]="fieldError('gPhone')" [(ngModel)]="customer.primaryGuarantor.phone" name="gPhone" placeholder="017XXXXXXXX" />
+                @if (fieldError('gPhone')) { <small class="field-error">{{ fieldError('gPhone') }}</small> }
               </div>
 
               <div class="form-group">
                 <label>জামিনদারের এনআইডি (NID)</label>
-                <input type="text" class="form-control" [(ngModel)]="customer.primaryGuarantor.nidNumber" name="gNid" placeholder="NID নম্বর" />
+                <input type="text" class="form-control" [class.is-invalid]="fieldError('gNid')" [(ngModel)]="customer.primaryGuarantor.nidNumber" name="gNid" placeholder="NID নম্বর" />
+                @if (fieldError('gNid')) { <small class="field-error">{{ fieldError('gNid') }}</small> }
               </div>
 
               <!-- Cheque Info -->
@@ -259,6 +326,158 @@
                 <input type="text" class="form-control" [(ngModel)]="customer.collateral.stampNumber" name="stampNumber" placeholder="যেমন: ST-300-884129" />
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Nominee (নমিনি) -->
+      <div class="card mb-3">
+        <div class="card-header header-with-action">
+          <div class="header-title">
+            <span class="material-symbols-outlined text-primary">family_restroom</span>
+            <h3>৫. নমিনি / উত্তরাধিকারী (মোট অংশ ১০০%) @if (!isEditMode()) { <span class="required">*</span> }</h3>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary" (click)="addNominee()">
+            <span class="material-symbols-outlined">add</span>
+            <span>নমিনি যোগ করুন</span>
+          </button>
+        </div>
+        <div class="card-body">
+          @for (n of customer.nominees; track $index; let i = $index) {
+            <div class="nominee-row">
+              <div class="form-group">
+                <label>নাম <span class="required">*</span></label>
+                <input type="text" class="form-control" [class.is-invalid]="fieldError('nominee_' + i + '_name')"
+                  [(ngModel)]="n.name" [name]="'nomName' + i" placeholder="নমিনির নাম" />
+                @if (fieldError('nominee_' + i + '_name')) { <small class="field-error">{{ fieldError('nominee_' + i + '_name') }}</small> }
+              </div>
+              <div class="form-group">
+                <label>সম্পর্ক <span class="required">*</span></label>
+                <input type="text" class="form-control" [class.is-invalid]="fieldError('nominee_' + i + '_relation')"
+                  [(ngModel)]="n.relation" [name]="'nomRel' + i" placeholder="স্বামী / ছেলে / মেয়ে" />
+                @if (fieldError('nominee_' + i + '_relation')) { <small class="field-error">{{ fieldError('nominee_' + i + '_relation') }}</small> }
+              </div>
+              <div class="form-group">
+                <label>NID</label>
+                <input type="text" class="form-control" [class.is-invalid]="fieldError('nominee_' + i + '_nid')"
+                  [(ngModel)]="n.nidNumber" [name]="'nomNid' + i" placeholder="ঐচ্ছিক" />
+                @if (fieldError('nominee_' + i + '_nid')) { <small class="field-error">{{ fieldError('nominee_' + i + '_nid') }}</small> }
+              </div>
+              <div class="form-group">
+                <label>মোবাইল</label>
+                <input type="tel" class="form-control" [class.is-invalid]="fieldError('nominee_' + i + '_phone')"
+                  [(ngModel)]="n.phone" [name]="'nomPhone' + i" placeholder="01XXXXXXXXX" />
+                @if (fieldError('nominee_' + i + '_phone')) { <small class="field-error">{{ fieldError('nominee_' + i + '_phone') }}</small> }
+              </div>
+              <div class="form-group">
+                <label>অংশ (%) <span class="required">*</span></label>
+                <input type="number" min="0" max="100" class="form-control" [class.is-invalid]="fieldError('nominee_' + i + '_share')"
+                  [(ngModel)]="n.sharePercent" [name]="'nomShare' + i" />
+                @if (fieldError('nominee_' + i + '_share')) { <small class="field-error">{{ fieldError('nominee_' + i + '_share') }}</small> }
+              </div>
+              <button type="button" class="btn-icon-remove" (click)="removeNominee(i)" title="নমিনি বাদ দিন">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          } @empty {
+            <p class="hint-text">কোনো নমিনি যোগ করা হয়নি।</p>
+          }
+          <div class="nominee-total" [class.text-danger]="customer.nominees?.length && nomineeShareTotal() !== 100">
+            মোট অংশ: <strong>{{ nomineeShareTotal() }}%</strong>
+          </div>
+          @if (fieldError('nominees')) { <small class="field-error">{{ fieldError('nominees') }}</small> }
+        </div>
+      </div>
+
+      <div class="form-sections-grid">
+        <!-- 6. Fees & Savings -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <div class="header-title">
+              <span class="material-symbols-outlined text-primary">payments</span>
+              <h3>৬. ভর্তি ফি, পাসবুক ফি ও সঞ্চয়</h3>
+            </div>
+          </div>
+          <div class="card-body form-grid">
+            @if (!isEditMode()) {
+              <div class="form-group">
+                <label>ভর্তি ফি (টাকা)</label>
+                <input type="number" min="0" class="form-control" [class.is-invalid]="fieldError('fees')" [(ngModel)]="admissionFee" name="admissionFee" />
+              </div>
+              <div class="form-group">
+                <label>পাসবুক ফি (টাকা)</label>
+                <input type="number" min="0" class="form-control" [class.is-invalid]="fieldError('fees')" [(ngModel)]="passbookFee" name="passbookFee" />
+              </div>
+              @if (fieldError('fees')) { <small class="field-error span-2">{{ fieldError('fees') }}</small> }
+              <div class="form-group span-2">
+                <label>প্রারম্ভিক সঞ্চয় জমা (টাকা)</label>
+                <input type="number" min="0" class="form-control" [class.is-invalid]="fieldError('openingSavings')" [(ngModel)]="customer.totalSavingsBalance" name="openingSavings" />
+                @if (fieldError('openingSavings')) { <small class="field-error">{{ fieldError('openingSavings') }}</small> }
+                <small class="hint-text">ফি ও সঞ্চয় সদস্য তৈরির পর শাখার ভল্ট ও সঞ্চয় খতিয়ানে জমা হবে (দিন বন্ধ থাকলে ফি জমা হবে না)।</small>
+              </div>
+            } @else {
+              <div class="form-group">
+                <label>ভর্তি ফি জমা</label>
+                <input type="text" class="form-control" [value]="'৳ ' + (customer.admissionFeePaid || 0)" readonly />
+              </div>
+              <div class="form-group">
+                <label>পাসবুক ফি জমা</label>
+                <input type="text" class="form-control" [value]="'৳ ' + (customer.passbookFeePaid || 0)" readonly />
+              </div>
+              <div class="form-group span-2">
+                <label>বর্তমান সঞ্চয় স্থিতি</label>
+                <input type="text" class="form-control" [value]="'৳ ' + (customer.totalSavingsBalance | number)" readonly />
+                <small class="hint-text">সঞ্চয় স্থিতি শুধু সঞ্চয় লেনদেনের মাধ্যমে পরিবর্তন হয়</small>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- 7. KYC Documents -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <div class="header-title">
+              <span class="material-symbols-outlined text-primary">badge</span>
+              <h3>৭. KYC ডকুমেন্ট (ছবি, NID, স্বাক্ষর)</h3>
+            </div>
+          </div>
+          <div class="card-body">
+            @if (!isEditMode()) {
+              <div class="flow-alert info">
+                <span class="material-symbols-outlined">info</span>
+                <span>সদস্য নিবন্ধন সংরক্ষণের পর এডিট পাতা থেকে ছবি, NID ও স্বাক্ষর আপলোড করা যাবে।</span>
+              </div>
+            } @else {
+              <div class="kyc-grid">
+                @for (d of kycDocTypes; track d.type) {
+                  <div class="kyc-item">
+                    <label>{{ d.label }}</label>
+                    <div class="kyc-thumb">
+                      @if (kycUrls()[d.type]; as url) {
+                        @if (isPdf(url)) {
+                          <a [href]="url" target="_blank" rel="noopener">PDF দেখুন</a>
+                        } @else {
+                          <a [href]="url" target="_blank" rel="noopener"><img [src]="url" [alt]="d.label" /></a>
+                        }
+                      } @else {
+                        <span class="material-symbols-outlined">image_not_supported</span>
+                      }
+                    </div>
+                    <input type="file" accept="image/*,application/pdf" class="kyc-file"
+                      [disabled]="kycUploading() !== null" (change)="onKycFileSelected(d.type, $event)" />
+                    @if (kycUploading() === d.type) { <small class="hint-text">আপলোড হচ্ছে...</small> }
+                    @if (versionsFor(d.type).length > 1) {
+                      <details class="kyc-versions">
+                        <summary>পূর্বের সংস্করণ ({{ versionsFor(d.type).length - 1 }})</summary>
+                        @for (v of versionsFor(d.type).slice(1); track v.uploadedAt) {
+                          <a [href]="v.url" target="_blank" rel="noopener">{{ v.uploadedAt | date:'dd/MM/yy HH:mm' }} — {{ v.actor.name }}</a>
+                        }
+                      </details>
+                    }
+                  </div>
+                }
+              </div>
+            }
           </div>
         </div>
       </div>

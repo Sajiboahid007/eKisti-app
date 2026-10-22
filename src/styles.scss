@@ -89,6 +89,108 @@ body.ekisti-app-body {
    Common UI Components & Utilities
    ======================================================== */
 
+/* Inline flow messages (replace alert() popups) */
+.flow-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  font-size: 0.875rem;
+  line-height: 1.5;
+
+  > .material-symbols-outlined { font-size: 20px; flex-shrink: 0; }
+  &.success { background: var(--success-bg); border-color: var(--success-border); color: #065f46; }
+  &.info { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+  &.warning { background: var(--warning-bg); border-color: var(--warning-border); color: #92400e; }
+  &.danger { background: var(--danger-bg); border-color: var(--danger-border); color: #991b1b; }
+}
+
+.pre-line { white-space: pre-line; }
+
+/* Collect forms: quick installment picks & allocation preview (daily sheet, loan detail) */
+.quick-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.pick-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+
+  .pick-label { font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); }
+  .pick-amt { font-size: 0.9rem; font-weight: 800; color: var(--text-primary); }
+  &:hover { border-color: var(--primary); }
+  &.active {
+    border-color: var(--primary);
+    background: var(--primary-subtle);
+    .pick-label, .pick-amt { color: var(--primary); }
+  }
+}
+
+.alloc-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+  max-height: 96px;
+  overflow-y: auto;
+
+  .alloc-title { font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); margin-right: 0.25rem; }
+}
+
+.alloc-chip {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--success-bg);
+  color: #047857;
+
+  &.partial { background: var(--warning-bg); color: #92400e; }
+  &.advance { background: #eff6ff; color: #1e40af; }
+}
+
+/* Shared tab bar */
+.tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+
+  .material-symbols-outlined { font-size: 20px; }
+  &.active { color: var(--primary); border-bottom-color: var(--primary); }
+}
+
 /* Skeleton shimmer (used by <app-skeleton> and dashboard placeholders) */
 .skeleton {
   background: linear-gradient(90deg, #eef2f6 25%, #f8fafc 50%, #eef2f6 75%);
@@ -1092,7 +1194,8 @@ select.form-control {
   /* 4. When Printing Loan Disbursement Receipt */
   body:has(#printableLoanDisburseReceipt),
   body:has(#printableMoneyReceipt),
-  body:has(#printableCashClosingSlip) {
+  body:has(#printableCashClosingSlip),
+  body:has(#printableSavingsStatement) {
 
     app-navbar,
     app-sidebar,
@@ -1102,7 +1205,7 @@ select.form-control {
     .filter-card,
     .app-layout>*:not(.app-main-body),
     .app-main-body>*:not(.app-content-area),
-    .modal-backdrop>*:not(#printableLoanDisburseReceipt):not(#printableMoneyReceipt):not(#printableCashClosingSlip) {
+    .modal-backdrop>*:not(#printableLoanDisburseReceipt):not(#printableMoneyReceipt):not(#printableCashClosingSlip):not(#printableSavingsStatement) {
       display: none !important;
     }
 
@@ -1132,7 +1235,8 @@ select.form-control {
 
     #printableLoanDisburseReceipt,
     #printableMoneyReceipt,
-    #printableCashClosingSlip {
+    #printableCashClosingSlip,
+    #printableSavingsStatement {
       position: static !important;
       display: block !important;
       width: 100% !important;
@@ -1154,6 +1258,75 @@ select.form-control {
         padding: 0 !important;
         overflow: visible !important;
       }
+    }
+  }
+
+  /* 4b. সমিতি কালেকশন শিট (মাঠে নেওয়ার কাগজ) — প্রশস্ত টেবিল, আড়াআড়ি A4 */
+  body:has(#printableCollectionSheet) {
+    @page {
+      size: A4 landscape;
+      margin: 8mm;
+    }
+
+    app-navbar,
+    app-sidebar,
+    .app-navbar,
+    .app-sidebar,
+    .page-container,
+    .app-layout>*:not(.app-main-body),
+    .app-main-body>*:not(.app-content-area) {
+      display: none !important;
+    }
+
+    .app-layout,
+    .app-main-body,
+    .app-content-area {
+      display: block !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+
+    .modal-backdrop {
+      position: static !important;
+      background: none !important;
+      backdrop-filter: none !important;
+      display: block !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+
+    #printableCollectionSheet {
+      max-width: 100% !important;
+      padding: 0 !important;
+    }
+  }
+
+  /* 4c. রিপোর্ট পাতা (পেজের ভেতরের কার্ড, মডাল নয়) */
+  body:has(#printableReport) {
+    @page {
+      size: A4 landscape;
+      margin: 8mm;
+    }
+
+    app-navbar,
+    app-sidebar,
+    .app-navbar,
+    .app-sidebar,
+    .no-print,
+    .app-layout>*:not(.app-main-body),
+    .app-main-body>*:not(.app-content-area) {
+      display: none !important;
+    }
+
+    .app-layout,
+    .app-main-body,
+    .app-content-area {
+      display: block !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
     }
   }
 

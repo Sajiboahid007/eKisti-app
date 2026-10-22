@@ -10,10 +10,18 @@ import {
   query,
   where,
   orderBy,
-  runTransaction
+  runTransaction,
+  writeBatch,
+  increment
 } from '@angular/fire/firestore';
 import { CounterService } from './counter.service';
-import { AuditHistoryService } from './audit-history.service';
+import { AuditHistoryService, diffFields } from './audit-history.service';
+import { CashService } from './cash.service';
+import { FinanceService } from './finance.service';
+import { LoanLifecycleService } from './loan-lifecycle.service';
+import { MemberService } from './member.service';
+import { normalizeNid } from '../finance/validation';
+import { toDhakaDayKey } from '../finance/dates';
 import {
   Customer,
   Loan,
@@ -36,6 +44,10 @@ export class KistiDatabaseService {
   private firestore = inject(Firestore);
   private counterService = inject(CounterService);
   private auditHistoryService = inject(AuditHistoryService);
+  private cashService = inject(CashService);
+  private financeService = inject(FinanceService);
+  private loanLifecycle = inject(LoanLifecycleService);
+  private memberService = inject(MemberService);
 
   // ==========================================
   // 1. CUSTOMER OPERATIONS (গ্রাহক নিবন্ধন ও এডিট)
@@ -49,6 +61,16 @@ export class KistiDatabaseService {
     createdByUser: { userId: number; name: string; role: string },
     reason: string = 'নতুন গ্রাহক নিবন্ধন'
   ): Promise<Customer> {
+    // NID: বাংলা অংক/স্পেস বাদ দিয়ে একরূপ করা ও ডুপ্লিকেট সদস্য আটকানো
+    if (customerData.nidNumber) {
+      customerData = { ...customerData, nidNumber: normalizeNid(customerData.nidNumber) };
+      const duplicates = await this.memberService.findByNid(customerData.nidNumber);
+      if (duplicates.length > 0) {
+        throw new Error(`এই NID দিয়ে ইতোমধ্যে সদস্য নিবন্ধিত আছে: ${duplicates.map(d => `${d.fullName} (#${d.customerId})`).join(', ')}`);
+      }
+    }
+    const openingSavings = Number(customerData.totalSavingsBalance) || 0;
+
     const customerId = await this.counterService.getNextIntegerId('customers');
     const customerCode = `CUST-${customerId}`;
     const now = new Date().toISOString();
@@ -64,6 +86,10 @@ export class KistiDatabaseService {
 
     const newCustomer: Customer = {
       ...customerData,
+      // সঞ্চয় স্থিতি শুধু সঞ্চয় খতিয়ানের মাধ্যমে বাড়ে (নিচে প্রারম্ভিক জমা)
+      totalSavingsBalance: 0,
+      totalLoansTaken: 0,
+      activeLoansCount: 0,
       customerId,
       customerCode,
       isDeleted: false,
@@ -76,7 +102,23 @@ export class KistiDatabaseService {
 
     // Store with Integer ID as doc key
     const docRef = doc(this.firestore, 'customers', customerId.toString());
-    await setDoc(docRef, newCustomer);
+    const batch = writeBatch(this.firestore);
+    batch.set(docRef, JSON.parse(JSON.stringify(newCustomer)));
+    this.auditHistoryService.writeAuditLog(batch, {
+      entityType: 'customers', entityId: customerId, action: 'CREATE', reason,
+      changes: diffFields(undefined, { fullName: newCustomer.fullName, nidNumber: newCustomer.nidNumber, branchId: newCustomer.branchId, centerId: newCustomer.centerId }),
+      branchId: Number(newCustomer.branchId), actor: this.auditHistoryService.actorStamp(createdByUser)
+    });
+    await batch.commit();
+
+    // প্রারম্ভিক সঞ্চয় থাকলে পাসবুকে প্রথম জমা (DEPOSIT) এন্ট্রি — ভল্ট ও জার্নালসহ
+    if (openingSavings > 0) {
+      await this.cashService.recordSavings({
+        customerId, type: 'DEPOSIT', amount: openingSavings, isCredit: true, paymentMethod: 'CASH',
+        reason: `সদস্য ভর্তির সময় প্রারম্ভিক সঞ্চয় জমা (+৳ ${openingSavings})`
+      }, createdByUser);
+      newCustomer.totalSavingsBalance = openingSavings;
+    }
 
     return newCustomer;
   }
@@ -120,6 +162,22 @@ export class KistiDatabaseService {
 
     const currentData = docSnap.data() as Customer;
 
+    // সঞ্চয় স্থিতি ও ঋণ কাউন্টার শুধু খতিয়ান/ঋণ অপারেশন বদলায় — ফর্ম থেকে পুরাতন মান লিখে ফেলা ঠেকাতে বাদ
+    const fields: Partial<Customer> = { ...updatedFields };
+    delete fields.totalSavingsBalance;
+    delete fields.totalLoansTaken;
+    delete fields.activeLoansCount;
+    delete (fields as any).history;
+    if (fields.nidNumber !== undefined) {
+      fields.nidNumber = normalizeNid(fields.nidNumber);
+      if (fields.nidNumber && fields.nidNumber !== normalizeNid(currentData.nidNumber || '')) {
+        const duplicates = await this.memberService.findByNid(fields.nidNumber, customerId);
+        if (duplicates.length > 0) {
+          throw new Error(`এই NID দিয়ে অন্য সদস্য নিবন্ধিত আছে: ${duplicates.map(d => `${d.fullName} (#${d.customerId})`).join(', ')}`);
+        }
+      }
+    }
+
     const historyEntry = await this.auditHistoryService.createHistoryEntry({
       action: 'UPDATE',
       changedByUserId: changedByUser.userId,
@@ -127,15 +185,19 @@ export class KistiDatabaseService {
       changedByRole: changedByUser.role,
       reason,
       previousData: currentData,
-      newData: updatedFields
+      newData: fields
     });
 
     const updatedHistory = this.auditHistoryService.appendHistory(currentData.history, historyEntry);
 
-    await updateDoc(docRef, {
-      ...updatedFields,
-      history: updatedHistory
+    const batch = writeBatch(this.firestore);
+    batch.update(docRef, JSON.parse(JSON.stringify({ ...fields, history: updatedHistory })));
+    this.auditHistoryService.writeAuditLog(batch, {
+      entityType: 'customers', entityId: customerId, action: 'UPDATE', reason,
+      changes: diffFields(currentData as any, fields as any), branchId: Number(currentData.branchId),
+      actor: this.auditHistoryService.actorStamp(changedByUser)
     });
+    await batch.commit();
   }
 
   /**
@@ -202,107 +264,15 @@ export class KistiDatabaseService {
     }
   }
 
-  async disburseLoan(
-    loanData: Omit<Loan, 'loanId' | 'loanAccountNo' | 'isDeleted' | 'deletedAt' | 'deletedByUserId' | 'deleteReason' | 'history'>,
-    createdByUser: { userId: number; name: string; role: string },
-    reason: string = 'নতুন ঋণ বিতরণ ও কিস্তি শিডিউল তৈরি',
-    customLoanAccountNo?: string
-  ): Promise<{ loan: Loan; installments: InstallmentSchedule[] }> {
-    const loanId = await this.counterService.getNextIntegerId('loans');
-    let loanAccountNo = `LN-${loanId}`;
-    if (customLoanAccountNo && customLoanAccountNo.trim()) {
-      const trimmed = customLoanAccountNo.trim();
-      loanAccountNo = trimmed.toUpperCase().startsWith('LN-') ? trimmed.toUpperCase() : `LN-${trimmed}`;
-    }
-
-    const historyEntry = await this.auditHistoryService.createHistoryEntry({
-      action: 'CREATE',
-      changedByUserId: createdByUser.userId,
-      changedByName: createdByUser.name,
-      changedByRole: createdByUser.role,
-      reason,
-      newData: { loanId, loanAccountNo, ...loanData }
-    });
-
-    const newLoan: Loan = {
-      ...loanData,
-      loanId,
-      loanAccountNo,
-      isDeleted: false,
-      deletedAt: null,
-      deletedByUserId: null,
-      deleteReason: null,
-      history: [historyEntry]
-    };
-
-    // Save Loan document
-    const loanDocRef = doc(this.firestore, 'loans', loanId.toString());
-    await setDoc(loanDocRef, newLoan);
-
-    // Generate Installment Schedules (e.g. 40 installments)
-    const installments: InstallmentSchedule[] = [];
-    const installmentAmount = loanData.installmentAmount;
-    const savingsPerInstallment = loanData.savingsPerInstallment || 0;
-    const principalPerInst = Math.round(loanData.principalAmount / loanData.totalInstallments);
-    const profitPerInst = installmentAmount - principalPerInst;
-
-    let dueDateCursor = new Date(loanData.firstInstallmentDueDate);
-
-    for (let i = 1; i <= loanData.totalInstallments; i++) {
-      const installmentId = await this.counterService.getNextIntegerId('installments');
-
-      const installment: InstallmentSchedule = {
-        installmentId,
-        loanId,
-        customerId: loanData.customerId,
-        branchId: loanData.branchId,
-        centerId: loanData.centerId,
-        fieldOfficerUserId: loanData.fieldOfficerUserId,
-        installmentNo: i,
-        dueDate: dueDateCursor.toISOString().split('T')[0],
-        expectedPrincipal: principalPerInst,
-        expectedProfit: profitPerInst,
-        expectedSavings: savingsPerInstallment,
-        expectedTotalAmount: installmentAmount + savingsPerInstallment,
-        paidPrincipal: 0,
-        paidProfit: 0,
-        paidSavings: 0,
-        paidTotalAmount: 0,
-        status: 'PENDING',
-        isDeleted: false,
-        deletedAt: null,
-        deletedByUserId: null,
-        deleteReason: null,
-        history: []
-      };
-
-      // Advance date depending on frequency
-      if (loanData.installmentFrequency === 'DAILY') {
-        dueDateCursor.setDate(dueDateCursor.getDate() + 1);
-      } else if (loanData.installmentFrequency === 'MONTHLY') {
-        dueDateCursor.setMonth(dueDateCursor.getMonth() + 1);
-      } else {
-        // Default WEEKLY
-        dueDateCursor.setDate(dueDateCursor.getDate() + 7);
-      }
-
-      const instDocRef = doc(this.firestore, 'installments', installmentId.toString());
-      await setDoc(instDocRef, installment);
-      installments.push(installment);
-    }
-
-    return { loan: newLoan, installments };
-  }
+  // ঋণ বিতরণ এখন অনুমোদন প্রবাহের মাধ্যমে: LoanLifecycleService.createApplication → verify → approve → disburse
 
   async peekNextLoanId(): Promise<number> {
     return this.counterService.peekNextIntegerId('loans');
   }
 
-  async updateLoanAccountNo(loanId: number, newAccountNo: string): Promise<string> {
-    const trimmed = newAccountNo.trim();
-    const finalAccountNo = trimmed.toUpperCase().startsWith('LN-') ? trimmed.toUpperCase() : `LN-${trimmed}`;
-    const loanDocRef = doc(this.firestore, 'loans', loanId.toString());
-    await updateDoc(loanDocRef, { loanAccountNo: finalAccountNo });
+  async updateLoanAccountNo(loanId: number, newAccountNo: string, changedByUser: { userId: number; name: string; role: string }): Promise<string> {
+    const finalAccountNo = await this.loanLifecycle.resolveAccountNo(loanId, newAccountNo);
+    await this.editRecord('loans', loanId, { loanAccountNo: finalAccountNo }, changedByUser, 'ঋণ হিসাব নম্বর পরিবর্তন');
     return finalAccountNo;
   }
 
@@ -332,162 +302,73 @@ export class KistiDatabaseService {
     return allLoans.filter(l => l.customerId === customerId);
   }
 
+  /** একটি ঋণের কিস্তি শিডিউল (কিস্তি নং অনুযায়ী) */
+  async getInstallmentsByLoanId(loanId: number): Promise<InstallmentSchedule[]> {
+    return this.getInstallmentsByLoanIds([loanId]);
+  }
+
+  /**
+   * একাধিক ঋণের কিস্তি একসাথে — Firestore 'in' কুয়েরি ৩০টি করে ভাগে (N+1 কুয়েরি এড়াতে)
+   */
+  async getInstallmentsByLoanIds(loanIds: number[]): Promise<InstallmentSchedule[]> {
+    const ids = [...new Set(loanIds)];
+    const chunks: number[][] = [];
+    for (let i = 0; i < ids.length; i += 30) {
+      chunks.push(ids.slice(i, i + 30));
+    }
+
+    const snaps = await Promise.all(chunks.map(chunk =>
+      getDocs(query(collection(this.firestore, 'installments'), where('loanId', 'in', chunk)))
+    ));
+
+    const list: InstallmentSchedule[] = [];
+    snaps.forEach(snap => snap.forEach(d => {
+      const inst = d.data() as InstallmentSchedule;
+      if (!inst.isDeleted) {
+        list.push(inst);
+      }
+    }));
+    return list.sort((a, b) => a.loanId - b.loanId || a.installmentNo - b.installmentNo);
+  }
+
+  /** সদস্যপদ সমাপ্তিতে সঞ্চয় থেকে বকেয়া ঋণ সমন্বয় — FinanceService-এ একটি ট্রানজ্যাকশনে */
+  async settleLoansFromSavings(
+    customerId: number,
+    performedByUser: { userId: number; name: string; role: string },
+    reason: string
+  ): Promise<{ adjustedAmount: number; closedLoanIds: number[]; newSavingsBalance: number }> {
+    return this.financeService.settleLoansFromSavings(customerId, performedByUser, reason);
+  }
+
   // ==========================================
   // 3. COLLECTION / MONEY RECEIPT (মাঠের কিস্তি আদায়)
   // ==========================================
 
-  /**
-   * Records a field collection receipt with Integer Receipt ID (e.g. 40001)
-   * and updates the corresponding Installment and Loan balance.
-   */
-  async collectPayment(
-    collectionData: Omit<PaymentCollection, 'receiptId' | 'isDeleted' | 'deletedAt' | 'deletedByUserId' | 'deleteReason' | 'history' | 'isHandedOverToBranch'>,
-    collectedByUser: { userId: number; name: string; role: string },
-    reason: string = 'কিস্তি ও সঞ্চয় আদায়'
-  ): Promise<PaymentCollection> {
-    const receiptId = await this.counterService.getNextIntegerId('receipts');
-
-    const historyEntry = await this.auditHistoryService.createHistoryEntry({
-      action: 'PAYMENT_COLLECTED',
-      changedByUserId: collectedByUser.userId,
-      changedByName: collectedByUser.name,
-      changedByRole: collectedByUser.role,
-      reason,
-      newData: { receiptId, ...collectionData }
-    });
-
-    const receipt: PaymentCollection = {
-      ...collectionData,
-      receiptId,
-      isHandedOverToBranch: false,
-      isDeleted: false,
-      deletedAt: null,
-      deletedByUserId: null,
-      deleteReason: null,
-      history: [historyEntry]
-    };
-
-    // Save Receipt document
-    const receiptDocRef = doc(this.firestore, 'collections', receiptId.toString());
-    await setDoc(receiptDocRef, receipt);
-
-    // Update Loan balance
-    const loanDocRef = doc(this.firestore, 'loans', collectionData.loanId.toString());
-    const loanSnap = await getDoc(loanDocRef);
-
-    if (loanSnap.exists()) {
-      const loan = loanSnap.data() as Loan;
-      const newPaid = loan.totalPaidAmount + collectionData.principalAmountCollected + collectionData.profitAmountCollected;
-      const newOutstanding = Math.max(0, loan.totalRepayableAmount - newPaid);
-      const newSavings = loan.totalSavingsCollected + collectionData.savingsAmountCollected;
-      const newPaidCount = loan.paidInstallmentsCount + 1;
-      const newRemainingCount = Math.max(0, loan.totalInstallments - newPaidCount);
-
-      await updateDoc(loanDocRef, {
-        totalPaidAmount: newPaid,
-        totalSavingsCollected: newSavings,
-        outstandingBalance: newOutstanding,
-        paidInstallmentsCount: newPaidCount,
-        remainingInstallmentsCount: newRemainingCount,
-        status: newOutstanding <= 0 ? 'CLOSED' : loan.status
-      });
-    }
-
-    // Update Customer savings balance and record savings transaction if savings collected
-    if (collectionData.savingsAmountCollected && collectionData.savingsAmountCollected > 0) {
-      try {
-        const custDocRef = doc(this.firestore, 'customers', collectionData.customerId.toString());
-        const custSnap = await getDoc(custDocRef);
-        if (custSnap.exists()) {
-          const cust = custSnap.data() as Customer;
-          const prevBal = cust.totalSavingsBalance || 0;
-          const newBal = prevBal + collectionData.savingsAmountCollected;
-
-          await updateDoc(custDocRef, {
-            totalSavingsBalance: newBal
-          });
-
-          await this.recordSavingsTransaction(
-            {
-              customerId: collectionData.customerId,
-              customerName: collectionData.customerName,
-              branchId: collectionData.branchId,
-              centerId: collectionData.centerId,
-              loanId: collectionData.loanId,
-              installmentNo: collectionData.installmentNo,
-              type: 'KISTI_COLLECTION',
-              amount: collectionData.savingsAmountCollected,
-              isCredit: true,
-              previousBalance: prevBal,
-              newBalance: newBal,
-              paymentMethod: collectionData.paymentMethod || 'CASH',
-              transactionDate: collectionData.collectionDate || new Date().toISOString(),
-              performedByUserId: collectedByUser.userId,
-              performedByName: collectedByUser.name,
-              performedByRole: collectedByUser.role,
-              reason: `কিস্তি #${collectionData.installmentNo} এর সাথে বাধ্যতামূলক সঞ্চয় জমা (+৳ ${collectionData.savingsAmountCollected})`,
-              receiptNo: `RCP-${receiptId}`
-            },
-            collectedByUser,
-            `কিস্তির সাথে সঞ্চয় জমা (+৳ ${collectionData.savingsAmountCollected})`
-          );
-        }
-      } catch (err) {
-        console.error('Error updating customer savings on collection:', err);
-      }
-    }
-
-    return receipt;
-  }
+  // কিস্তি আদায় এখন FinanceService.collectPayment — রসিদ, কিস্তি, ঋণ, সঞ্চয়, খতিয়ান ও জার্নাল একটি ট্রানজ্যাকশনে
 
   // ==========================================
   // 4. SAVINGS OPERATIONS (সঞ্চয় জমা, উত্তোলন ও লেনদেন ইতিহাস)
   // ==========================================
 
   /**
-   * Records a savings transaction (Deposit, Withdraw, Adjustment, Closure)
-   * and atomically updates the customer's totalSavingsBalance.
+   * Records a savings transaction (Deposit, Withdraw, Adjustment, Closure).
+   * স্থিতি ট্রানজ্যাকশনের ভেতরে নতুন করে পড়ে হিসাব হয় (previousBalance/newBalance কলারের মান উপেক্ষিত),
+   * নগদ জমা/উত্তোলনে ভল্ট খতিয়ান ও জার্নাল লেখা হয়।
    */
   async recordSavingsTransaction(
     data: Omit<SavingsTransaction, 'transactionId' | 'isDeleted' | 'deletedAt' | 'deletedByUserId' | 'deleteReason' | 'history'>,
     performedByUser: { userId: number; name: string; role: string },
     reason: string
   ): Promise<SavingsTransaction> {
-    const transactionId = await this.counterService.getNextIntegerId('savings');
-
-    const historyEntry = await this.auditHistoryService.createHistoryEntry({
-      action: 'CREATE',
-      changedByUserId: performedByUser.userId,
-      changedByName: performedByUser.name,
-      changedByRole: performedByUser.role,
-      reason,
-      newData: { transactionId, ...data }
-    });
-
-    const transaction: SavingsTransaction = {
-      ...data,
-      transactionId,
-      isDeleted: false,
-      deletedAt: null,
-      deletedByUserId: null,
-      deleteReason: null,
-      history: [historyEntry]
-    };
-
-    // 1. Save savings transaction document
-    const docRef = doc(this.firestore, 'savingsTransactions', transactionId.toString());
-    await setDoc(docRef, transaction);
-
-    // 2. Atomically update Customer totalSavingsBalance in Firestore
-    const custDocRef = doc(this.firestore, 'customers', data.customerId.toString());
-    const custSnap = await getDoc(custDocRef);
-    if (custSnap.exists()) {
-      await updateDoc(custDocRef, {
-        totalSavingsBalance: data.newBalance
-      });
-    }
-
-    return transaction;
+    return this.cashService.recordSavings({
+      customerId: data.customerId,
+      type: data.type,
+      amount: data.amount,
+      isCredit: data.isCredit,
+      paymentMethod: data.paymentMethod,
+      reason: data.reason || reason,
+      receiptNo: data.receiptNo
+    }, performedByUser);
   }
 
   /**
@@ -576,13 +457,7 @@ export class KistiDatabaseService {
     }
   }
 
-  /**
-   * মাঠকর্মীর হাতের টাকা ক্যাশিয়ার কর্তৃক গ্রহণ — একটি Firestore ট্রানজ্যাকশনে:
-   *  1. DailyReconciliation রেকর্ড তৈরি (50001+)
-   *  2. প্রতিটি রসিদে isHandedOverToBranch / reconciliationId সেট + অডিট হিস্ট্রি
-   *  3. শাখার ভল্ট ক্যাশ বৃদ্ধি (শুধু গণনাকৃত নগদ) + অডিট হিস্ট্রি
-   * কোনো রসিদ ইতোমধ্যে অন্য কেউ জমা নিলে পুরো ট্রানজ্যাকশন বাতিল হয় (ডাবল কাউন্ট প্রতিরোধ)।
-   */
+  /** মাঠকর্মীর হাতের টাকা ক্যাশিয়ার কর্তৃক গ্রহণ — CashService (ভল্ট খতিয়ান ও জার্নালসহ) */
   async reconcileFieldOfficerCash(params: {
     branchId: number;
     fieldOfficerUserId: number;
@@ -593,175 +468,7 @@ export class KistiDatabaseService {
     notes?: string;
     cashier: { userId: number; name: string; role: string };
   }): Promise<DailyReconciliation> {
-    const receiptIds = [...new Set(params.receiptIds)];
-    if (receiptIds.length === 0) {
-      throw new Error('কমপক্ষে একটি রসিদ নির্বাচন করুন');
-    }
-    if (receiptIds.length > 400) {
-      throw new Error('একবারে সর্বোচ্চ ৪০০টি রসিদ জমা নেওয়া যাবে');
-    }
-    if (!(params.countedCashAmount >= 0)) {
-      throw new Error('গণনাকৃত নগদ টাকার পরিমাণ সঠিক নয়');
-    }
-
-    // আইডি আগেই সংরক্ষণ (ট্রানজ্যাকশন ব্যর্থ হলে শুধু সিকোয়েন্সে ফাঁক থাকবে, ডেটা নয়)
-    const reconciliationId = await this.counterService.getNextIntegerId('reconciliations');
-    // প্রতিটি রসিদ + শাখা + ক্লোজিং রেকর্ডের জন্য একটি করে হিস্ট্রি আইডি
-    let nextHistoryId = await this.counterService.reserveIntegerIds('history', receiptIds.length + 2);
-
-    const now = new Date().toISOString();
-    const today = this.toLocalDayKey(new Date());
-    const cashier = params.cashier;
-    const notes = (params.notes || '').trim();
-    const round2 = (n: number) => Math.round(n * 100) / 100;
-
-    const makeHistory = (
-      reason: string,
-      previousData: Record<string, any> | undefined,
-      newData: Record<string, any>
-    ): EditHistoryEntry => {
-      const prev = previousData ? { ...previousData } : {};
-      delete prev['history'];
-      return {
-        historyId: nextHistoryId++,
-        action: 'CASH_RECONCILED',
-        timestamp: now,
-        changedByUserId: cashier.userId,
-        changedByName: cashier.name,
-        changedByRole: cashier.role,
-        reason,
-        previousData: prev,
-        newData
-      };
-    };
-
-    return runTransaction(this.firestore, async (tx) => {
-      // ---------- READS (ট্রানজ্যাকশনে সব রিড আগে) ----------
-      const branchRef = doc(this.firestore, 'branches', params.branchId.toString());
-      const branchSnap = await tx.get(branchRef);
-      if (!branchSnap.exists()) {
-        throw new Error(`শাখা #${params.branchId} পাওয়া যায়নি`);
-      }
-      const branch = branchSnap.data() as Branch;
-
-      const receiptRefs = receiptIds.map(id => doc(this.firestore, 'collections', id.toString()));
-      const receiptSnaps = await Promise.all(receiptRefs.map(ref => tx.get(ref)));
-
-      const receipts: PaymentCollection[] = receiptSnaps.map((snap, i) => {
-        if (!snap.exists()) {
-          throw new Error(`রসিদ #${receiptIds[i]} পাওয়া যায়নি`);
-        }
-        const r = snap.data() as PaymentCollection;
-        if (r.isDeleted) {
-          throw new Error(`রসিদ #${r.receiptId} মুছে ফেলা হয়েছে`);
-        }
-        if (r.isHandedOverToBranch) {
-          throw new Error(`রসিদ #${r.receiptId} ইতোমধ্যে ভল্টে জমা নেওয়া হয়েছে। পেজ রিফ্রেশ করুন।`);
-        }
-        if (Number(r.branchId) !== Number(params.branchId)) {
-          throw new Error(`রসিদ #${r.receiptId} এই শাখার নয়`);
-        }
-        if (Number(r.collectedByUserId) !== Number(params.fieldOfficerUserId)) {
-          throw new Error(`রসিদ #${r.receiptId} এই মাঠকর্মীর আদায় নয়`);
-        }
-        return r;
-      });
-
-      // ---------- হিসাব ----------
-      let totalCollected = 0, expectedCash = 0, digital = 0, kisti = 0, savings = 0, fine = 0;
-      for (const r of receipts) {
-        const amount = r.totalAmountCollected || 0;
-        totalCollected += amount;
-        if (r.paymentMethod === 'CASH') expectedCash += amount; else digital += amount;
-        kisti += (r.principalAmountCollected || 0) + (r.profitAmountCollected || 0);
-        savings += r.savingsAmountCollected || 0;
-        fine += r.fineAmountCollected || 0;
-      }
-
-      const counted = round2(params.countedCashAmount);
-      const shortage = round2(expectedCash - counted); // + ঘাটতি, − অতিরিক্ত
-      const status: DailyReconciliation['cashierStatus'] = shortage === 0 ? 'ACCEPTED' : 'MISMATCH_DISCREPANCY';
-      if (status === 'MISMATCH_DISCREPANCY' && !notes) {
-        throw new Error('টাকার অমিল থাকলে কারণ / নোট লেখা বাধ্যতামূলক');
-      }
-
-      const vaultBefore = branch.currentVaultCash || 0;
-      const vaultAfter = round2(vaultBefore + counted);
-
-      const record: Omit<DailyReconciliation, 'history'> = {
-        reconciliationId,
-        date: today,
-        branchId: Number(params.branchId),
-        fieldOfficerUserId: params.fieldOfficerUserId,
-        fieldOfficerName: params.fieldOfficerName,
-        targetCollectionAmount: round2(totalCollected),
-        actualCashCollected: round2(expectedCash),
-        shortageOrDeficitAmount: shortage,
-        totalReceiptsCount: receipts.length,
-        cashHandedOverAmount: counted,
-        cashierUserId: cashier.userId,
-        cashierName: cashier.name,
-        cashierStatus: status,
-        cashierNotes: notes,
-        receiptIds,
-        digitalCollectedAmount: round2(digital),
-        kistiAmount: round2(kisti),
-        savingsAmount: round2(savings),
-        fineAmount: round2(fine),
-        denominations: params.denominations || {},
-        vaultBalanceBefore: vaultBefore,
-        vaultBalanceAfter: vaultAfter,
-        submittedAt: now,
-        verifiedAt: now,
-        createdAt: now,
-        isDeleted: false,
-        deletedAt: null,
-        deletedByUserId: null,
-        deleteReason: null
-      };
-      const reconciliation: DailyReconciliation = {
-        ...record,
-        history: [makeHistory('মাঠকর্মীর ক্যাশ ক্লোজিং ও ভল্টে জমা গ্রহণ', undefined, record)]
-      };
-
-      // ---------- WRITES ----------
-      tx.set(doc(this.firestore, 'reconciliations', reconciliationId.toString()), reconciliation);
-
-      receipts.forEach((r, i) => {
-        const fields = {
-          isHandedOverToBranch: true,
-          reconciliationId,
-          reconciledAt: now,
-          reconciledByUserId: cashier.userId
-        };
-        tx.update(receiptRefs[i], {
-          ...fields,
-          history: this.auditHistoryService.appendHistory(
-            r.history,
-            makeHistory(`ক্যাশ ক্লোজিং #${reconciliationId} — ক্যাশিয়ার কর্তৃক গ্রহণ`, r, fields)
-          )
-        });
-      });
-
-      const branchFields = { currentVaultCash: vaultAfter };
-      tx.update(branchRef, {
-        ...branchFields,
-        history: this.auditHistoryService.appendHistory(
-          branch.history,
-          makeHistory(
-            `ক্যাশ ক্লোজিং #${reconciliationId}: ${params.fieldOfficerName} থেকে ৳${counted} ভল্টে জমা`,
-            { currentVaultCash: vaultBefore },
-            branchFields
-          )
-        )
-      });
-
-      return reconciliation;
-    });
-  }
-
-  private toLocalDayKey(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return this.cashService.reconcileFieldOfficerCash(params);
   }
 
   // ==========================================
@@ -799,10 +506,15 @@ export class KistiDatabaseService {
 
     const updatedHistory = this.auditHistoryService.appendHistory(currentData['history'], historyEntry);
 
-    await updateDoc(docRef, {
-      ...updatedFields,
-      history: updatedHistory
+    const batch = writeBatch(this.firestore);
+    batch.update(docRef, { ...updatedFields, history: updatedHistory });
+    this.auditHistoryService.writeAuditLog(batch, {
+      entityType: collectionName, entityId: integerId, action: 'UPDATE', reason,
+      changes: diffFields(currentData, updatedFields),
+      branchId: typeof currentData['branchId'] === 'number' ? currentData['branchId'] : undefined,
+      actor: this.auditHistoryService.actorStamp(changedByUser)
     });
+    await batch.commit();
   }
 
   /**
@@ -833,13 +545,21 @@ export class KistiDatabaseService {
       previousData: currentData
     });
 
-    await updateDoc(docRef, {
+    const batch = writeBatch(this.firestore);
+    batch.update(docRef, {
       isDeleted: true,
       deletedAt: now,
       deletedByUserId: deletedByUser.userId,
       deleteReason: reason,
       history: this.auditHistoryService.appendHistory(currentData['history'], historyEntry)
     });
+    this.auditHistoryService.writeAuditLog(batch, {
+      entityType: collectionName, entityId: integerId, action: 'DELETE', reason,
+      changes: { isDeleted: { before: false, after: true } },
+      branchId: typeof currentData['branchId'] === 'number' ? currentData['branchId'] : undefined,
+      actor: this.auditHistoryService.actorStamp(deletedByUser)
+    });
+    await batch.commit();
   }
 
   // ==========================================
@@ -989,7 +709,25 @@ export class KistiDatabaseService {
     changedByUser: { userId: number; name: string; role: string },
     reason: string = 'রুট/সমিতি তথ্য আপডেট'
   ): Promise<void> {
+    const before = (await getDoc(doc(this.firestore, 'centers', centerId.toString()))).data() as CenterOrSamity | undefined;
     await this.editRecord('centers', centerId, updatedFields, changedByUser, reason);
+    // কোন মাঠকর্মী কোন সমিতির দায়িত্বে কবে থেকে — পুরাতন আদায়/ঘাটতি সঠিক ব্যক্তির নামে রাখতে
+    if (before && updatedFields.fieldOfficerUserId !== undefined && Number(updatedFields.fieldOfficerUserId) !== Number(before.fieldOfficerUserId)) {
+      await this.recordStaffAssignment({
+        kind: 'CENTER_FIELD_OFFICER', centerId, staffUserId: Number(updatedFields.fieldOfficerUserId),
+        previousStaffUserId: Number(before.fieldOfficerUserId), branchId: Number(before.branchId)
+      }, changedByUser);
+    }
+  }
+
+  private async recordStaffAssignment(
+    data: { kind: 'CENTER_FIELD_OFFICER' | 'STAFF_BRANCH'; centerId?: number; staffUserId: number; previousStaffUserId?: number; branchId: number; previousBranchId?: number },
+    changedByUser: { userId: number; name: string; role: string }
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await setDoc(doc(collection(this.firestore, 'staffAssignments')), JSON.parse(JSON.stringify({
+      ...data, effectiveFrom: toDhakaDayKey(now), timestamp: now, actor: this.auditHistoryService.actorStamp(changedByUser)
+    })));
   }
 
   async softDeleteCenter(
@@ -1194,7 +932,13 @@ export class KistiDatabaseService {
     changedByUser: { userId: number; name: string; role: string },
     reason: string = 'কর্মী তথ্য আপডেট'
   ): Promise<void> {
+    const before = (await getDoc(doc(this.firestore, 'staff', userId.toString()))).data() as UserStaff | undefined;
     await this.editRecord('staff', userId, updatedFields, changedByUser, reason);
+    if (before && updatedFields.branchId !== undefined && Number(updatedFields.branchId) !== Number(before.branchId)) {
+      await this.recordStaffAssignment({
+        kind: 'STAFF_BRANCH', staffUserId: userId, branchId: Number(updatedFields.branchId), previousBranchId: Number(before.branchId)
+      }, changedByUser);
+    }
   }
 
   async softDeleteStaff(

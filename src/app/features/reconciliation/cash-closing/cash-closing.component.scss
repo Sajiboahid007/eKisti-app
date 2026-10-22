@@ -558,3 +558,33 @@
   .receipt-pick { grid-template-columns: auto 1fr auto; .rp-id, .badge { display: none; } }
   .slip-meta { grid-template-columns: 1fr; .text-right { text-align: left; } }
 }
+
+/* ---------- মাঠকর্মীর হাতে টাকার খাতভিত্তিক বিভাজন ---------- */
+.type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.type-chip, .rp-type {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.t-KISTI { background: #ecfdf5; color: #047857; }
+.t-SAVINGS_DEPOSIT { background: #eff6ff; color: #1d4ed8; }
+.t-FEE { background: #faf5ff; color: #7e22ce; }
+.t-WRITE_OFF_RECOVERY { background: #fff7ed; color: #c2410c; }
+
+.rp-type { padding: 0 0.4rem; font-size: 0.68rem; }
+
+.pick-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}

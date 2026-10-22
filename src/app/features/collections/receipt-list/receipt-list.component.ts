@@ -5,6 +5,10 @@ import { Branch, CenterOrSamity, PaymentCollection } from '../../../core/models/
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { FinanceService } from '../../../core/services/finance.service';
+import { formatBnDate, toDhakaDayKey } from '../../../core/finance/dates';
+import { isSettledStatus, remainingOf } from '../../../core/finance/allocation';
+import { RECEIPT_TYPE_LABELS, receiptTypeOf } from '../../../core/finance/field-cash';
 
 type PaymentMethod = PaymentCollection['paymentMethod'];
 type HandoverFilter = 'ALL' | 'PENDING' | 'HANDED_OVER';
@@ -26,6 +30,14 @@ function toLocalDayKey(value: string | Date): string {
 })
 export class ReceiptListComponent implements OnInit {
   private kistiService = inject(KistiDatabaseService);
+  private finance = inject(FinanceService);
+
+  // রসিদ বাতিল (রিভার্সাল) — মোছা নয়, উল্টো এন্ট্রি
+  readonly reversing = signal<PaymentCollection | null>(null);
+  readonly reverseReason = signal<string>('');
+  readonly reverseBusy = signal<boolean>(false);
+  readonly reverseError = signal<string>('');
+  readonly notice = signal<string>('');
   readonly authService = inject(AuthStateService);
 
   readonly receipts = signal<PaymentCollection[]>([]);
@@ -117,7 +129,8 @@ export class ReceiptListComponent implements OnInit {
   readonly summary = computed(() => {
     let kisti = 0, savings = 0, fine = 0, total = 0, pendingHandover = 0;
     for (const r of this.filteredReceipts()) {
-      kisti += (r.principalAmountCollected || 0) + (r.profitAmountCollected || 0);
+      if (r.isReversed) continue;
+      kisti +=(r.principalAmountCollected || 0) + (r.profitAmountCollected || 0);
       savings += r.savingsAmountCollected || 0;
       fine += r.fineAmountCollected || 0;
       total += r.totalAmountCollected || 0;
@@ -225,8 +238,58 @@ export class ReceiptListComponent implements OnInit {
     return this.paymentMethods.find(m => m.value === method)?.label || method;
   }
 
-  viewReceipt(r: PaymentCollection) {
+  /** রসিদে "পরবর্তী কিস্তি" — রসিদের তারিখের পরের প্রথম অপরিশোধিত কিস্তি */
+  readonly receiptNextInstallment = signal<{ no: number; label: string; amount: number } | null>(null);
+
+  readonly receiptTypeLabels = RECEIPT_TYPE_LABELS;
+
+  typeOf(r: PaymentCollection) {
+    return receiptTypeOf(r);
+  }
+
+  async viewReceipt(r: PaymentCollection) {
     this.selectedReceiptForPrint.set(r);
+    this.receiptNextInstallment.set(null);
+    if (r.isReversed || receiptTypeOf(r) !== 'KISTI') return;
+    try {
+      const day = toDhakaDayKey(r.collectionDate);
+      const next = (await this.kistiService.getInstallmentsByLoanId(r.loanId))
+        .filter(i => !isSettledStatus(i.status) && i.dueDate > day)
+        .sort((a, b) => a.installmentNo - b.installmentNo)[0];
+      if (next && this.selectedReceiptForPrint()?.receiptId === r.receiptId) {
+        this.receiptNextInstallment.set({ no: next.installmentNo, label: formatBnDate(next.dueDate), amount: remainingOf(next).total + Math.max(0, (next.expectedSavings || 0) - (next.paidSavings || 0)) });
+      }
+    } catch (err) {
+      console.error('Could not load next installment for receipt:', err);
+    }
+  }
+
+  openReverse(r: PaymentCollection) {
+    this.reversing.set(r);
+    this.reverseReason.set('');
+    this.reverseError.set('');
+  }
+
+  closeReverse() {
+    if (!this.reverseBusy()) this.reversing.set(null);
+  }
+
+  async confirmReverse() {
+    const r = this.reversing();
+    if (!r || !this.reverseReason().trim()) return;
+    const u = this.authService.currentUser();
+    this.reverseBusy.set(true);
+    this.reverseError.set('');
+    try {
+      await this.finance.reverseReceipt(r.receiptId, this.reverseReason(), { userId: u.userId, name: u.name, role: u.role });
+      this.reversing.set(null);
+      this.notice.set(`রসিদ #${r.receiptId} বাতিল হয়েছে — কিস্তি, ঋণ ও সঞ্চয় স্থিতি ফেরত সমন্বয় করা হয়েছে`);
+      await this.loadReceipts();
+    } catch (err: any) {
+      this.reverseError.set(err?.message || 'রসিদ বাতিল করা যায়নি');
+    } finally {
+      this.reverseBusy.set(false);
+    }
   }
 
   closeReceipt() {

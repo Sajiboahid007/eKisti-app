@@ -1,0 +1,249 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <h2>ভল্ট, ব্যাংক ও দিবস সমাপনী</h2>
+      <p class="sub-text">শাখার প্রতিটি নগদ আসা-যাওয়ার খতিয়ান — ভল্ট স্থিতি এই খতিয়ানের চলতি যোগফল</p>
+    </div>
+    <div class="header-right">
+      @if (branches().length > 1) {
+        <select class="form-control branch-select" [ngModel]="branchId()" (ngModelChange)="branchId.set(+$event); load()">
+          @for (b of branches(); track b.branchId) { <option [ngValue]="b.branchId">{{ b.name }}</option> }
+        </select>
+      }
+      <button class="btn btn-secondary" (click)="load()" [disabled]="loading()"><span class="material-symbols-outlined">refresh</span></button>
+    </div>
+  </div>
+
+  @if (notice(); as n) {
+    <div class="flow-alert" [class.success]="n.kind === 'success'" [class.danger]="n.kind === 'danger'">
+      <span class="material-symbols-outlined">{{ n.kind === 'success' ? 'check_circle' : 'error' }}</span>
+      <span class="pre-line">{{ n.text }}</span>
+    </div>
+  }
+
+  @if (branch(); as b) {
+    <div class="kpi-row">
+      <div class="kpi"><span class="kpi-label">ভল্ট নগদ</span><strong class="amount-bdt">{{ b.currentVaultCash || 0 | number:'1.0-2' }}</strong></div>
+      <div class="kpi"><span class="kpi-label">ব্যাংক স্থিতি</span><strong class="amount-bdt">{{ b.currentBankBalance || 0 | number:'1.0-2' }}</strong></div>
+      <div class="kpi"><span class="kpi-label">সময়কালে আসা / যাওয়া</span><strong><span class="text-success">+{{ totals().inn | number }}</span> / <span class="text-danger">−{{ totals().out | number }}</span></strong></div>
+      <div class="kpi" [class.closed]="dayClosed()">
+        <span class="kpi-label">আজ ({{ today }})</span>
+        <strong>{{ dayClosed() ? 'দিবস সমাপ্ত 🔒' : 'খোলা' }}</strong>
+        @if (dayClosed()) { <span class="sub-text">{{ dayStatus()!.closedBy.name }}</span> }
+      </div>
+    </div>
+
+    @if (!hasLedger()) {
+      <div class="flow-alert info">
+        <span class="material-symbols-outlined">info</span>
+        <span>এই শাখার ভল্ট খতিয়ান এখনো চালু হয়নি। ভল্টের প্রকৃত নগদ গুনে "প্রারম্ভিক স্থিতি" দিয়ে শুরু করুন।
+          <button class="btn btn-sm btn-primary ms-2" (click)="open('OPENING')">প্রারম্ভিক স্থিতি</button>
+        </span>
+      </div>
+    }
+
+    <div class="action-row">
+      @for (o of operations; track o) {
+        <button class="btn btn-secondary" (click)="open(o)" [disabled]="dayClosed()">
+          <span class="material-symbols-outlined">{{ opLabels[o].icon }}</span><span>{{ opLabels[o].label }}</span>
+        </button>
+      }
+      <span class="spacer"></span>
+      <button class="btn btn-secondary" (click)="open('INTEREST')"><span class="material-symbols-outlined">percent</span><span>সঞ্চয় মুনাফা জমা</span></button>
+      <button class="btn btn-secondary" (click)="open('CLOSE_MONTH')"><span class="material-symbols-outlined">calendar_month</span><span>মাস সমাপনী</span></button>
+      @if (!dayClosed()) {
+        <button class="btn btn-primary" (click)="open('CLOSE_DAY')"><span class="material-symbols-outlined">lock_clock</span><span>দিবস সমাপনী</span></button>
+      }
+      @if (authService.canReopenDay()) {
+        <button class="btn btn-danger" (click)="open('REOPEN')"><span class="material-symbols-outlined">lock_open</span><span>দিন পুনরায় খুলুন</span></button>
+      }
+    </div>
+
+    <div class="tab-bar" role="tablist">
+      <button role="tab" class="tab-btn" [class.active]="tab() === 'LEDGER'" (click)="tab.set('LEDGER')">ভল্ট খতিয়ান</button>
+      <button role="tab" class="tab-btn" [class.active]="tab() === 'EXPENSES'" (click)="tab.set('EXPENSES')">খরচ ({{ expenses().length }})</button>
+      <button role="tab" class="tab-btn" [class.active]="tab() === 'SUMMARIES'" (click)="tab.set('SUMMARIES')">দিবস ও মাস সমাপনী</button>
+    </div>
+
+    @if (tab() !== 'SUMMARIES') {
+      <div class="range-row">
+        <input type="date" class="form-control" [ngModel]="from()" (ngModelChange)="from.set($event)" />
+        <span>থেকে</span>
+        <input type="date" class="form-control" [ngModel]="to()" (ngModelChange)="to.set($event)" />
+        <button class="btn btn-sm btn-primary" (click)="load()">দেখুন</button>
+        <button class="btn btn-sm btn-secondary" (click)="setRange(0)">আজ</button>
+        <button class="btn btn-sm btn-secondary" (click)="setRange(6)">৭ দিন</button>
+        <button class="btn btn-sm btn-secondary" (click)="setRange(29)">৩০ দিন</button>
+      </div>
+    }
+
+    <div class="card">
+      @if (loading()) {
+        <app-skeleton variant="table" [rows]="6" [columns]="6" />
+      } @else {
+        @switch (tab()) {
+          @case ('LEDGER') {
+            @if (ledger().length === 0) {
+              <div class="empty-state"><p>এই সময়ে কোনো ভল্ট লেনদেন নেই।</p></div>
+            } @else {
+              <div class="table-container border-0">
+                <table class="data-table">
+                  <thead><tr><th>নং</th><th>তারিখ ও সময়</th><th>বিবরণ</th><th>রেফারেন্স</th><th class="text-right">জমা</th><th class="text-right">খরচ/বের</th><th class="text-right">স্থিতি</th><th>কর্মী</th></tr></thead>
+                  <tbody>
+                    @for (v of ledger(); track v.vaultTransactionId) {
+                      <tr>
+                        <td>#{{ v.vaultTransactionId }}</td>
+                        <td>{{ v.businessDate }}<div class="sub-text">{{ v.createdAt | date:'hh:mm a' }}</div></td>
+                        <td>{{ typeLabel(v.type) }}@if (v.note) { <div class="sub-text">{{ v.note }}</div> }</td>
+                        <td>@if (v.slipNo) { স্লিপ {{ v.slipNo }} } @if (v.refType) { <span class="sub-text">{{ v.refType }} #{{ v.refId }}</span> }</td>
+                        <td class="text-right">@if (v.direction === 'IN') { <span class="amount-bdt text-success">{{ v.amount | number }}</span> }</td>
+                        <td class="text-right">@if (v.direction === 'OUT') { <span class="amount-bdt text-danger">{{ v.amount | number }}</span> }</td>
+                        <td class="text-right"><strong class="amount-bdt">{{ v.balanceAfter | number }}</strong></td>
+                        <td>{{ v.createdBy.name }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          }
+          @case ('EXPENSES') {
+            @if (expenses().length === 0) {
+              <div class="empty-state"><p>এই সময়ে কোনো খরচ নেই।</p></div>
+            } @else {
+              <div class="table-container border-0">
+                <table class="data-table">
+                  <thead><tr><th>ভাউচার</th><th>তারিখ</th><th>খাত</th><th>বিবরণ / প্রাপক</th><th class="text-right">টাকা</th><th>অনুমোদনকারী</th></tr></thead>
+                  <tbody>
+                    @for (e of expenses(); track e.expenseId) {
+                      <tr>
+                        <td>#{{ e.expenseId }}@if (e.voucherNo) { <div class="sub-text">{{ e.voucherNo }}</div> }</td>
+                        <td>{{ e.businessDate }}</td>
+                        <td>{{ e.head }}</td>
+                        <td>{{ e.description }}@if (e.paidTo) { <div class="sub-text">প্রাপক: {{ e.paidTo }}</div> }</td>
+                        <td class="text-right amount-bdt">{{ e.amount | number }}</td>
+                        <td>{{ e.createdBy.name }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          }
+          @case ('SUMMARIES') {
+            <div class="table-container border-0">
+              <table class="data-table">
+                <thead><tr><th>তারিখ</th><th class="text-right">প্রারম্ভিক ভল্ট</th><th class="text-right">আসা</th><th class="text-right">যাওয়া</th><th class="text-right">সমাপনী ভল্ট</th><th class="text-right">আদায়</th><th class="text-right">বিতরণ</th><th class="text-right">খরচ</th><th>PAR>৩০</th><th>সমাপনকারী</th></tr></thead>
+                <tbody>
+                  @for (s of summaries(); track s.summaryId) {
+                    <tr>
+                      <td>{{ s.date }}</td>
+                      <td class="text-right">{{ s.openingVault | number }}</td>
+                      <td class="text-right text-success">{{ vaultInOut(s, 'IN') | number }}</td>
+                      <td class="text-right text-danger">{{ vaultInOut(s, 'OUT') | number }}</td>
+                      <td class="text-right"><strong>{{ s.closingVault | number }}</strong></td>
+                      <td class="text-right">{{ s.collectionsTotal | number }} <span class="sub-text">({{ s.collectionsCount }})</span></td>
+                      <td class="text-right">{{ s.disbursedAmount | number }} <span class="sub-text">({{ s.disbursementsCount }})</span></td>
+                      <td class="text-right">{{ s.expensesTotal | number }}</td>
+                      <td>{{ s.par30Percent }}%</td>
+                      <td>{{ s.createdBy.name }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="10" class="text-center text-muted">এখনো কোনো দিবস সমাপনী হয়নি</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (snapshots().length) {
+              <h4 class="section-title">মাসিক পোর্টফোলিও স্ন্যাপশট</h4>
+              <div class="table-container border-0">
+                <table class="data-table">
+                  <thead><tr><th>মাস</th><th class="text-right">চলমান ঋণ</th><th class="text-right">বাকি আসল</th><th>PAR>১</th><th>PAR>৩০</th><th>OTR</th><th>CRR</th><th class="text-right">প্রয়োজনীয় সঞ্চিতি</th></tr></thead>
+                  <tbody>
+                    @for (m of snapshots(); track m.snapshotId) {
+                      <tr>
+                        <td>{{ m.month }}</td>
+                        <td class="text-right">{{ m.loansCount }}</td>
+                        <td class="text-right">{{ m.outstandingPrincipal | number }}</td>
+                        <td>{{ m.par1Percent }}%</td>
+                        <td>{{ m.par30Percent }}%</td>
+                        <td>{{ m.otrPercent }}%</td>
+                        <td>{{ m.crrPercent }}%</td>
+                        <td class="text-right">{{ m.requiredProvision | number }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          }
+        }
+      }
+    </div>
+  } @else if (!loading()) {
+    <div class="card empty-state"><p>আপনার অ্যাকাউন্টে কোনো শাখা নির্ধারিত নেই।</p></div>
+  }
+</div>
+
+@if (op(); as o) {
+  <div class="modal-backdrop" (click)="close()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>
+          @switch (o) {
+            @case ('CLOSE_DAY') { দিবস সমাপনী — {{ today }} }
+            @case ('CLOSE_MONTH') { মাস সমাপনী }
+            @case ('REOPEN') { বন্ধ দিন পুনরায় খোলা }
+            @case ('INTEREST') { সঞ্চয় মুনাফা জমা }
+            @default { {{ opInfo(o).label }} }
+          }
+        </h3>
+        <button class="close-btn" (click)="close()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body modal-stack">
+        @switch (o) {
+          @case ('CLOSE_DAY') {
+            <p>আজকের সব মাঠকর্মীর নগদ ভল্টে জমা নেওয়া হয়ে থাকলে দিনটি বন্ধ করুন। বন্ধের পর আজকের তারিখে এই শাখায় আর কোনো আদায়, বিতরণ বা ভল্ট লেনদেন করা যাবে না। দিনের সারাংশ সংরক্ষিত হবে।</p>
+            <p class="sub-text">বর্তমান ভল্ট: ৳{{ branch()?.currentVaultCash || 0 | number }} — বন্ধের আগে ভল্টের নগদ গুনে মিলিয়ে নিন।</p>
+          }
+          @case ('CLOSE_MONTH') {
+            <div class="form-group"><label>মাস</label><input type="month" class="form-control" [ngModel]="month()" (ngModelChange)="month.set($event)" /></div>
+            <p class="sub-text">শ্রেণীকরণ, ঋণ ক্ষতি সঞ্চিতি, PAR, OTR ও CRR-এর স্ন্যাপশট সংরক্ষিত হবে (MRA রিপোর্টের জন্য)।</p>
+          }
+          @case ('REOPEN') {
+            <div class="form-group"><label>তারিখ</label><input type="date" class="form-control" [ngModel]="reopenDate()" (ngModelChange)="reopenDate.set($event)" /></div>
+            <div class="form-group"><label>কারণ *</label><textarea class="form-control" rows="2" [ngModel]="note()" (ngModelChange)="note.set($event)"></textarea></div>
+          }
+          @case ('INTEREST') {
+            <div class="form-group"><label>মাস</label><input type="month" class="form-control" [ngModel]="month()" (ngModelChange)="month.set($event)" /></div>
+            <p class="sub-text">সাধারণ সেটিংসের বার্ষিক হার অনুযায়ী প্রতিটি সদস্যের সঞ্চয় স্থিতির ওপর মাসিক মুনাফা জমা হবে। একই মাসে দুবার জমা হবে না।</p>
+            @if (progress()) { <p>অগ্রগতি: {{ progress() }}</p> }
+          }
+          @default {
+            <p class="sub-text">{{ opInfo(o).hint }}</p>
+            <div class="form-group"><label>টাকার পরিমাণ *</label><input type="number" class="form-control" min="0" [ngModel]="amount()" (ngModelChange)="amount.set(+$event)" /></div>
+            @if (o === 'EXPENSE') {
+              <div class="form-group"><label>খরচের খাত *</label>
+                <select class="form-control" [ngModel]="head()" (ngModelChange)="head.set($event)">
+                  @for (h of expenseHeads; track h) { <option [value]="h">{{ h }}</option> }
+                </select>
+              </div>
+              <div class="form-group"><label>প্রাপক</label><input class="form-control" [ngModel]="paidTo()" (ngModelChange)="paidTo.set($event)" /></div>
+            }
+            @if (o !== 'OPENING') {
+              <div class="form-group"><label>{{ o === 'EXPENSE' ? 'ভাউচার নং' : 'স্লিপ / চেক / রেফারেন্স নং' }}@if (o === 'BANK_DEPOSIT' || o === 'BANK_WITHDRAW') { * }</label><input class="form-control" [ngModel]="slipNo()" (ngModelChange)="slipNo.set($event)" /></div>
+            }
+            <div class="form-group"><label>বিবরণ</label><input class="form-control" [ngModel]="note()" (ngModelChange)="note.set($event)" /></div>
+          }
+        }
+        @if (modalError()) {
+          <div class="flow-alert danger"><span class="material-symbols-outlined">error</span><span class="pre-line">{{ modalError() }}</span></div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="close()" [disabled]="busy()">বাতিল</button>
+        <button class="btn btn-primary" (click)="submit()" [disabled]="busy() || (o === 'REOPEN' && !note().trim())">{{ busy() ? 'প্রক্রিয়াধীন...' : 'নিশ্চিত করুন' }}</button>
+      </div>
+    </div>
+  </div>
+}

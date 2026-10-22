@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, superAdminGuard } from './core/guards/auth.guard';
+import { authGuard, permissionGuard, superAdminGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -47,8 +47,15 @@ export const routes: Routes = [
         loadComponent: () => import('./features/loans/loan-list/loan-list.component').then(m => m.LoanListComponent)
       },
       {
+        // ঋণ আবেদন (মাঠকর্মী / শাখা ব্যবস্থাপক) এবং ?loanId= দিয়ে অনুমোদিত ঋণ বিতরণ (ক্যাশিয়ার / BM)
         path: 'disburse',
+        canActivate: [permissionGuard('canApplyLoan', 'canDisburseLoan')],
         loadComponent: () => import('./features/loans/loan-disburse/loan-disburse.component').then(m => m.LoanDisburseComponent)
+      },
+      {
+        path: 'approvals',
+        canActivate: [permissionGuard('canSeeLoanPipeline')],
+        loadComponent: () => import('./features/loans/loan-approvals/loan-approvals.component').then(m => m.LoanApprovalsComponent)
       },
       {
         path: 'detail/:id',
@@ -62,6 +69,7 @@ export const routes: Routes = [
     children: [
       {
         path: 'daily',
+        canActivate: [permissionGuard('canCollectKisti')],
         loadComponent: () => import('./features/collections/daily-sheet/daily-sheet.component').then(m => m.DailySheetComponent)
       },
       {
@@ -71,13 +79,35 @@ export const routes: Routes = [
     ]
   },
   {
+    // ক্যাশিয়ার/BM জমা নেন; মাঠকর্মী শুধু নিজের অপেক্ষমাণ নগদ দেখেন
     path: 'reconciliation',
-    canActivate: [authGuard],
+    canActivate: [permissionGuard('canVerifyCash', 'isFieldOfficer')],
     loadComponent: () => import('./features/reconciliation/cash-closing/cash-closing.component').then(m => m.CashClosingComponent)
   },
   {
-    path: 'branches',
+    path: 'accounts',
+    canActivate: [permissionGuard('canManageAccounts')],
+    loadComponent: () => import('./features/accounts/vault-ledger/vault-ledger.component').then(m => m.VaultLedgerComponent)
+  },
+  {
+    // সঞ্চয়: সবাই দেখতে পারেন (মাঠকর্মী শুধু নিজের সদস্য); জমা/উত্তোলন শুধু ক্যাশিয়ার/BM
+    path: 'savings',
     canActivate: [authGuard],
+    loadComponent: () => import('./features/savings/savings.component').then(m => m.SavingsComponent)
+  },
+  {
+    path: 'reports',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent)
+  },
+  {
+    path: 'settings',
+    canActivate: [permissionGuard('canManageSettings')],
+    loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent)
+  },
+  {
+    path: 'branches',
+    canActivate: [permissionGuard('canManageBranches')],
     loadComponent: () => import('./features/organization/branch-route-list/branch-route-list.component').then(m => m.BranchRouteListComponent)
   },
   {

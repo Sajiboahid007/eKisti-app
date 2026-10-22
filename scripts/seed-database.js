@@ -1,5 +1,5 @@
 const { initializeApp } = require('firebase/app');
-const { getFirestore, doc, setDoc, deleteDoc } = require('firebase/firestore');
+const { getFirestore, doc, setDoc, getDoc, deleteDoc } = require('firebase/firestore');
 const dotenv = require('dotenv');
 const path = require('path');
 
@@ -23,6 +23,16 @@ const db = getFirestore(app);
 async function seedDatabase() {
   try {
     const timestamp = new Date().toISOString();
+
+    // নিরাপত্তা: ডেটাবেজে আগে থেকেই ডেটা থাকলে সিড চালালে কাউন্টার রিসেট হয়ে
+    // নতুন গ্রাহক/ঋণ পুরাতন রেকর্ডের ওপর লেখা হয়ে যেত। --force ছাড়া বন্ধ।
+    const existing = await getDoc(doc(db, 'counters', 'customers'));
+    if (existing.exists() && !process.argv.includes('--force')) {
+      console.error('\n✗ এই ডেটাবেজে ইতোমধ্যে ডেটা আছে (counters/customers পাওয়া গেছে)।');
+      console.error('  সিড চালালে বিদ্যমান গ্রাহক, ঋণ ও কিস্তি ওভাররাইট হতে পারে।');
+      console.error('  শুধু নতুন / ডেমো ডেটাবেজে চালাতে চাইলে: npm run db:seed -- --force\n');
+      process.exit(1);
+    }
 
     console.log('\n--- 1. Pushing System Counters (অটো-ইনক্রিমেন্ট কাউন্টার) ---');
     const counters = [

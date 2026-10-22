@@ -12,7 +12,16 @@ export type EntitySequence =
   | 'roles' 
   | 'reconciliations' 
   | 'history'
-  | 'savings';
+  | 'savings'
+  | 'loanTransactions'
+  | 'vaultTransactions'
+  | 'feeTransactions'
+  | 'expenses'
+  | 'followUps'
+  | 'insuranceClaims'
+  | 'memberTransfers'
+  | 'journalEntries'
+  | 'loanProducts';
 
 // Default starting Integer IDs for each table (like bank / microfinance numbering)
 const STARTING_SEQUENCES: Record<EntitySequence, number> = {
@@ -26,8 +35,22 @@ const STARTING_SEQUENCES: Record<EntitySequence, number> = {
   receipts: 40001,
   reconciliations: 50001,
   history: 1,
-  savings: 60001
+  savings: 60001,
+  loanTransactions: 70001,
+  vaultTransactions: 80001,
+  feeTransactions: 90001,
+  expenses: 91001,
+  followUps: 92001,
+  insuranceClaims: 93001,
+  memberTransfers: 94001,
+  journalEntries: 100001,
+  loanProducts: 1
 };
+
+/** কাউন্টার না থাকলে শেষ ইস্যুকৃত আইডি = শুরুর আগের সংখ্যা */
+export function startingSequence(entity: EntitySequence): number {
+  return STARTING_SEQUENCES[entity];
+}
 
 @Injectable({
   providedIn: 'root'

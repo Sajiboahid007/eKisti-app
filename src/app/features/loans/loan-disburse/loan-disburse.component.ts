@@ -1,11 +1,14 @@
-import { Component, inject, OnInit, signal, computed, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, OnInit, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
-import { Firestore } from '@angular/fire/firestore';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
-import { Customer, LoanProduct, InstallmentFrequency, Branch, CenterOrSamity, UserStaff } from '../../../core/models/database.models';
+import { LoanEligibility, LoanLifecycleService } from '../../../core/services/loan-lifecycle.service';
+import { SettingsService } from '../../../core/services/settings.service';
+import { Customer, LoanProduct, InstallmentFrequency, Branch, CenterOrSamity, UserStaff, Loan } from '../../../core/models/database.models';
+import { EMPTY_CALENDAR, LoanSchedule, WorkingCalendar, buildSchedule } from '../../../core/finance/schedule';
+import { formatBnDate, todayDhaka, weekdayBn } from '../../../core/finance/dates';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 
 export interface DisbursementReceiptData {
@@ -28,22 +31,36 @@ export interface DisbursementReceiptData {
   approvedByRole: string;
   principalAmount: number;
   profitRate: number;
-  profitType: 'FLAT' | 'ANNUAL';
+  profitType: 'FLAT' | 'ANNUAL' | 'DECLINING';
   effectiveProfitRate: number;
+  effectiveAnnualRate: number;
   profitAmount: number;
   totalRepayable: number;
   totalInstallments: number;
   installmentFrequency: InstallmentFrequency;
   frequencyLabel: string;
   installmentAmount: number;
+  lastInstallmentAmount: number;
   savingsPerInstallment: number;
   totalCollectionPerCycle: number;
   firstInstallmentDueDate: string;
   expectedClosingDate: string;
   formFeePaid: number;
+  insuranceFeePaid: number;
   purposeOfLoan: string;
+  loanCycle: number;
+  /** "বৃহস্পতিবার, ৫ নভেম্বর, ২০২৬" */
+  firstInstallmentDayLabel: string;
+  /** "প্রতি বৃহস্পতিবার (শাপলা মহিলা সমিতির মিটিং)" */
+  scheduleDayLabel: string;
+  centerMeetingInfo: string;
 }
 
+/**
+ * দুই ধাপের পেজ:
+ *  - আবেদন (ডিফল্ট): মাঠকর্মী/BM ঋণ আবেদন জমা দেন → অনুমোদন প্রবাহে যায়
+ *  - বিতরণ (?loanId=): অনুমোদিত ঋণ ক্যাশিয়ার/BM বিতরণ করেন → কিস্তি শিডিউল, ভল্ট, ভাউচার
+ */
 @Component({
   selector: 'app-loan-disburse',
   standalone: true,
@@ -52,10 +69,11 @@ export interface DisbursementReceiptData {
   styleUrl: './loan-disburse.component.scss'
 })
 export class LoanDisburseComponent implements OnInit {
-  private firestore = inject(Firestore);
   private kistiService = inject(KistiDatabaseService);
+  private lifecycle = inject(LoanLifecycleService);
+  private settings = inject(SettingsService);
   private router = inject(Router);
-  private cdr = inject(ChangeDetectorRef);
+  private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);
 
   readonly customers = signal<Customer[]>([]);
@@ -66,95 +84,110 @@ export class LoanDisburseComponent implements OnInit {
 
   readonly loading = signal<boolean>(true);
   readonly submitting = signal<boolean>(false);
+  readonly errorMessage = signal<string>('');
+  readonly successMessage = signal<string>('');
+
+  // আবেদন বনাম বিতরণ
+  readonly mode = signal<'APPLY' | 'DISBURSE'>('APPLY');
+  readonly approvedLoan = signal<Loan | null>(null);
 
   // Receipt Modal State
   readonly selectedReceiptForPrint = signal<DisbursementReceiptData | null>(null);
 
-  // Form Signals - Fully reactive in zoneless Angular
+  // Form Signals
   readonly selectedCustomerId = signal<number>(0);
   readonly selectedProductId = signal<number>(1);
   readonly principalAmount = signal<number>(20000);
   readonly totalInstallments = signal<number>(40);
-  readonly profitRate = signal<number>(10.0); // Base profit/service charge rate
-  readonly profitCalculationType = signal<'FLAT' | 'ANNUAL'>('FLAT');
+  readonly profitRate = signal<number>(10.0);
+  /** FLAT: মেয়াদের মোট %, ANNUAL: বার্ষিক ফ্ল্যাট % মেয়াদে রূপান্তর, DECLINING: বার্ষিক হ্রাসমান % */
+  readonly profitCalculationType = signal<'FLAT' | 'ANNUAL' | 'DECLINING'>('FLAT');
   readonly installmentFrequency = signal<InstallmentFrequency>('WEEKLY');
   readonly savingsPerInstallment = signal<number>(50);
   readonly formFeePaid = signal<number>(200);
   readonly insuranceFeePaid = signal<number>(100);
-  readonly firstInstallmentDueDate = signal<string>(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  readonly firstInstallmentDueDate = signal<string>('');
   readonly purposeOfLoan = signal<string>('ব্যবসা সম্প্রসারণ ও মালামাল ক্রয়');
   readonly customLoanAccountNo = signal<string>('');
   readonly estimatedNextLoanId = signal<number>(20001);
   readonly isEditingReceiptLoanNo = signal<boolean>(false);
   readonly tempReceiptLoanNo = signal<string>('');
 
-  // Live Reactive Computed Calculations
+  readonly calendar = signal<WorkingCalendar>(EMPTY_CALENDAR);
+  readonly today = signal<string>(todayDhaka());
+  readonly eligibility = signal<LoanEligibility | null>(null);
+  readonly checkingEligibility = signal<boolean>(false);
+
+  readonly selectedProduct = computed(() => this.products().find(p => p.productId === Number(this.selectedProductId())));
+  readonly selectedCustomer = computed(() => this.customers().find(c => c.customerId === Number(this.selectedCustomerId())));
+  readonly selectedCenter = computed(() => {
+    const cust = this.selectedCustomer();
+    return cust ? this.centers().find(c => c.centerId === cust.centerId) : undefined;
+  });
+
+  /** প্রথম কিস্তি — বার ও তারিখসহ (ছুটি বাদ দেওয়ার পরের প্রকৃত তারিখ) */
+  readonly firstDueLabel = computed(() => formatBnDate(this.schedule()?.rows[0]?.dueDate || this.firstInstallmentDueDate()));
+  readonly closingLabel = computed(() => formatBnDate(this.expectedClosingDate()));
+
+  /** কিস্তি কোন বারে / কবে আদায় হবে */
+  readonly scheduleDayLabel = computed(() => {
+    const first = this.schedule()?.rows[0]?.dueDate || this.firstInstallmentDueDate();
+    const freq = this.installmentFrequency();
+    if (!first) return '';
+    if (freq === 'DAILY') return 'প্রতি কর্মদিবস (সাপ্তাহিক ও সরকারি ছুটি বাদে)';
+    if (freq === 'MONTHLY') return `প্রতি মাসের ${new Intl.NumberFormat('bn-BD').format(Number(first.slice(8, 10)))} তারিখ`;
+    return `প্রতি ${weekdayBn(first)}`;
+  });
+
+  /** সাপ্তাহিক ঋণে প্রথম কিস্তি সমিতির মিটিং-বারে না পড়লে সতর্কতা */
+  readonly meetingDayMismatch = computed(() => {
+    const center = this.selectedCenter();
+    const first = this.firstInstallmentDueDate();
+    if (!center || !first || this.installmentFrequency() !== 'WEEKLY' || center.meetingDay === 'Daily') return '';
+    const aligned = this.lifecycle.alignToMeetingDay(first, 'WEEKLY', center.meetingDay);
+    return aligned !== first ? `সমিতির মিটিং ${weekdayBn(aligned)} — প্রথম কিস্তি ${formatBnDate(aligned)} করুন?` : '';
+  });
+
+  alignFirstDueToMeeting() {
+    const center = this.selectedCenter();
+    if (center) this.firstInstallmentDueDate.set(this.lifecycle.alignToMeetingDay(this.firstInstallmentDueDate(), 'WEEKLY', center.meetingDay));
+  }
+
+  /** মেয়াদের মোট ফ্ল্যাট % (FLAT ও ANNUAL); হ্রাসমানে বার্ষিক হার */
   readonly effectiveProfitRate = computed(() => {
     const rate = this.profitRate();
-    if (this.profitCalculationType() === 'FLAT') {
-      return Math.round(rate * 10) / 10;
-    }
-
-    // ANNUAL (বাৎসরিক লাভ) calculation:
+    const type = this.profitCalculationType();
+    if (type === 'FLAT' || type === 'DECLINING') return Math.round(rate * 100) / 100;
     const installments = Math.max(1, this.totalInstallments());
     const freq = this.installmentFrequency();
-    if (freq === 'DAILY') {
-      return Math.round((rate * (installments / 365)) * 10) / 10;
-    } else if (freq === 'MONTHLY') {
-      return Math.round((rate * (installments / 12)) * 10) / 10;
-    }
-    // WEEKLY: 52 weeks in a year
-    return Math.round((rate * (installments / 52)) * 10) / 10;
+    const perYear = freq === 'DAILY' ? 365 : freq === 'MONTHLY' ? 12 : 52;
+    return Math.round(rate * (installments / perYear) * 100) / 100;
   });
 
-  readonly profitAmount = computed(() => {
-    return Math.round((this.principalAmount() * this.effectiveProfitRate()) / 100);
+  /** পূর্ণ শিডিউল — ছুটির ক্যালেন্ডার ও শেষ কিস্তির রাউন্ডিং সমন্বয়সহ */
+  readonly schedule = computed<LoanSchedule | null>(() => {
+    if (!this.firstInstallmentDueDate() || this.principalAmount() <= 0 || this.totalInstallments() <= 0) return null;
+    return buildSchedule({
+      principal: this.principalAmount(),
+      ratePercent: this.effectiveProfitRate(),
+      method: this.profitCalculationType() === 'DECLINING' ? 'DECLINING' : 'FLAT',
+      count: this.totalInstallments(),
+      frequency: this.installmentFrequency(),
+      firstDueDate: this.firstInstallmentDueDate(),
+      calendar: this.calendar()
+    });
   });
 
-  readonly totalRepayable = computed(() => {
-    return this.principalAmount() + this.profitAmount();
-  });
-
-  readonly installmentAmount = computed(() => {
-    const count = this.totalInstallments();
-    if (!count || count <= 0) return 0;
-    return Math.round(this.totalRepayable() / count);
-  });
-
-  readonly principalPerInstallment = computed(() => {
-    const count = this.totalInstallments();
-    if (!count || count <= 0) return 0;
-    return Math.round(this.principalAmount() / count);
-  });
-
-  readonly profitPerInstallment = computed(() => {
-    return Math.max(0, this.installmentAmount() - this.principalPerInstallment());
-  });
-
-  readonly totalCycleCollection = computed(() => {
-    return this.installmentAmount() + (this.savingsPerInstallment() || 0);
-  });
-
-  readonly totalSavingsCollected = computed(() => {
-    return (this.savingsPerInstallment() || 0) * (this.totalInstallments() || 0);
-  });
-
-  readonly expectedClosingDate = computed(() => {
-    const firstDate = this.firstInstallmentDueDate();
-    const count = Math.max(1, this.totalInstallments());
-    if (!firstDate) return '';
-    const start = new Date(firstDate);
-    const freq = this.installmentFrequency();
-
-    if (freq === 'DAILY') {
-      start.setDate(start.getDate() + (count - 1));
-    } else if (freq === 'MONTHLY') {
-      start.setMonth(start.getMonth() + (count - 1));
-    } else {
-      start.setDate(start.getDate() + (count - 1) * 7);
-    }
-    return start.toISOString().split('T')[0];
-  });
+  readonly profitAmount = computed(() => this.schedule()?.totalProfit || 0);
+  readonly totalRepayable = computed(() => this.schedule()?.totalRepayable || this.principalAmount());
+  readonly installmentAmount = computed(() => this.schedule()?.installmentAmount || 0);
+  readonly lastInstallmentAmount = computed(() => this.schedule()?.lastInstallmentAmount || 0);
+  readonly effectiveAnnualRate = computed(() => this.schedule()?.effectiveAnnualRate || 0);
+  readonly principalPerInstallment = computed(() => this.schedule()?.rows[0]?.principal || 0);
+  readonly profitPerInstallment = computed(() => this.schedule()?.rows[0]?.profit || 0);
+  readonly totalCycleCollection = computed(() => this.installmentAmount() + (this.savingsPerInstallment() || 0));
+  readonly totalSavingsCollected = computed(() => (this.savingsPerInstallment() || 0) * (this.totalInstallments() || 0));
+  readonly expectedClosingDate = computed(() => this.schedule()?.expectedClosingDate || '');
 
   readonly frequencyLabel = computed(() => {
     const freq = this.installmentFrequency();
@@ -165,7 +198,7 @@ export class LoanDisburseComponent implements OnInit {
 
   readonly frequencyNameBangla = computed(() => {
     const freq = this.installmentFrequency();
-    if (freq === 'DAILY') return 'প্রতিদিন (Daily)';
+    if (freq === 'DAILY') return 'প্রতি কর্মদিবস (Daily)';
     if (freq === 'MONTHLY') return 'প্রতি মাসে (Monthly)';
     return 'সপ্তাহে ১ দিন (Weekly)';
   });
@@ -184,6 +217,21 @@ export class LoanDisburseComponent implements OnInit {
     return 'সপ্তাহে মোট আদায় হবে';
   });
 
+  readonly profitTypeLabel = computed(() => {
+    const t = this.profitCalculationType();
+    return t === 'FLAT' ? 'ফ্ল্যাট' : t === 'ANNUAL' ? 'বাৎসরিক ফ্ল্যাট' : 'বার্ষিক হ্রাসমান';
+  });
+
+  constructor() {
+    // গ্রাহক বা প্রোডাক্ট বদলালে যোগ্যতা ও শাখার ছুটির ক্যালেন্ডার নতুন করে আনা
+    effect(() => {
+      const customer = this.selectedCustomer();
+      const product = this.selectedProduct();
+      if (!customer || this.mode() !== 'APPLY') return;
+      void this.refreshEligibility(customer, product);
+    });
+  }
+
   async ngOnInit() {
     await this.loadInitialData();
   }
@@ -200,101 +248,128 @@ export class LoanDisburseComponent implements OnInit {
         this.kistiService.peekNextLoanId()
       ]);
 
-      this.customers.set(custList);
-      this.products.set(prodList);
+      // শুধু নিজের শাখার সক্রিয় সদস্য
+      this.customers.set(custList.filter(c => c.status !== 'CLOSED' && this.authService.canAccessBranch(c.branchId)));
+      this.products.set(prodList.filter(p => p.isActive !== false));
       this.branches.set(branchList);
       this.centers.set(centerList);
       this.staffList.set(staffList);
       this.estimatedNextLoanId.set(nextId);
 
-      if (custList.length > 0) {
-        this.selectedCustomerId.set(custList[0].customerId);
-      }
-      if (prodList.length > 0) {
-        this.selectedProductId.set(prodList[0].productId);
+      const loanIdParam = Number(this.route.snapshot.queryParamMap.get('loanId'));
+      if (loanIdParam) {
+        await this.loadApprovedLoan(loanIdParam);
+      } else {
+        if (this.customers().length > 0) this.selectedCustomerId.set(this.customers()[0].customerId);
+        const weekly = this.products().find(p => p.frequency === 'WEEKLY') || this.products()[0];
+        if (weekly) this.applyProduct(weekly);
+        else this.firstInstallmentDueDate.set(this.lifecycle.defaultFirstDueDate(undefined, 'WEEKLY'));
       }
     } catch (err) {
       console.error('Error loading data from database:', err);
+      this.errorMessage.set('ডেটা লোড করা যায়নি। আবার চেষ্টা করুন।');
     } finally {
       this.loading.set(false);
-      this.cdr.markForCheck();
     }
+  }
+
+  /** অনুমোদিত ঋণ বিতরণ মোড — শর্তাবলি আবেদন থেকে, শুধু তারিখ ও হিসাব নং পরিবর্তনযোগ্য */
+  private async loadApprovedLoan(loanId: number) {
+    const loan = (await this.kistiService.getLoans()).find(l => l.loanId === loanId);
+    if (!loan) throw new Error('ঋণ পাওয়া যায়নি');
+    this.mode.set('DISBURSE');
+    this.approvedLoan.set(loan);
+    if (!this.customers().some(c => c.customerId === loan.customerId)) {
+      const all = await this.kistiService.getCustomers();
+      const cust = all.find(c => c.customerId === loan.customerId);
+      if (cust) this.customers.update(list => [...list, cust]);
+    }
+    this.selectedCustomerId.set(loan.customerId);
+    this.selectedProductId.set(loan.productId);
+    this.principalAmount.set(loan.principalAmount);
+    this.totalInstallments.set(loan.totalInstallments);
+    this.installmentFrequency.set(loan.installmentFrequency);
+    this.profitCalculationType.set(loan.interestMethod === 'DECLINING' ? 'DECLINING' : 'FLAT');
+    this.profitRate.set(loan.ratePercent ?? Math.round((loan.interestOrServiceCharge / loan.principalAmount) * 10000) / 100);
+    this.savingsPerInstallment.set(loan.savingsPerInstallment);
+    this.formFeePaid.set(loan.formFeePaid || 0);
+    this.insuranceFeePaid.set(loan.insuranceFeePaid || 0);
+    this.purposeOfLoan.set(loan.purposeOfLoan);
+    const today = todayDhaka();
+    this.firstInstallmentDueDate.set(loan.firstInstallmentDueDate > today
+      ? loan.firstInstallmentDueDate
+      : this.lifecycle.defaultFirstDueDate(this.selectedProduct(), loan.installmentFrequency, today, this.centers().find(c => c.centerId === loan.centerId)?.meetingDay));
+    this.calendar.set(await this.settings.getCalendar(loan.branchId));
+    if (loan.status !== 'APPROVED') {
+      this.errorMessage.set(`এই ঋণটি "${loan.status}" অবস্থায় আছে — শুধু অনুমোদিত ঋণ বিতরণ করা যায়।`);
+    }
+  }
+
+  private async refreshEligibility(customer: Customer, product: LoanProduct | undefined) {
+    this.checkingEligibility.set(true);
+    try {
+      const [elig, cal] = await Promise.all([
+        this.lifecycle.checkEligibility(customer, product),
+        this.settings.getCalendar(customer.branchId)
+      ]);
+      this.eligibility.set(elig);
+      this.calendar.set(cal);
+      // গ্রাহক বদলালে তার সমিতির মিটিং-বার অনুযায়ী প্রথম কিস্তির তারিখ
+      this.firstInstallmentDueDate.set(this.lifecycle.defaultFirstDueDate(product, this.installmentFrequency(), undefined, this.selectedCenter()?.meetingDay));
+    } catch (err) {
+      console.error('Eligibility check failed:', err);
+    } finally {
+      this.checkingEligibility.set(false);
+    }
+  }
+
+  /** প্রোডাক্ট নির্বাচনে নীতি অনুযায়ী ডিফল্ট মান */
+  applyProduct(product: LoanProduct) {
+    this.selectedProductId.set(product.productId);
+    this.installmentFrequency.set(product.frequency);
+    this.totalInstallments.set(product.defaultInstallmentsCount);
+    this.profitRate.set(product.interestOrServiceChargeRate);
+    this.profitCalculationType.set(product.interestMethod === 'DECLINING' ? 'DECLINING' : 'FLAT');
+    this.savingsPerInstallment.set(product.mandatorySavingsPerInstallment);
+    this.formFeePaid.set(product.formAndProcessingFee || 0);
+    this.insuranceFeePaid.set(product.insuranceFee || 0);
+    this.firstInstallmentDueDate.set(this.lifecycle.defaultFirstDueDate(product, product.frequency, undefined, this.selectedCenter()?.meetingDay));
+  }
+
+  onProductChange(productId: number | string) {
+    const product = this.products().find(p => p.productId === Number(productId));
+    if (product) this.applyProduct(product);
   }
 
   setFrequency(freq: InstallmentFrequency) {
-    this.installmentFrequency.set(freq);
-    const now = Date.now();
-    if (freq === 'DAILY') {
-      const dailyProd = this.products().find(p => p.frequency === 'DAILY');
-      this.selectedProductId.set(dailyProd ? dailyProd.productId : 2);
-      this.totalInstallments.set(100);
-      this.profitRate.set(12.0);
-      this.savingsPerInstallment.set(20);
-      this.firstInstallmentDueDate.set(new Date(now + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-    } else if (freq === 'MONTHLY') {
-      const monthlyProd = this.products().find(p => p.frequency === 'MONTHLY');
-      this.selectedProductId.set(monthlyProd ? monthlyProd.productId : 3);
-      this.totalInstallments.set(12);
-      this.profitRate.set(12.0);
-      this.savingsPerInstallment.set(200);
-      this.firstInstallmentDueDate.set(new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-    } else {
-      this.installmentFrequency.set('WEEKLY');
-      const weeklyProd = this.products().find(p => p.frequency === 'WEEKLY');
-      this.selectedProductId.set(weeklyProd ? weeklyProd.productId : 1);
-      this.totalInstallments.set(40);
-      this.profitRate.set(10.0);
-      this.savingsPerInstallment.set(50);
-      this.firstInstallmentDueDate.set(new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    const product = this.products().find(p => p.frequency === freq);
+    if (product) {
+      this.applyProduct(product);
+      return;
     }
-    this.cdr.markForCheck();
+    this.installmentFrequency.set(freq);
+    this.totalInstallments.set(freq === 'DAILY' ? 100 : freq === 'MONTHLY' ? 12 : 40);
+    this.firstInstallmentDueDate.set(this.lifecycle.defaultFirstDueDate(undefined, freq, undefined, this.selectedCenter()?.meetingDay));
   }
 
   setInstallments(val: any) {
-    const count = Math.max(1, Number(val) || 1);
-    this.totalInstallments.set(count);
-    this.cdr.markForCheck();
+    this.totalInstallments.set(Math.max(1, Math.min(450, Number(val) || 1)));
   }
 
   setPrincipal(val: any) {
-    const amount = Math.max(0, Number(val) || 0);
-    this.principalAmount.set(amount);
-    this.cdr.markForCheck();
+    this.principalAmount.set(Math.max(0, Number(val) || 0));
   }
 
   setProfitRate(val: any) {
-    const rate = Math.max(0, Number(val) || 0);
-    this.profitRate.set(rate);
-    this.cdr.markForCheck();
+    this.profitRate.set(Math.max(0, Number(val) || 0));
   }
 
-  setProfitType(type: 'FLAT' | 'ANNUAL') {
+  setProfitType(type: 'FLAT' | 'ANNUAL' | 'DECLINING') {
     this.profitCalculationType.set(type);
-    this.cdr.markForCheck();
   }
 
   setSavings(val: any) {
-    const savings = Math.max(0, Number(val) || 0);
-    this.savingsPerInstallment.set(savings);
-    this.cdr.markForCheck();
-  }
-
-  // Getters for template compatibility
-  getEffectiveProfitRate(): number { return this.effectiveProfitRate(); }
-  calculateProfitAmount(): number { return this.profitAmount(); }
-  calculateTotalRepayable(): number { return this.totalRepayable(); }
-  calculateWeeklyInstallment(): number { return this.installmentAmount(); }
-  calculatePrincipalPerInstallment(): number { return this.principalPerInstallment(); }
-  calculateProfitPerInstallment(): number { return this.profitPerInstallment(); }
-  calculateTotalWeeklyCollection(): number { return this.totalCycleCollection(); }
-  calculateExpectedClosingDate(): string { return this.expectedClosingDate(); }
-  getFrequencyLabel(): string { return this.frequencyLabel(); }
-  getFrequencyNameBangla(): string { return this.frequencyNameBangla(); }
-  getFrequencySavingsLabel(): string { return this.frequencySavingsLabel(); }
-  getFrequencyCollectionLabel(): string { return this.frequencyCollectionLabel(); }
-
-  getSelectedCustomer(): Customer | undefined {
-    return this.customers().find(c => c.customerId === Number(this.selectedCustomerId()));
+    this.savingsPerInstallment.set(Math.max(0, Number(val) || 0));
   }
 
   getCustomerBranch(cust: Customer): Branch | undefined {
@@ -309,28 +384,14 @@ export class LoanDisburseComponent implements OnInit {
     return this.staffList().find(s => s.userId === cust.assignedFieldOfficerId);
   }
 
-  // Preview receipt without disbursing
-  previewReceipt() {
-    const cust = this.getSelectedCustomer();
-    if (!cust) {
-      alert('অনুগ্রহ করে আগে গ্রাহক নির্বাচন করুন');
-      return;
-    }
+  private buildReceipt(cust: Customer, loanId: number, loanAccountNo: string, disbursementDate: string, approver: { name: string; role: string }): DisbursementReceiptData {
     const branch = this.getCustomerBranch(cust);
     const center = this.getCustomerCenter(cust);
     const fo = this.getCustomerFieldOfficer(cust);
-    const currentUser = this.authService.currentUser();
-    const now = new Date().toISOString().split('T')[0];
-
-    const custom = this.customLoanAccountNo().trim();
-    const previewLoanNo = custom
-      ? (custom.toUpperCase().startsWith('LN-') ? custom.toUpperCase() : `LN-${custom}`)
-      : `LN-${this.estimatedNextLoanId()} (খসড়া)`;
-
-    const receipt: DisbursementReceiptData = {
-      loanId: 0,
-      loanAccountNo: previewLoanNo,
-      disbursementDate: now,
+    return {
+      loanId,
+      loanAccountNo,
+      disbursementDate,
       customerName: cust.fullName,
       customerId: cust.customerId,
       customerPhone: cust.phonePrimary,
@@ -343,28 +404,47 @@ export class LoanDisburseComponent implements OnInit {
       centerCode: center?.centerCode || '',
       fieldOfficerName: fo?.name || 'দায়িত্বপ্রাপ্ত মাঠ কর্মকর্তা',
       fieldOfficerPhone: fo?.phone || '',
-      approvedByName: currentUser.name,
-      approvedByRole: currentUser.role,
+      approvedByName: approver.name,
+      approvedByRole: approver.role,
       principalAmount: this.principalAmount(),
       profitRate: this.profitRate(),
       profitType: this.profitCalculationType(),
       effectiveProfitRate: this.effectiveProfitRate(),
+      effectiveAnnualRate: this.effectiveAnnualRate(),
       profitAmount: this.profitAmount(),
       totalRepayable: this.totalRepayable(),
       totalInstallments: this.totalInstallments(),
       installmentFrequency: this.installmentFrequency(),
       frequencyLabel: this.frequencyLabel(),
       installmentAmount: this.installmentAmount(),
+      lastInstallmentAmount: this.lastInstallmentAmount(),
       savingsPerInstallment: this.savingsPerInstallment(),
       totalCollectionPerCycle: this.totalCycleCollection(),
-      firstInstallmentDueDate: this.firstInstallmentDueDate(),
+      firstInstallmentDueDate: this.schedule()?.rows[0]?.dueDate || this.firstInstallmentDueDate(),
       expectedClosingDate: this.expectedClosingDate(),
       formFeePaid: this.formFeePaid(),
-      purposeOfLoan: this.purposeOfLoan()
+      insuranceFeePaid: this.insuranceFeePaid(),
+      purposeOfLoan: this.purposeOfLoan(),
+      loanCycle: this.approvedLoan()?.loanCycle || this.eligibility()?.loanCycle || 1,
+      firstInstallmentDayLabel: this.firstDueLabel(),
+      scheduleDayLabel: this.scheduleDayLabel(),
+      centerMeetingInfo: center ? `${center.name} — মিটিং: ${center.meetingDay === 'Daily' ? 'প্রতিদিন' : weekdayBn(this.lifecycle.alignToMeetingDay(this.today(), 'WEEKLY', center.meetingDay))} ${center.meetingTime || ''}` : ''
     };
+  }
 
-    this.selectedReceiptForPrint.set(receipt);
-    this.cdr.markForCheck();
+  // Preview receipt without saving
+  previewReceipt() {
+    const cust = this.selectedCustomer();
+    if (!cust) {
+      this.errorMessage.set('অনুগ্রহ করে আগে গ্রাহক নির্বাচন করুন');
+      return;
+    }
+    const custom = this.customLoanAccountNo().trim();
+    const loanNo = this.approvedLoan()
+      ? (custom ? (custom.toUpperCase().startsWith('LN-') ? custom.toUpperCase() : `LN-${custom}`) : this.approvedLoan()!.loanAccountNo) + ' (খসড়া)'
+      : `LN-${this.estimatedNextLoanId()} (খসড়া)`;
+    const user = this.authService.currentUser();
+    this.selectedReceiptForPrint.set(this.buildReceipt(cust, 0, loanNo, todayDhaka(), { name: this.approvedLoan()?.approvedByName || user.name, role: user.role }));
   }
 
   printReceipt() {
@@ -378,19 +458,10 @@ export class LoanDisburseComponent implements OnInit {
     if (receipt && receipt.loanId > 0) {
       this.router.navigate(['/loans/detail', receipt.loanId]);
     }
-    this.cdr.markForCheck();
   }
 
   viewLoanDetails() {
-    const receipt = this.selectedReceiptForPrint();
-    if (receipt && receipt.loanId > 0) {
-      this.selectedReceiptForPrint.set(null);
-      this.isEditingReceiptLoanNo.set(false);
-      this.router.navigate(['/loans/detail', receipt.loanId]);
-    } else {
-      this.selectedReceiptForPrint.set(null);
-      this.isEditingReceiptLoanNo.set(false);
-    }
+    this.closeReceipt();
   }
 
   startEditReceiptLoanNo() {
@@ -398,150 +469,76 @@ export class LoanDisburseComponent implements OnInit {
     if (cur) {
       this.tempReceiptLoanNo.set(cur.loanAccountNo);
       this.isEditingReceiptLoanNo.set(true);
-      this.cdr.markForCheck();
     }
   }
 
   cancelEditReceiptLoanNo() {
     this.isEditingReceiptLoanNo.set(false);
-    this.cdr.markForCheck();
   }
 
   async saveReceiptLoanNo() {
     const cur = this.selectedReceiptForPrint();
     const newNo = this.tempReceiptLoanNo().trim();
     if (!cur || !newNo) return;
-
     let finalNo = newNo.toUpperCase().startsWith('LN-') ? newNo.toUpperCase() : `LN-${newNo}`;
-
     if (cur.loanId > 0) {
       try {
-        finalNo = await this.kistiService.updateLoanAccountNo(cur.loanId, finalNo);
-      } catch (err) {
-        console.error('Failed to update loan account no in database:', err);
+        const user = this.authService.currentUser();
+        finalNo = await this.kistiService.updateLoanAccountNo(cur.loanId, finalNo, { userId: user.userId, name: user.name, role: user.role });
+      } catch (err: any) {
+        this.errorMessage.set(err?.message || 'ঋণ হিসাব নং পরিবর্তন করা যায়নি');
+        return;
       }
     }
-
-    this.selectedReceiptForPrint.set({
-      ...cur,
-      loanAccountNo: finalNo
-    });
+    this.selectedReceiptForPrint.set({ ...cur, loanAccountNo: finalNo });
     this.isEditingReceiptLoanNo.set(false);
-    this.cdr.markForCheck();
   }
 
-  async onDisburse() {
-    const cust = this.getSelectedCustomer();
+  async onSubmit() {
+    this.errorMessage.set('');
+    this.successMessage.set('');
+    const cust = this.selectedCustomer();
     if (!cust) {
-      alert('অনুগ্রহ করে গ্রাহক নির্বাচন করুন');
+      this.errorMessage.set('অনুগ্রহ করে গ্রাহক নির্বাচন করুন');
       return;
     }
-
-    if (this.principalAmount() <= 0) {
-      alert('সঠিক ঋণের পরিমাণ দিন');
-      return;
-    }
-
-    if (this.totalInstallments() <= 0) {
-      alert('সঠিক কিস্তির সংখ্যা দিন');
-      return;
-    }
-
+    const user = this.authService.currentUser();
+    const actor = { userId: user.userId, name: user.name, role: user.role };
     this.submitting.set(true);
-    const currentUser = this.authService.currentUser();
-    const now = new Date().toISOString().split('T')[0];
-
     try {
-      const branch = this.getCustomerBranch(cust);
-      const center = this.getCustomerCenter(cust);
-      const fo = this.getCustomerFieldOfficer(cust);
-
-      const result = await this.kistiService.disburseLoan(
-        {
+      if (this.mode() === 'DISBURSE') {
+        const loan = this.approvedLoan()!;
+        const result = await this.lifecycle.disburse(loan.loanId, {
+          firstDueDate: this.firstInstallmentDueDate(),
+          customLoanAccountNo: this.customLoanAccountNo()
+        }, actor);
+        this.approvedLoan.set(result.loan);
+        this.selectedReceiptForPrint.set(this.buildReceipt(cust, result.loan.loanId, result.loan.loanAccountNo, result.loan.disbursementDate, {
+          name: loan.approvedByName || user.name, role: loan.approvedByName ? 'শাখা ব্যবস্থাপক (অনুমোদনকারী)' : user.role
+        }));
+      } else {
+        const loan = await this.lifecycle.createApplication({
           customerId: cust.customerId,
-          customerName: cust.fullName,
-          branchId: cust.branchId,
-          centerId: cust.centerId,
-          fieldOfficerUserId: cust.assignedFieldOfficerId,
           productId: Number(this.selectedProductId()),
           principalAmount: this.principalAmount(),
-          interestOrServiceCharge: this.profitAmount(),
-          totalRepayableAmount: this.totalRepayable(),
-          installmentFrequency: this.installmentFrequency(),
+          interestMethod: this.profitCalculationType() === 'DECLINING' ? 'DECLINING' : 'FLAT',
+          ratePercent: this.effectiveProfitRate(),
           totalInstallments: this.totalInstallments(),
-          installmentAmount: this.installmentAmount(),
+          installmentFrequency: this.installmentFrequency(),
           savingsPerInstallment: this.savingsPerInstallment(),
           formFeePaid: this.formFeePaid(),
           insuranceFeePaid: this.insuranceFeePaid(),
-          totalPaidAmount: 0,
-          totalPrincipalPaid: 0,
-          totalProfitPaid: 0,
-          totalSavingsCollected: 0,
-          outstandingBalance: this.totalRepayable(),
-          paidInstallmentsCount: 0,
-          remainingInstallmentsCount: this.totalInstallments(),
-          overdueAmount: 0,
-          missedInstallmentsCount: 0,
-          applicationDate: now,
-          approvedDate: now,
-          approvedByUserId: currentUser.userId,
-          disbursementDate: now,
-          firstInstallmentDueDate: this.firstInstallmentDueDate(),
-          expectedClosingDate: this.expectedClosingDate(),
           purposeOfLoan: this.purposeOfLoan(),
-          status: 'DISBURSED'
-        },
-        { userId: currentUser.userId, name: currentUser.name, role: currentUser.role },
-        `নতুন ঋণ বিতরণ: ৳${this.principalAmount()} (${this.totalInstallments()} কিস্তি - ${this.installmentFrequency()})`,
-        this.customLoanAccountNo()
-      );
-
-      // Construct Complete Disbursement Sanction & Money Receipt Data
-      const receipt: DisbursementReceiptData = {
-        loanId: result.loan.loanId,
-        loanAccountNo: result.loan.loanAccountNo,
-        disbursementDate: result.loan.disbursementDate,
-        customerName: cust.fullName,
-        customerId: cust.customerId,
-        customerPhone: cust.phonePrimary,
-        customerNid: cust.nidNumber,
-        customerAddress: `${cust.presentAddress?.villageOrStreet || ''}, ${cust.presentAddress?.thanaOrUpazila || ''}, ${cust.presentAddress?.district || ''}`.replace(/^,\s*|,\s*$/g, ''),
-        customerFatherOrSpouse: cust.spouseName || cust.fatherName || 'N/A',
-        branchName: branch?.name || 'প্রধান শাখা',
-        branchPhone: branch?.phone || '',
-        centerName: center?.name || 'সাধারণ কেন্দ্র',
-        centerCode: center?.centerCode || '',
-        fieldOfficerName: fo?.name || 'দায়িত্বপ্রাপ্ত মাঠ কর্মকর্তা',
-        fieldOfficerPhone: fo?.phone || '',
-        approvedByName: currentUser.name,
-        approvedByRole: currentUser.role,
-        principalAmount: this.principalAmount(),
-        profitRate: this.profitRate(),
-        profitType: this.profitCalculationType(),
-        effectiveProfitRate: this.effectiveProfitRate(),
-        profitAmount: this.profitAmount(),
-        totalRepayable: this.totalRepayable(),
-        totalInstallments: this.totalInstallments(),
-        installmentFrequency: this.installmentFrequency(),
-        frequencyLabel: this.frequencyLabel(),
-        installmentAmount: this.installmentAmount(),
-        savingsPerInstallment: this.savingsPerInstallment(),
-        totalCollectionPerCycle: this.totalCycleCollection(),
-        firstInstallmentDueDate: this.firstInstallmentDueDate(),
-        expectedClosingDate: this.expectedClosingDate(),
-        formFeePaid: this.formFeePaid(),
-        purposeOfLoan: this.purposeOfLoan()
-      };
-
-      // Open the printable receipt modal immediately upon saving loan!
-      this.selectedReceiptForPrint.set(receipt);
-      this.cdr.markForCheck();
-    } catch (err) {
-      console.error('Disbursement error:', err);
-      alert('ঋণ বিতরণে সমস্যা হয়েছে');
+          proposedFirstDueDate: this.firstInstallmentDueDate()
+        }, actor);
+        this.successMessage.set(`ঋণ আবেদন ${loan.loanAccountNo} জমা হয়েছে — এখন মাঠ যাচাই ও শাখা ব্যবস্থাপকের অনুমোদনের অপেক্ষায়।`);
+        setTimeout(() => this.router.navigate(['/loans/approvals']), 1500);
+      }
+    } catch (err: any) {
+      console.error('Loan submit error:', err);
+      this.errorMessage.set(err?.message || 'প্রক্রিয়া সম্পন্ন করা যায়নি');
     } finally {
       this.submitting.set(false);
-      this.cdr.markForCheck();
     }
   }
 }

@@ -151,6 +151,13 @@
                 </div>
               </div>
 
+              <div class="type-chips">
+                @if (g.breakdown.kisti) { <span class="type-chip t-KISTI">কিস্তি ৳{{ g.breakdown.kisti | number }}</span> }
+                @if (g.breakdown.savings) { <span class="type-chip t-SAVINGS_DEPOSIT">সঞ্চয় ৳{{ g.breakdown.savings | number }}</span> }
+                @if (g.breakdown.fees) { <span class="type-chip t-FEE">ফি ৳{{ g.breakdown.fees | number }}</span> }
+                @if (g.breakdown.recovery) { <span class="type-chip t-WRITE_OFF_RECOVERY">অবলোপিত আদায় ৳{{ g.breakdown.recovery | number }}</span> }
+              </div>
+
               <div class="officer-foot">
                 <span class="sub-text">
                   <span class="material-symbols-outlined icon-mini">schedule</span>
@@ -295,11 +302,17 @@
               <label class="receipt-pick" [class.unchecked]="!selectedReceiptIds().has(r.receiptId)">
                 <input type="checkbox" [checked]="selectedReceiptIds().has(r.receiptId)" (change)="toggleReceipt(r.receiptId)" [disabled]="submitting()" />
                 <span class="rp-id">#{{ r.receiptId }}</span>
-                <span class="rp-name">{{ r.customerName }}<small>{{ r.collectionDate | date:'dd MMM, hh:mm a' }}</small></span>
+                <span class="rp-name">{{ r.customerName }}<small>{{ r.collectionDate | date:'dd MMM, hh:mm a' }} • <span class="rp-type" [class]="'t-' + typeOf(r)">{{ receiptTypeLabels[typeOf(r)] }}</span></small></span>
                 <span class="badge" [ngClass]="r.paymentMethod === 'CASH' ? 'badge-secondary' : 'badge-paid'">{{ r.paymentMethod }}</span>
                 <span class="rp-amt amount-bdt">{{ r.totalAmountCollected | number }}</span>
               </label>
             }
+          </div>
+          <div class="pick-breakdown">
+            <span>কিস্তি <strong>৳{{ selectedBreakdown().kisti | number }}</strong></span>
+            <span>সঞ্চয় <strong>৳{{ selectedBreakdown().savings | number }}</strong></span>
+            @if (selectedBreakdown().fees) { <span>ফি <strong>৳{{ selectedBreakdown().fees | number }}</strong></span> }
+            @if (selectedBreakdown().recovery) { <span>অবলোপিত আদায় <strong>৳{{ selectedBreakdown().recovery | number }}</strong></span> }
           </div>
           <div class="pick-summary">
             <span>নির্বাচিত: <strong>{{ selectedReceipts().length }}</strong> / {{ g.receipts.length }}</span>
@@ -436,7 +449,13 @@
             <div class="s-row"><span>মোট রসিদ</span><span class="text-right">{{ s.totalReceiptsCount }} টি</span></div>
             @if (s.kistiAmount !== undefined) {
               <div class="s-row"><span>কিস্তি (আসল + লাভ)</span><span class="text-right amount-bdt">{{ s.kistiAmount | number }}</span></div>
-              <div class="s-row"><span>সঞ্চয় জমা</span><span class="text-right amount-bdt">{{ s.savingsAmount | number }}</span></div>
+              <div class="s-row"><span>সঞ্চয় জমা (কিস্তির সাথে + সরাসরি)</span><span class="text-right amount-bdt">{{ s.savingsAmount | number }}</span></div>
+              @if (s.feeAmount) {
+                <div class="s-row"><span>ভর্তি / পাসবুক ফি</span><span class="text-right amount-bdt">{{ s.feeAmount | number }}</span></div>
+              }
+              @if (s.recoveryAmount) {
+                <div class="s-row"><span>অবলোপিত ঋণ আদায়</span><span class="text-right amount-bdt">{{ s.recoveryAmount | number }}</span></div>
+              }
               @if (s.fineAmount) {
                 <div class="s-row"><span>জরিমানা</span><span class="text-right amount-bdt">{{ s.fineAmount | number }}</span></div>
               }

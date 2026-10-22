@@ -22,6 +22,24 @@ export const superAdminGuard: CanActivateFn = (route, state) => {
     return true;
   }
 
-  alert('এই পেজে শুধুমাত্র সুপার অ্যাডমিনের অনুমতি রয়েছে (Super Admin Access Only)');
-  return router.createUrlTree(['/dashboard']);
+  return router.createUrlTree(['/dashboard'], { queryParams: { denied: 'users' } });
+};
+
+/** যেসব অনুমতি রুটে যাচাই করা যায় (AuthStateService-এর computed সিগন্যাল) */
+export type RoutePermission =
+  | 'canCollectKisti' | 'canVerifyCash' | 'canApplyLoan' | 'canSeeLoanPipeline' | 'canDisburseLoan'
+  | 'canManageAccounts' | 'canManageSettings' | 'canManageBranches' | 'isFieldOfficer';
+
+/**
+ * ভূমিকা-ভিত্তিক রুট গার্ড — যেকোনো একটি অনুমতি থাকলেই প্রবেশ।
+ * সতর্কতা: ক্লায়েন্ট গার্ড শুধু UX; আসল নিরাপত্তা Firestore Security Rules-এ (firestore.rules)।
+ */
+export const permissionGuard = (...permissions: RoutePermission[]): CanActivateFn => () => {
+  const authService = inject(AuthStateService);
+  const router = inject(Router);
+  if (!authService.isAuthenticated()) {
+    return router.createUrlTree(['/login']);
+  }
+  const allowed = permissions.some(p => (authService[p] as () => boolean)());
+  return allowed ? true : router.createUrlTree(['/dashboard'], { queryParams: { denied: permissions[0] } });
 };

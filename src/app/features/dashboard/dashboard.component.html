@@ -9,14 +9,9 @@
       @if (authService.isFieldOfficer() && !loading()) {
         <p class="banner-route">
           <span class="material-symbols-outlined icon-mini">route</span>
-          @if (todaySamities().length > 0) {
-            {{ lang.isBangla() ? 'আজকের সমিতি: ' : 'Today: ' }}
-            @for (s of todaySamities(); track s.center.centerId; let last = $last) {
-              <strong>{{ s.center.name }}</strong> ({{ s.center.meetingTime }}, {{ s.center.totalMembers }} {{ lang.isBangla() ? 'জন' : 'members' }}){{ last ? '' : ' • ' }}
-            }
-          } @else {
-            {{ lang.isBangla() ? 'আজ কোনো সমিতির মিটিং নির্ধারিত নেই' : 'No samity meeting scheduled today' }}
-          }
+          <span [textContent]="todayLabel() + ' — ' + (routeTotals().stops > 0
+            ? ('আজ ' + routeTotals().stops + 'টি সমিতিতে যেতে হবে, ' + routeTotals().members + ' জনের কিস্তি দেয়')
+            : 'আজ কোনো সমিতির মিটিং বা কিস্তি নেই')"></span>
         </p>
       }
       <div class="banner-meta">
@@ -30,6 +25,22 @@
         </span>
         @if (lastUpdated()) {
           <span class="updated-at">{{ lang.isBangla() ? 'হালনাগাদ: ' : 'Updated: ' }}{{ lastUpdated() | date:'shortTime' }}</span>
+        }
+        @if (overdueResult(); as od) {
+          <span class="overdue-note" [title]="(lang.isBangla() ? 'যাচাইকৃত ঋণ: ' : 'Loans checked: ') + od.loansChecked + (lang.isBangla() ? ' • কিস্তি বকেয়া চিহ্নিত: ' : ' • Installments marked overdue: ') + od.installmentsMarked">
+            <span class="material-symbols-outlined icon-mini">update</span>
+            {{ lang.isBangla() ? 'বকেয়া হিসাব হালনাগাদ: ' : 'Overdue updated: ' }}{{ od.loansUpdated }} {{ lang.isBangla() ? 'ঋণ' : 'loans' }}
+          </span>
+        }
+        @if (overdueError()) {
+          <span class="overdue-note error">{{ overdueError() }}</span>
+        }
+        @if (authService.canApproveLoans()) {
+          <button type="button" class="btn-overdue-rerun no-print" (click)="rerunOverdueEngine()" [disabled]="overdueRunning() || loading()"
+            [title]="lang.isBangla() ? 'সব চলমান ঋণের বকেয়া, শ্রেণীকরণ ও ক্রেডিট স্কোর পুনরায় হিসাব করুন' : 'Recalculate overdue, classification and credit scores'">
+            <span class="material-symbols-outlined icon-mini" [class.spin]="overdueRunning()">sync</span>
+            {{ overdueRunning() ? (lang.isBangla() ? 'হিসাব চলছে...' : 'Running...') : (lang.isBangla() ? 'বকেয়া পুনঃহিসাব' : 'Recalculate Overdue') }}
+          </button>
         }
       </div>
     </div>
@@ -158,6 +169,9 @@
           <div class="kpi-label">{{ lang.isBangla() ? 'ঝুঁকিপূর্ণ পোর্টফোলিও (PAR)' : 'Portfolio at Risk (PAR)' }}</div>
           <div class="kpi-value">{{ parPercent() | number:'1.1-1' }}%</div>
           <div class="kpi-subtext">
+            PAR&gt;30: <strong>{{ par30Percent() | number:'1.1-1' }}%</strong>
+          </div>
+          <div class="kpi-subtext">
             @if (overdueAmount() === 0) {
               <span class="text-success">{{ lang.t('noOverdue') }}</span>
             } @else {
@@ -214,37 +228,114 @@
   <!-- Role-based widgets -->
   @if (!loading()) {
     <div class="dashboard-content-grid">
-      <!-- Field officer: today's samities with progress -->
+      <!-- Field officer: money in my hand that the cashier has not received yet -->
       @if (authService.isFieldOfficer()) {
-        <div class="card">
+        @let fc = myFieldCash();
+        <div class="card my-cash-card" [class.has-cash]="fc.total > 0" [class.stale]="myCashStale()">
           <div class="card-header">
             <div class="header-title">
-              <span class="material-symbols-outlined text-primary">groups</span>
-              <h3>{{ lang.isBangla() ? 'আজকের সমিতি ও আদায় অগ্রগতি' : "Today's Samities & Progress" }}</h3>
+              <span class="material-symbols-outlined text-primary">account_balance_wallet</span>
+              <h3>আমার হাতে থাকা টাকা (ক্যাশিয়ারকে জমা বাকি)</h3>
             </div>
+            <a routerLink="/reconciliation" class="btn btn-sm btn-secondary">বিস্তারিত</a>
           </div>
           <div class="card-body">
-            @if (todaySamities().length === 0) {
+            @if (fc.total === 0) {
               <div class="empty-state compact">
-                <span class="material-symbols-outlined">event_busy</span>
-                <p>{{ lang.isBangla() ? 'আজ কোনো সমিতির মিটিং নেই।' : 'No samity meeting today.' }}</p>
+                <span class="material-symbols-outlined">task_alt</span>
+                <p>আপনার হাতে জমা দেওয়ার মতো কোনো টাকা নেই — সব ক্যাশিয়ারকে বুঝিয়ে দেওয়া হয়েছে।</p>
               </div>
             } @else {
-              <ul class="progress-list">
-                @for (s of todaySamities(); track s.center.centerId) {
-                  <li>
-                    <div class="progress-head">
-                      <div>
+              <div class="my-cash-total">
+                <span>মোট <strong class="amount-bdt">{{ fc.total | number:'1.0-0' }}</strong></span>
+                <span>নগদ <strong class="amount-bdt">{{ fc.cash | number:'1.0-0' }}</strong></span>
+                @if (fc.digital) { <span>ডিজিটাল <strong class="amount-bdt">{{ fc.digital | number:'1.0-0' }}</strong></span> }
+                <span>{{ fc.count }}টি রসিদ</span>
+              </div>
+              <div class="my-cash-grid">
+                <div class="mc-item"><span>কিস্তি (আসল + লাভ)</span><strong class="amount-bdt">{{ fc.kisti | number:'1.0-0' }}</strong></div>
+                <div class="mc-item"><span>সঞ্চয়</span><strong class="amount-bdt">{{ fc.savings | number:'1.0-0' }}</strong></div>
+                <div class="mc-item"><span>ভর্তি / পাসবুক ফি</span><strong class="amount-bdt">{{ fc.fees | number:'1.0-0' }}</strong></div>
+                <div class="mc-item"><span>অবলোপিত ঋণ আদায়</span><strong class="amount-bdt">{{ fc.recovery | number:'1.0-0' }}</strong></div>
+              </div>
+              <p class="my-cash-note">
+                দিন শেষে এই সব টাকা শাখায় ক্যাশিয়ারকে গুনে বুঝিয়ে দিন। ক্যাশিয়ার গ্রহণ না করা পর্যন্ত এই টাকার দায় আপনার।
+                @if (myCashStale()) { <strong class="text-danger">আগের দিনের টাকা এখনো জমা হয়নি!</strong> }
+              </p>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Field officer: today's route (which samity to visit, in meeting-time order) -->
+      @if (authService.isFieldOfficer()) {
+        <div class="card route-card">
+          <div class="card-header">
+            <div class="header-title">
+              <span class="material-symbols-outlined text-primary">route</span>
+              <h3>আজকের রুট</h3>
+            </div>
+            <span class="route-date" [textContent]="todayLabel()"></span>
+          </div>
+          <div class="card-body">
+            @if (todayRoute().length === 0) {
+              <div class="empty-state compact">
+                <span class="material-symbols-outlined">event_busy</span>
+                <p>আজ আপনার কোনো সমিতির মিটিং বা কিস্তি নেই।</p>
+              </div>
+            } @else {
+              <div class="route-summary">
+                <span><strong>{{ routeTotals().stops }}</strong> সমিতি</span>
+                <span><strong>{{ routeTotals().members }}</strong> জনের কিস্তি দেয়</span>
+                <span>বাকি <strong class="amount-bdt">{{ routeTotals().remaining | number:'1.0-0' }}</strong></span>
+                <span>আদায় <strong class="amount-bdt text-success">{{ routeTotals().collected | number:'1.0-0' }}</strong></span>
+              </div>
+              <ol class="route-list">
+                @for (s of todayRoute(); track s.center.centerId; let i = $index) {
+                  <li class="route-stop" [class.done]="s.dueMembers === 0 && s.target > 0">
+                    <span class="stop-no">{{ i + 1 }}</span>
+                    <div class="stop-body">
+                      <div class="stop-head">
                         <strong>{{ s.center.name }}</strong>
-                        <div class="sub-text">{{ s.center.meetingTime }} • {{ s.center.location }} • {{ s.center.totalMembers }} {{ lang.isBangla() ? 'জন সদস্য' : 'members' }}</div>
+                        <span class="stop-reason" [class]="'reason-' + s.reason">
+                          {{ s.reason === 'MEETING' ? 'আজ মিটিং' : s.reason === 'DAILY' ? 'দৈনিক সমিতি' : 'কিস্তি দেয়' }}
+                        </span>
                       </div>
-                      <span class="progress-figure"><span class="amount-bdt">{{ s.collected | number:'1.0-0' }}</span> / {{ s.target | number:'1.0-0' }}</span>
+                      <div class="sub-text">
+                        <span class="material-symbols-outlined icon-mini">schedule</span> {{ s.center.meetingTime || '—' }}
+                        • <span class="material-symbols-outlined icon-mini">location_on</span> {{ s.center.location || '—' }}
+                      </div>
+                      <div class="stop-figures">
+                        <span>দেয়: <strong>{{ s.dueMembers }} জন</strong> / বাকি <strong class="amount-bdt">{{ s.dueRemaining | number:'1.0-0' }}</strong></span>
+                        @if (s.overdueLoans > 0) {
+                          <span class="text-danger">বকেয়া ঋণ: <strong>{{ s.overdueLoans }}টি</strong> (৳{{ s.overdueAmount | number:'1.0-0' }})</span>
+                        }
+                      </div>
+                      <div class="progress-track"><div class="progress-fill" [class]="'tone-' + progressTone(s.percent)" [style.width.%]="s.percent"></div></div>
                     </div>
-                    <div class="progress-track"><div class="progress-fill" [class]="'tone-' + progressTone(s.percent)" [style.width.%]="s.percent"></div></div>
+                    <a class="btn btn-sm btn-primary stop-open" [routerLink]="['/collections/daily']" [queryParams]="{ centerId: s.center.centerId }">
+                      <span class="material-symbols-outlined">payments</span><span>শিট খুলুন</span>
+                    </a>
                   </li>
                 }
-              </ul>
+              </ol>
             }
+
+            <div class="week-plan">
+              <div class="week-title">আগামী দিনের রুট</div>
+              <div class="week-grid">
+                @for (d of weekPlan(); track d.date) {
+                  <div class="week-day" [class.empty]="d.centers.length === 0">
+                    <span class="wd-label">{{ d.label }}</span>
+                    @for (c of d.centers; track c.centerId) {
+                      <span class="wd-center">{{ c.name }}@if (c.meetingTime) { <small>{{ c.meetingTime }}</small> }</span>
+                    } @empty {
+                      <span class="wd-none">—</span>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
           </div>
         </div>
       }
@@ -292,6 +383,16 @@
             <a routerLink="/reconciliation" class="btn btn-sm btn-secondary">{{ lang.isBangla() ? 'ক্লোজিং করুন' : 'Reconcile' }}</a>
           </div>
           <div class="card-body p-0">
+            @if (overLimitOfficers().length > 0) {
+              <div class="cash-limit-alert" role="alert">
+                <span class="material-symbols-outlined">priority_high</span>
+                <span>
+                  {{ lang.isBangla() ? 'নগদ সীমা অতিক্রম' : 'Cash-in-hand limit exceeded' }}
+                  ({{ foCashLimit() | number:'1.0-0' }} ৳):
+                  <strong>{{ overLimitOfficers().length }}</strong> {{ lang.isBangla() ? 'জন মাঠকর্মী — দ্রুত শাখায় জমা নিন' : 'field officer(s) — collect cash now' }}
+                </span>
+              </div>
+            }
             @if (handoverQueue().length === 0) {
               <div class="empty-state compact">
                 <span class="material-symbols-outlined">task_alt</span>
@@ -309,10 +410,18 @@
                   </thead>
                   <tbody>
                     @for (q of handoverQueue(); track q.userId) {
-                      <tr>
-                        <td><strong>{{ q.name }}</strong></td>
+                      <tr [class.over-limit-row]="q.overLimit">
+                        <td>
+                          <strong>{{ q.name }}</strong>
+                          <div class="sub-text">{{ breakdownText(q.userId) }}</div>
+                          @if (q.overLimit) {
+                            <span class="limit-badge" [title]="(lang.isBangla() ? 'হাতে নগদ: ' : 'Cash in hand: ') + (q.cashAmount | number:'1.0-0') + ' ৳'">
+                              {{ lang.isBangla() ? 'সীমা অতিক্রম' : 'Over limit' }}
+                            </span>
+                          }
+                        </td>
                         <td>{{ q.receiptsCount }}</td>
-                        <td class="amount-bdt text-warning">{{ q.amount | number:'1.0-0' }}</td>
+                        <td class="amount-bdt" [class.text-warning]="!q.overLimit" [class.text-danger]="q.overLimit">{{ q.amount | number:'1.0-0' }}</td>
                       </tr>
                     }
                   </tbody>

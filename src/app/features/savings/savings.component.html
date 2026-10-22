@@ -1,0 +1,351 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-left">
+      <h2>সঞ্চয় হিসাব (Savings)</h2>
+      <p class="sub-text">সকল সদস্যের সঞ্চয় স্থিতি, জমা ও উত্তোলনের খতিয়ান এবং সদস্যভিত্তিক পাসবুক স্টেটমেন্ট</p>
+    </div>
+    <div class="header-right no-print">
+      <button class="btn btn-secondary" (click)="exportCsv()" [disabled]="loading()">
+        <span class="material-symbols-outlined">download</span><span>CSV</span>
+      </button>
+      <button class="btn btn-secondary" (click)="refreshCustomers(); loadTransactions()" [disabled]="loading()">
+        <span class="material-symbols-outlined">refresh</span>
+      </button>
+    </div>
+  </div>
+
+  @if (notice(); as n) {
+    <div class="flow-alert" [class.success]="n.kind === 'success'" [class.danger]="n.kind === 'danger'" [class.info]="n.kind === 'info'">
+      <span class="material-symbols-outlined">{{ n.kind === 'success' ? 'check_circle' : n.kind === 'danger' ? 'error' : 'info' }}</span>
+      <span>{{ n.text }}</span>
+      <button class="alert-close" (click)="notice.set(null)" aria-label="বন্ধ"><span class="material-symbols-outlined">close</span></button>
+    </div>
+  }
+
+  @if (loading()) {
+    <app-skeleton variant="cards" [cards]="4" />
+    <div class="card"><app-skeleton variant="table" [rows]="8" [columns]="6" label="সঞ্চয়ের তথ্য লোড হচ্ছে..." /></div>
+  } @else {
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi highlight">
+        <span class="kpi-label">মোট সঞ্চয় স্থিতি</span>
+        <strong class="amount-bdt">{{ summary().totalBalance | number }}</strong>
+        <span class="sub-text">{{ summary().withBalance }} জন সদস্যের হিসাবে • গড় ৳{{ summary().average | number }}</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">সময়কালে জমা</span>
+        <strong class="amount-bdt text-success">{{ summary().deposits | number }}</strong>
+        <span class="sub-text">কিস্তির সাথে ৳{{ summary().kisti | number }} • মুনাফা ৳{{ summary().interest | number }}</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">সময়কালে উত্তোলন / ফেরত</span>
+        <strong class="amount-bdt text-danger">{{ summary().withdrawals | number }}</strong>
+        <span class="sub-text">নিট পরিবর্তন ৳{{ summary().net | number }}</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">নীতি</span>
+        <strong>{{ interestRate() }}% বার্ষিক মুনাফা</strong>
+        <span class="sub-text">{{ withdrawLock() ? 'চলমান ঋণে উত্তোলন বন্ধ' : 'চলমান ঋণেও উত্তোলন চালু' }}</span>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filter-card no-print">
+      <div class="filter-row">
+        @if (branches().length > 1) {
+          <label class="filter-field">
+            <span>শাখা</span>
+            <select class="form-control" [ngModel]="branchId()" (ngModelChange)="onBranchChange($event)">
+              <option [ngValue]="0">সকল শাখা</option>
+              @for (b of branches(); track b.branchId) { <option [ngValue]="b.branchId">{{ b.name }}</option> }
+            </select>
+          </label>
+        }
+        <label class="filter-field">
+          <span>সমিতি</span>
+          <select class="form-control" [ngModel]="centerId()" (ngModelChange)="centerId.set(+$event)">
+            <option [ngValue]="0">সকল সমিতি</option>
+            @for (c of branchCenters(); track c.centerId) { <option [ngValue]="c.centerId">{{ c.name }}</option> }
+          </select>
+        </label>
+        <label class="filter-field grow">
+          <span>খুঁজুন</span>
+          <input class="form-control" placeholder="নাম, আইডি, ফোন, NID বা রসিদ নং" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+        </label>
+        @if (tab() === 'MEMBERS') {
+          <label class="filter-field">
+            <span>সাজান</span>
+            <select class="form-control" [ngModel]="sort()" (ngModelChange)="sort.set($event)">
+              <option value="BALANCE_DESC">স্থিতি (বেশি → কম)</option>
+              <option value="BALANCE_ASC">স্থিতি (কম → বেশি)</option>
+              <option value="NAME">নাম</option>
+            </select>
+          </label>
+          <label class="check-inline">
+            <input type="checkbox" [checked]="onlyWithBalance()" (change)="onlyWithBalance.set(!onlyWithBalance())" />
+            শুধু স্থিতি আছে এমন
+          </label>
+        }
+      </div>
+      <div class="filter-row">
+        <label class="filter-field">
+          <span>শুরুর তারিখ</span>
+          <input type="date" class="form-control" [ngModel]="from()" (ngModelChange)="from.set($event)" />
+        </label>
+        <label class="filter-field">
+          <span>শেষ তারিখ</span>
+          <input type="date" class="form-control" [ngModel]="to()" (ngModelChange)="to.set($event)" />
+        </label>
+        @if (tab() === 'TRANSACTIONS') {
+          <label class="filter-field">
+            <span>লেনদেনের ধরন</span>
+            <select class="form-control" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
+              <option value="ALL">সকল</option>
+              @for (t of typeLabels | keyvalue; track t.key) { <option [value]="t.key">{{ t.value }}</option> }
+            </select>
+          </label>
+        }
+        <div class="range-buttons">
+          <button class="btn btn-sm btn-primary" (click)="loadTransactions()" [disabled]="loadingTxns()">দেখুন</button>
+          <button class="btn btn-sm btn-secondary" (click)="setRange(0)">আজ</button>
+          <button class="btn btn-sm btn-secondary" (click)="setRange(6)">৭ দিন</button>
+          <button class="btn btn-sm btn-secondary" (click)="setRange(29)">৩০ দিন</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-bar no-print" role="tablist">
+      <button role="tab" class="tab-btn" [class.active]="tab() === 'MEMBERS'" (click)="tab.set('MEMBERS')">
+        <span class="material-symbols-outlined">groups</span> সদস্যভিত্তিক স্থিতি ({{ filteredMembers().length }})
+      </button>
+      <button role="tab" class="tab-btn" [class.active]="tab() === 'TRANSACTIONS'" (click)="tab.set('TRANSACTIONS')">
+        <span class="material-symbols-outlined">receipt_long</span> লেনদেন খতিয়ান ({{ filteredTransactions().length }})
+      </button>
+    </div>
+
+    <div class="card">
+      @if (tab() === 'MEMBERS') {
+        @if (filteredMembers().length === 0) {
+          <div class="empty-state"><span class="material-symbols-outlined">savings</span><p>কোনো সদস্য পাওয়া যায়নি।</p></div>
+        } @else {
+          <div class="table-container border-0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>সদস্য</th>
+                  <th class="col-opt">শাখা / সমিতি</th>
+                  <th class="col-opt">ঋণ</th>
+                  <th class="text-right">সঞ্চয় স্থিতি</th>
+                  <th class="text-right">অ্যাকশন</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of filteredMembers(); track c.customerId) {
+                  <tr>
+                    <td>
+                      <strong>{{ c.fullName }}</strong>
+                      <div class="sub-text">#{{ c.customerId }} • {{ c.phonePrimary }}@if (c.status === 'CLOSED') { • <span class="text-danger">হিসাব সমাপ্ত</span> }</div>
+                    </td>
+                    <td class="col-opt">{{ branchName(c.branchId) }}<div class="sub-text">{{ centerName(c.centerId) }}</div></td>
+                    <td class="col-opt">
+                      @if ((c.activeLoansCount || 0) > 0) { <span class="badge badge-warning">{{ c.activeLoansCount }} চলমান</span> } @else { <span class="sub-text">—</span> }
+                    </td>
+                    <td class="text-right"><strong class="amount-bdt">{{ c.totalSavingsBalance || 0 | number }}</strong></td>
+                    <td class="text-right actions-cell">
+                      <button class="btn btn-sm btn-secondary" (click)="openStatement(c)" title="পাসবুক স্টেটমেন্ট">
+                        <span class="material-symbols-outlined">menu_book</span><span class="btn-text">স্টেটমেন্ট</span>
+                      </button>
+                      @if (canDeposit() && c.status !== 'CLOSED') {
+                        <button class="btn btn-sm btn-success" (click)="openEntry(c, 'DEPOSIT')" title="জমা">
+                          <span class="material-symbols-outlined">add</span>
+                        </button>
+                      }
+                      @if (canTransact() && c.status !== 'CLOSED') {
+                        <button class="btn btn-sm btn-danger" (click)="openEntry(c, 'WITHDRAW')" title="উত্তোলন" [disabled]="(c.totalSavingsBalance || 0) <= 0">
+                          <span class="material-symbols-outlined">remove</span>
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr><td colspan="3"><strong>মোট</strong></td><td class="text-right"><strong class="amount-bdt">{{ summary().totalBalance | number }}</strong></td><td></td></tr>
+              </tfoot>
+            </table>
+          </div>
+        }
+      } @else {
+        @if (loadingTxns()) {
+          <app-skeleton variant="table" [rows]="8" [columns]="6" label="লেনদেন লোড হচ্ছে..." />
+        } @else if (filteredTransactions().length === 0) {
+          <div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>এই সময়ে কোনো সঞ্চয় লেনদেন নেই।</p></div>
+        } @else {
+          @if (dailyFlow().length > 1) {
+            <div class="daily-flow">
+              @for (d of dailyFlow(); track d.date) {
+                <div class="flow-chip"><span>{{ d.date }}</span><span class="text-success">+{{ d.inn | number }}</span><span class="text-danger">−{{ d.out | number }}</span></div>
+              }
+            </div>
+          }
+          <div class="table-container border-0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>নং / তারিখ</th>
+                  <th>সদস্য</th>
+                  <th>ধরন</th>
+                  <th class="text-right">জমা</th>
+                  <th class="text-right">উত্তোলন</th>
+                  <th class="text-right col-opt">স্থিতি (আগে → পরে)</th>
+                  <th class="col-opt">মাধ্যম / রসিদ</th>
+                  <th class="col-opt">কর্মী</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (t of filteredTransactions(); track t.transactionId) {
+                  <tr>
+                    <td>#{{ t.transactionId }}<div class="sub-text">{{ t.transactionDate | date:'dd MMM yy, hh:mm a' }}</div></td>
+                    <td><strong>{{ t.customerName }}</strong><div class="sub-text">#{{ t.customerId }}</div></td>
+                    <td>
+                      <span class="badge" [class.badge-paid]="t.isCredit" [class.badge-danger]="!t.isCredit">{{ typeLabels[t.type] || t.type }}</span>
+                      <div class="sub-text reason">{{ t.reason }}</div>
+                    </td>
+                    <td class="text-right">@if (t.isCredit) { <span class="amount-bdt text-success">{{ t.amount | number }}</span> }</td>
+                    <td class="text-right">@if (!t.isCredit) { <span class="amount-bdt text-danger">{{ t.amount | number }}</span> }</td>
+                    <td class="text-right col-opt">৳{{ t.previousBalance | number }} → ৳{{ t.newBalance | number }}</td>
+                    <td class="col-opt">{{ t.paymentMethod }}@if (t.receiptNo) { <div class="sub-text">{{ t.receiptNo }}</div> }</td>
+                    <td class="col-opt">{{ t.performedByName }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+    </div>
+  }
+</div>
+
+<!-- পাসবুক স্টেটমেন্ট -->
+@if (statementCustomer(); as c) {
+  <div class="modal-backdrop" (click)="closeStatement()">
+    <div class="modal-dialog statement-dialog" id="printableSavingsStatement" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div>
+          <h3>সঞ্চয় পাসবুক স্টেটমেন্ট</h3>
+          <div class="sub-text">{{ c.fullName }} (#{{ c.customerId }}) • {{ branchName(c.branchId) }} • {{ centerName(c.centerId) }}</div>
+        </div>
+        <button class="close-btn no-print" (click)="closeStatement()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="print-only statement-print-head">
+          <strong>eKisti মাইক্রোফাইন্যান্স — সঞ্চয় পাসবুক স্টেটমেন্ট</strong>
+          <div>{{ c.fullName }} (#{{ c.customerId }}) • ফোন {{ c.phonePrimary }} • NID {{ c.nidNumber }} • {{ branchName(c.branchId) }} / {{ centerName(c.centerId) }} • প্রিন্ট: {{ today }}</div>
+        </div>
+
+        @if (statementLoading()) {
+          <app-skeleton variant="list" [rows]="5" label="স্টেটমেন্ট লোড হচ্ছে..." />
+        } @else if (statementRows().length === 0) {
+          <div class="empty-state"><p>এই সদস্যের কোনো সঞ্চয় লেনদেন নেই। বর্তমান স্থিতি ৳{{ c.totalSavingsBalance || 0 | number }}।</p></div>
+        } @else {
+          @if (statementCheck(); as chk) {
+            <div class="flow-alert" [class.success]="chk.ok && !chk.rowMismatches" [class.warning]="!chk.ok || chk.rowMismatches">
+              <span class="material-symbols-outlined">{{ chk.ok && !chk.rowMismatches ? 'verified' : 'report' }}</span>
+              <span>
+                খতিয়ান অনুযায়ী স্থিতি ৳{{ chk.ledger | number }} • প্রোফাইলে স্থিতি ৳{{ chk.profile | number }}
+                @if (chk.ok && !chk.rowMismatches) { — মিলেছে ✓ }
+                @if (!chk.ok) { — অমিল! পুরাতন (খতিয়ান চালুর আগের) লেনদেন বা সরাসরি এডিট থাকতে পারে। }
+                @if (chk.rowMismatches) { — {{ chk.rowMismatches }}টি এন্ট্রিতে চলতি স্থিতি মেলেনি। }
+              </span>
+            </div>
+          }
+          <div class="table-container border-0">
+            <table class="data-table statement-table">
+              <thead>
+                <tr><th>তারিখ</th><th>বিবরণ</th><th class="text-right">জমা</th><th class="text-right">উত্তোলন</th><th class="text-right">স্থিতি</th></tr>
+              </thead>
+              <tbody>
+                @for (r of statementRows(); track r.txn.transactionId) {
+                  <tr [class.row-mismatch]="r.mismatch">
+                    <td>{{ r.txn.transactionDate | date:'dd MMM yyyy' }}<div class="sub-text">#{{ r.txn.transactionId }}</div></td>
+                    <td>{{ typeLabels[r.txn.type] || r.txn.type }}<div class="sub-text">{{ r.txn.reason }}@if (r.txn.receiptNo) { • {{ r.txn.receiptNo }} }</div></td>
+                    <td class="text-right">@if (r.credit) { {{ r.credit | number }} }</td>
+                    <td class="text-right">@if (r.debit) { {{ r.debit | number }} }</td>
+                    <td class="text-right"><strong>{{ r.runningBalance | number }}</strong></td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr><td colspan="2"><strong>মোট</strong></td><td class="text-right"><strong>{{ statementTotals().credit | number }}</strong></td><td class="text-right"><strong>{{ statementTotals().debit | number }}</strong></td><td></td></tr>
+              </tfoot>
+            </table>
+          </div>
+        }
+      </div>
+      <div class="modal-footer no-print">
+        @if (canDeposit() && c.status !== 'CLOSED') {
+          <button class="btn btn-success" (click)="openEntry(c, 'DEPOSIT')"><span class="material-symbols-outlined">add</span><span>জমা</span></button>
+        }
+        @if (canTransact() && c.status !== 'CLOSED') {
+          <button class="btn btn-danger" (click)="openEntry(c, 'WITHDRAW')" [disabled]="(c.totalSavingsBalance || 0) <= 0"><span class="material-symbols-outlined">remove</span><span>উত্তোলন</span></button>
+        }
+        <span class="spacer"></span>
+        <button class="btn btn-secondary" (click)="closeStatement()">বন্ধ করুন</button>
+        <button class="btn btn-primary" (click)="printStatement()" [disabled]="statementRows().length === 0"><span class="material-symbols-outlined">print</span><span>প্রিন্ট</span></button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- জমা / উত্তোলন -->
+@if (entry(); as e) {
+  <div class="modal-backdrop entry-backdrop" (click)="closeEntry()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>{{ e.kind === 'DEPOSIT' ? 'সঞ্চয় জমা' : 'সঞ্চয় উত্তোলন' }} — {{ e.customer.fullName }}</h3>
+        <button class="close-btn" (click)="closeEntry()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body entry-body">
+        <div class="entry-balance">বর্তমান স্থিতি: <strong>৳{{ e.customer.totalSavingsBalance || 0 | number }}</strong>
+          @if (entryAmount() > 0) { → নতুন <strong>৳{{ (e.customer.totalSavingsBalance || 0) + (e.kind === 'DEPOSIT' ? entryAmount() : -entryAmount()) | number }}</strong> }
+        </div>
+        <label class="field">
+          <span>টাকার পরিমাণ *</span>
+          <input type="number" class="form-control" min="1" [ngModel]="entryAmount()" (ngModelChange)="entryAmount.set(+$event)" />
+        </label>
+        <label class="field">
+          <span>মাধ্যম</span>
+          <select class="form-control" [ngModel]="entryMethod()" (ngModelChange)="entryMethod.set($event)">
+            <option value="CASH">নগদ (ভল্ট থেকে/ভল্টে)</option>
+            <option value="BKASH">বিকাশ</option>
+            <option value="NAGAD">নগদ (Nagad)</option>
+            <option value="BANK">ব্যাংক</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>কারণ / বিবরণ</span>
+          <input class="form-control" [ngModel]="entryReason()" (ngModelChange)="entryReason.set($event)" />
+        </label>
+        @if (authService.isFieldOfficer()) {
+          <div class="flow-alert info"><span class="material-symbols-outlined">account_balance_wallet</span><span>মাঠ রসিদ তৈরি হবে — টাকা আপনার হাতে থাকবে, দিন শেষে ক্যাশ ক্লোজিংয়ে ক্যাশিয়ারকে জমা দিন।</span></div>
+        } @else if (entryMethod() === 'CASH') {
+          <div class="sub-text">শাখার কাউন্টারে নগদ — ভল্ট খতিয়ানে সরাসরি {{ e.kind === 'DEPOSIT' ? 'জমা' : 'খরচ' }} হিসেবে লেখা হবে।</div>
+        }
+        @if (entryWarning()) {
+          <div class="flow-alert warning"><span class="material-symbols-outlined">warning</span><span>{{ entryWarning() }}</span></div>
+        }
+        @if (entryError()) {
+          <div class="flow-alert danger"><span class="material-symbols-outlined">error</span><span>{{ entryError() }}</span></div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeEntry()" [disabled]="entryBusy()">বাতিল</button>
+        <button class="btn" [class.btn-success]="e.kind === 'DEPOSIT'" [class.btn-danger]="e.kind === 'WITHDRAW'" (click)="submitEntry()" [disabled]="entryBusy() || entryAmount() <= 0">
+          {{ entryBusy() ? 'সংরক্ষণ হচ্ছে...' : (e.kind === 'DEPOSIT' ? 'জমা নিশ্চিত' : 'উত্তোলন নিশ্চিত') }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

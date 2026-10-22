@@ -12,8 +12,7 @@
       <a routerLink="/collections/daily" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link highlight-link">
         <span class="material-symbols-outlined nav-icon">payments</span>
         <span class="nav-label">{{ lang.t('navDailySheet') }}</span>
-        <span class="nav-badge">{{ lang.isBangla() ? 'রুট ১০১' : 'Route 101' }}</span>
-      </a>
+</a>
     }
 
     <a routerLink="/customers" routerLinkActive="active" class="nav-link">
@@ -21,9 +20,21 @@
       <span class="nav-label">{{ lang.t('navCustomers') }}</span>
     </a>
 
-    <a routerLink="/loans" routerLinkActive="active" class="nav-link">
+    <a routerLink="/loans" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
       <span class="material-symbols-outlined nav-icon">receipt_long</span>
       <span class="nav-label">{{ lang.t('navLoans') }}</span>
+    </a>
+
+    @if (authService.canSeeLoanPipeline()) {
+      <a routerLink="/loans/approvals" routerLinkActive="active" class="nav-link">
+        <span class="material-symbols-outlined nav-icon">approval</span>
+        <span class="nav-label">{{ lang.isBangla() ? 'ঋণ আবেদন ও অনুমোদন' : 'Loan Approvals' }}</span>
+      </a>
+    }
+
+    <a routerLink="/savings" routerLinkActive="active" class="nav-link">
+      <span class="material-symbols-outlined nav-icon">savings</span>
+      <span class="nav-label">{{ lang.isBangla() ? 'সঞ্চয় হিসাব' : 'Savings' }}</span>
     </a>
 
     <a routerLink="/collections/receipts" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
@@ -31,14 +42,25 @@
       <span class="nav-label">{{ lang.t('navReceipts') }}</span>
     </a>
 
-    <!-- Cashier or BM: Day-end Cash Closing -->
-    @if (authService.canVerifyCash()) {
+    <!-- Cashier or BM: Day-end Cash Closing, Vault & Accounts -->
+    @if (authService.canVerifyCash() || authService.isFieldOfficer()) {
       <div class="nav-section-title">{{ lang.t('navAccounting') }}</div>
       <a routerLink="/reconciliation" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
         <span class="material-symbols-outlined nav-icon">point_of_sale</span>
         <span class="nav-label">{{ lang.t('navCashClosing') }}</span>
       </a>
     }
+    @if (authService.canManageAccounts()) {
+      <a routerLink="/accounts" routerLinkActive="active" class="nav-link">
+        <span class="material-symbols-outlined nav-icon">account_balance</span>
+        <span class="nav-label">{{ lang.isBangla() ? 'ভল্ট, ব্যাংক ও সমাপনী' : 'Vault & Day Closing' }}</span>
+      </a>
+    }
+
+    <a routerLink="/reports" routerLinkActive="active" class="nav-link">
+      <span class="material-symbols-outlined nav-icon">monitoring</span>
+      <span class="nav-label">{{ lang.isBangla() ? 'রিপোর্ট' : 'Reports' }}</span>
+    </a>
 
     <!-- Super Admin Administration: Organization Setup & User Management -->
     @if (authService.canManageUsers()) {
@@ -46,6 +68,10 @@
       <a routerLink="/branches" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
         <span class="material-symbols-outlined nav-icon">alt_route</span>
         <span class="nav-label">{{ lang.isBangla() ? 'শাখা ও রুট/সমিতি' : 'Branches & Routes' }}</span>
+      </a>
+      <a routerLink="/settings" routerLinkActive="active" class="nav-link">
+        <span class="material-symbols-outlined nav-icon">settings</span>
+        <span class="nav-label">{{ lang.isBangla() ? 'সেটিংস' : 'Settings' }}</span>
       </a>
       <a routerLink="/users" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link admin-link">
         <span class="material-symbols-outlined nav-icon">manage_accounts</span>

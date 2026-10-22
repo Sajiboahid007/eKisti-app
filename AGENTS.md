@@ -20,6 +20,7 @@
 9. [Print Engine Architecture (A4 Forms & Receipts)](#9-print-engine-architecture-a4-forms--receipts)
 10. [Build, Environment & Seed Scripts](#10-build-environment--seed-scripts)
 11. [Agent Rules & Implementation Guidelines](#11-agent-rules--implementation-guidelines)
+12. [Financial Ledger & Money-Operation Architecture](#12-financial-ledger--money-operation-architecture)
 
 ---
 
@@ -63,7 +64,7 @@
 - **Frontend Framework:** Angular 21 (v21.2.24) using 100% **Standalone Components** (no `NgModule` anywhere in the app).
 - **Reactive State Management:** Angular **Signals** (`signal()`, `computed()`, `model()`) and RxJS Observables (`toObservable()`).
 - **Database & Backend:** Firebase Firestore (v12.19.0) with `@angular/fire` (v21.0.0-rc.2).
-- **Offline / Local Fallback:** Firestore persistence enabled + localStorage session cache.
+- **Offline / Local Fallback:** Firestore `persistentLocalCache` (reads work offline) + localStorage session cache. Money operations use `runTransaction` and therefore need a connection.
 - **Styling Architecture:** Vanilla SCSS (`src/styles.scss`) with HSL design system tokens, CSS Grid/Flexbox, and comprehensive `@media print` rules.
 - **Typography:** Google Fonts (`Hind Siliguri` for Bengali readability and `Inter` for numbers/English).
 - **Test Runner:** Vitest (v4.0.8) configured in `package.json`.
@@ -101,8 +102,23 @@ c:/unversity/eKisti-app/
         │   │   └── auth.guard.ts  # authGuard (logged-in check) and superAdminGuard (admin permissions)
         │   ├── models/
         │   │   └── database.models.ts # Master domain schema (Customer, Loan, Branch, Staff, Audit, etc.)
+        │   ├── finance/           # Pure, unit-tested money logic (no Firestore)
+        │   │   ├── dates.ts           # Asia/Dhaka business dates (todayDhaka, toDhakaDayKey, addMonthsKey…)
+        │   │   ├── schedule.ts        # Flat/declining schedules, holiday calendar, rounding on last installment, effective annual rate
+        │   │   ├── allocation.ts      # Payment allocation (partial/advance), collectionView (due-date eligibility)
+        │   │   ├── classification.ts  # MRA-style classification, provision, PAR, OTR/CRR
+        │   │   ├── settlement.ts      # Early settlement quote + rebate
+        │   │   ├── accounts.ts        # Chart of accounts (double entry)
+        │   │   └── validation.ts      # BD NID / mobile validation
         │   └── services/
-        │       ├── kisti-database.service.ts # Firestore CRUD operations, queries, and business logic
+        │       ├── finance.service.ts        # Collection, reversal, early settlement, reschedule, write-off, insurance claim, follow-ups
+        │       ├── loan-lifecycle.service.ts # Application → field verification → approval (maker-checker) → disbursement
+        │       ├── cash.service.ts           # Cash closing, vault/bank/expense/HO fund, savings txns, fees, interest, day/month closing
+        │       ├── overdue-engine.service.ts # Daily overdue/classification/credit-score engine
+        │       ├── member.service.ts         # NID duplicate check, member transfer, blacklist, attendance, KYC uploads
+        │       ├── settings.service.ts       # General policy, holiday calendar, loan products
+        │       ├── tx-runner.service.ts / tx-session.ts # Transaction runner: in-transaction IDs, day lock, ledgers, audit
+        │       ├── kisti-database.service.ts # Firestore CRUD operations, queries (money methods delegate to the services above)
         │       ├── auth-state.service.ts     # User session, 3-tier staff roles, permissions, demo logins
         │       ├── counter.service.ts        # Atomic Firestore transaction integer ID sequencer
         │       ├── audit-history.service.ts  # Generates and appends EditHistoryEntry logs
@@ -123,13 +139,19 @@ c:/unversity/eKisti-app/
             │   └── customer-form/         # Create & edit customer KYC, address, guarantors, collateral
             ├── loans/             # Loan lifecycle management
             │   ├── loan-list/     # Portfolio view filterable by status (Active, Overdue, Closed)
-            │   ├── loan-disburse/ # Loan creation calculator, interest rules, first due date, disburse voucher
+            │   ├── loan-approvals/ # Maker-checker pipeline: verify → approve → disburse
+            │   ├── loan-disburse/ # Loan application form (default) / disbursement of an approved loan (?loanId=) + voucher
             │   └── loan-detail/   # Loan account ledger, 40-installment schedule, savings balance & settlement
             ├── collections/       # Field collection sheets & money receipts
             │   ├── daily-sheet/   # Field Officer daily samity collection sheet with one-click collection
             │   └── receipt-list/  # Register of all payment receipts with printable thermal/A4 voucher
             ├── reconciliation/    # Day closing & accounting
             │   └── cash-closing/  # Cashier vault balance, FO cash handover verification, discrepancy notes
+            ├── accounts/
+            │   └── vault-ledger/  # Vault ledger, bank, expenses, HO funds, day/month closing, savings interest
+            ├── savings/           # All members' savings balances, savings ledger, passbook statement, deposit/withdraw
+            ├── reports/           # Daily collection, due/overdue, portfolio & MRA classification, day book, trial balance, MIS
+            ├── settings/          # Loan products & policy, holiday calendar, general settings
             ├── organization/      # Company structure
             │   └── branch-route-list/ # Branch management, route/samity scheduling, and meeting days
             └── users/             # Staff & access control
@@ -298,12 +320,17 @@ Routes are defined in [src/app/app.routes.ts](file:///c:/unversity/eKisti-app/sr
 | `/customers/edit/:id` | `CustomerFormComponent` | `[authGuard]` | Member profile editor with audit logging |
 | `/customers/register` | `CustomerFormComponent` | `[authGuard]` | Alias for member registration |
 | `/loans` | `LoanListComponent` | `[authGuard]` | Loan portfolio filterable by status |
-| `/loans/disburse` | `LoanDisburseComponent` | `[authGuard]` | Loan disburse calculator, schedule preview & voucher |
+| `/loans/disburse` | `LoanDisburseComponent` | `permissionGuard('canApplyLoan','canDisburseLoan')` | Loan application (default) / disbursement of approved loan (`?loanId=`) & voucher |
 | `/loans/detail/:id` | `LoanDetailComponent` | `[authGuard]` | Ledger, 40-installment schedule, savings settlement |
-| `/collections/daily` | `DailySheetComponent` | `[authGuard]` | Field officer daily collection sheet |
-| `/collections/receipts`| `ReceiptListComponent` | `[authGuard]` | Payment receipts register & print vouchers |
-| `/reconciliation` | `CashClosingComponent` | `[authGuard]` | Cashier vault closing & field officer reconciliation |
-| `/branches` | `BranchRouteListComponent` | `[authGuard]` | Branch & samity/route management |
+| `/loans/approvals` | `LoanApprovalsComponent` | `permissionGuard('canSeeLoanPipeline')` | Verify / approve / reject / send to disbursement |
+| `/collections/daily` | `DailySheetComponent` | `permissionGuard('canCollectKisti')` | Field officer daily collection sheet, attendance, printable sheet |
+| `/collections/receipts`| `ReceiptListComponent` | `[authGuard]` | Payment receipts register, print, reversal (`canReverseReceipt`) |
+| `/reconciliation` | `CashClosingComponent` | `permissionGuard('canVerifyCash','isFieldOfficer')` | Cashier vault closing & field officer reconciliation |
+| `/accounts` | `VaultLedgerComponent` | `permissionGuard('canManageAccounts')` | Vault ledger, bank, expenses, day/month closing |
+| `/savings` | `SavingsComponent` | `[authGuard]` | Savings balances, ledger, passbook statement; deposit/withdraw needs `canManageAccounts` |
+| `/reports` | `ReportsComponent` | `[authGuard]` | Reports with CSV export & print |
+| `/settings` | `SettingsComponent` | `permissionGuard('canManageSettings')` | Loan products, holidays, general policy |
+| `/branches` | `BranchRouteListComponent` | `permissionGuard('canManageBranches')` | Branch & samity/route management |
 | `/users` | `UserListComponent` | `[authGuard, superAdminGuard]` | Staff management, role permissions & ID cards |
 | `/users/new` | `UserFormComponent` | `[authGuard, superAdminGuard]` | Add/edit staff user profile |
 
@@ -368,6 +395,11 @@ eKisti features a dedicated print engine implemented in [src/styles.scss](file:/
 #printableCustomerDetails         --> Single/Multi-page Member KYC & Loan Statement
 #printableCustomerIdCard          --> Staff/Member Identity Card Badge
 #printableLoanDisburseReceipt     --> Loan Sanction & Disbursement Advice Slip
+#printableMoneyReceipt            --> Collection money receipt (receipt register)
+#printableCashClosingSlip         --> Field officer cash closing slip
+#printableCollectionSheet         --> Samity collection sheet (A4 landscape)
+#printableReport                  --> Any report tab on /reports (A4 landscape)
+#printableSavingsStatement        --> Member savings passbook statement (/savings)
 ```
 
 ### Print Rules & Pagination Mechanics
@@ -405,11 +437,14 @@ npm start
 # 2. Build production bundle (Automatically triggers prebuild: env:config)
 npm run build
 
-# 3. Seed fresh Firestore database with counters, branches, staff, members, and loans
+# 3. Seed a FRESH Firestore database (refuses to run when data exists unless `-- --force`)
 npm run db:seed
 
 # 4. Generate environment config manually from .env
 npm run env:config
+
+# 4b. One-time: copy embedded history[] arrays into the central auditLogs collection (dry run unless --apply)
+npm run db:migrate-history -- --apply
 
 # 5. Run unit tests via Vitest
 npm test
@@ -443,12 +478,50 @@ When writing code or assisting with `eKisti`, every AI Agent MUST follow these r
 
 1. **Standalone Components Only:** Never generate or look for `NgModule`. Use `@Component({ standalone: true, imports: [...] })`.
 2. **Signals Over Imperative State:** Use Angular signals (`signal()`, `computed()`) for UI state and reactive calculations.
-3. **Sequential Integer IDs:** Never generate random UUIDs or Firestore string IDs for business records. Always use `CounterService.getNextIntegerId('customers' | 'loans' | ...)` and store documents with integer keys (`doc(firestore, 'collection', id.toString())`).
-4. **Audit History Logging:** Any modification, deletion, or creation must create an `EditHistoryEntry` via `AuditHistoryService` with `changedByUserId`, `reason`, `previousData`, and `newData`.
+3. **Sequential Integer IDs:** Never generate random UUIDs or Firestore string IDs for business records. Use `CounterService.getNextIntegerId(...)`, or inside a money transaction `TxSession.reserve(entity, n)` (same atomic transaction). Store documents with integer keys (`doc(firestore, 'collection', id.toString())`). **Exception:** pure log collections (`auditLogs`, `loanStatusHistory`, `creditScoreHistory`, `staffAssignments`, `documentVersions`, `smsLogs`) use Firestore auto IDs, and `EditHistoryEntry.historyId` is timestamp-based (the old `counters/history` sequence was a write hotspot).
+4. **Audit History Logging:** Any modification, deletion, or creation must be audited: embedded `history[]` (capped to the last 30 entries) **and** a central `auditLogs` document written in the same batch/transaction (`AuditHistoryService.writeAuditLog`). `HistoryModalComponent` takes `entityType` + `entityId` to show the full log.
 5. **No Hardcoded Passwords in Production:** Staff authentication uses `AuthStateService` presets for testing and Firebase Auth UID links in production.
 6. **Preserve Bengali Terminology:** Always preserve correct microfinance domain terminology in comments and UI templates (কিস্তি, সঞ্চয়, সমিতি, জামিনদার, ভল্ট ক্যাশ).
 7. **Print CSS Discipline:** When adding printable sections, register the container ID in `src/styles.scss` under `@media print` and ensure non-printable navigation bars and buttons have `.no-print`.
-8. **Verify Builds:** Always verify changes using `npx ng build --configuration development` to catch TypeScript and Angular template compiler diagnostics.
+8. **Verify Builds:** Always verify changes using `npx ng build --configuration development` and `npx ng test --watch=false`.
+9. **Money Moves Only Through the Finance Services:** Never write loan balances, installment paid amounts, receipts, savings balances, or `currentVaultCash` directly with `updateDoc`/`editRecord`. Use `FinanceService`, `CashService` or `LoanLifecycleService` — each operation is one Firestore transaction that also writes the ledgers (`loanTransactions`, `vaultTransactions`, `journalEntries`, `savingsTransactions`, `feeTransactions`) and checks the day lock.
+10. **Never Edit or Delete Money Records:** Fix mistakes with a reversal (`FinanceService.reverseReceipt`) or an adjustment entry. Ledger collections are append-only (enforced in `firestore.rules`).
+11. **Business Dates Are Asia/Dhaka:** Use `todayDhaka()` / `toDhakaDayKey()` from `core/finance/dates.ts`; never `new Date().toISOString().split('T')[0]` for a business date.
+13. **All Field Money Goes Through the Cashier:** Anything a field officer collects (kisti, savings deposit, admission/passbook fee, write-off recovery) is a `collections` receipt (`receiptType`) that stays in the officer's cash-in-hand until `CashService.reconcileFieldOfficerCash` moves it into the vault. Only branch-counter transactions by cashier/BM (`CashChannel 'COUNTER'`) touch the vault directly. Field officers cannot withdraw or adjust savings.
+12. **Domain Logic Stays Pure:**Schedule, allocation, eligibility, classification and settlement math live in `core/finance/*.ts` with Vitest specs; components only call them.
 
 ---
 *Generated for AI Agents & Developers maintaining eKisti.*
+
+---
+
+## 12. Financial Ledger & Money-Operation Architecture
+
+### Loan lifecycle (maker-checker)
+`APPLIED` (application, `LoanLifecycleService.createApplication` — checks loan cycle ceiling, concurrent loans, NID overlap across members, blacklist) → `FIELD_VERIFIED` (checklist) → `APPROVED` (approver ≠ applicant) → `DISBURSED` (`disburse`: schedule with holiday calendar, vault OUT, fees IN, customer counters, ledgers). Also `REJECTED`, `OVERDUE` (overdue engine), `CLOSED`, `WRITTEN_OFF`.
+
+### Every money operation = one transaction (`TxRunner.run` + `TxSession`)
+1. READ phase: documents, `assertDayOpen(branchId)` (period lock), `reserve()` counters, `readBranch()` (vault).
+2. WRITE phase: business docs + `loanTxn()` + `vaultMove()` + `journal()` (balanced double entry) + `audit()` + `statusChange()` + `queueSms()`, then `finish()` writes counters and branch vault/bank balance.
+Concurrent edits on the same loan are detected through `Loan.ledgerVersion` and retried.
+
+### Collections & ledgers
+| Collection | Sequence | Purpose |
+|---|---|---|
+| `loanTransactions` | 70001+ | Every loan money movement (disbursement, repayment, reversal, rebate, write-off…) |
+| `vaultTransactions` | 80001+ | Every branch cash movement; `Branch.currentVaultCash` is its running total |
+| `feeTransactions` | 90001+ | Admission, passbook, loan form, insurance fees |
+| `expenses` | 91001+ | Branch expenses with voucher |
+| `followUps` | 92001+ | Overdue / guarantor follow-up log |
+| `insuranceClaims` | 93001+ | Death / disability waivers from the loan risk fund |
+| `memberTransfers` | 94001+ | Samity / branch / FO transfers |
+| `journalEntries` | 100001+ | Double-entry journal (chart of accounts in `core/finance/accounts.ts`) |
+| `auditLogs`, `loanStatusHistory`, `creditScoreHistory`, `staffAssignments`, `documentVersions`, `smsLogs` | auto ID | History / logs |
+| `periodClosings`, `dailyBranchSummaries`, `monthlyPortfolioSnapshots` | `${branchId}_${date}` | Day/month closing & frozen figures |
+| `settings/general`, `holidays/{date}`, `meetings/{centerId}_{date}`, `systemJobs/*`, `savingsInterestPostings/*` | fixed IDs | Policy, calendar, attendance, job markers |
+
+### Policy values that must be confirmed (⚖️)
+MRA classification day ranges & provision rates (`core/finance/classification.ts`), service-charge cap, savings interest rate, late-fee policy (fines are currently not charged), rebate % on early settlement (`LoanProduct.earlySettlementRebatePercent`, default 100).
+
+### Security
+Client route guards (`permissionGuard`) are UX only. Real enforcement is `firestore.rules`; its `authEnforced()` switch must be turned on once Firebase Auth with `role`/`branchId` custom claims is live.

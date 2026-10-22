@@ -105,6 +105,41 @@
   gap: 1rem;
 }
 
+// অনলাইন / অফলাইন নির্দেশক
+.net-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: help;
+
+  .net-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+  }
+
+  &.offline {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #b45309;
+
+    .net-dot {
+      background: #f59e0b;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+    }
+  }
+}
+
 .nav-lang-btn {
   display: inline-flex;
   align-items: center;
