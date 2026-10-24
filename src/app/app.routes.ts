@@ -81,7 +81,7 @@ export const routes: Routes = [
   {
     // ক্যাশিয়ার/BM জমা নেন; মাঠকর্মী শুধু নিজের অপেক্ষমাণ নগদ দেখেন
     path: 'reconciliation',
-    canActivate: [permissionGuard('canVerifyCash', 'isFieldOfficer')],
+    canActivate: [permissionGuard('canVerifyCash')],
     loadComponent: () => import('./features/reconciliation/cash-closing/cash-closing.component').then(m => m.CashClosingComponent)
   },
   {
@@ -97,7 +97,7 @@ export const routes: Routes = [
   },
   {
     path: 'reports',
-    canActivate: [authGuard],
+    canActivate: [permissionGuard('canViewReports')],
     loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent)
   },
   {

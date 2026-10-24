@@ -12,6 +12,15 @@ import { round2 } from './tx-session';
 
 /** যেসব অবস্থায় ঋণ "চলমান" ধরা হয় (নতুন ঋণ আটকাতে) */
 export const OPEN_LOAN_STATUSES: LoanStatus[] = ['APPLIED', 'FIELD_VERIFIED', 'APPROVED', 'DISBURSED', 'OVERDUE'];
+/**
+ * ঋণ প্রবাহের ধাপভিত্তিক দায়িত্ব:
+ * মাঠকর্মী সরেজমিনে যাচাই → শাখা ব্যবস্থাপক অনুমোদন → ক্যাশিয়ার ভল্ট থেকে টাকা দিয়ে বিতরণ।
+ * অ্যাডমিন / সুপার অ্যাডমিন সব ধাপে প্রয়োজনে কাজ করতে পারেন।
+ */
+export const LOAN_VERIFY_ROLES = ['FIELD_OFFICER', 'SUPER_ADMIN', 'ADMIN'];
+export const LOAN_APPROVE_ROLES = ['BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'];
+export const LOAN_DISBURSE_ROLES = ['CASHIER', 'SUPER_ADMIN', 'ADMIN'];
+
 /** ঋণ চক্র গণনায় যেসব ঋণ ধরা হয় */
 const CYCLE_COUNTED_STATUSES: LoanStatus[] = ['DISBURSED', 'OVERDUE', 'CLOSED', 'WRITTEN_OFF'];
 
@@ -196,12 +205,19 @@ export class LoanLifecycleService {
 
   async verify(loanId: number, notes: string, actor: Actor): Promise<void> {
     if (!notes.trim()) throw new Error('মাঠ যাচাইয়ের মন্তব্য লিখুন');
-    await this.transition(loanId, ['APPLIED'], 'FIELD_VERIFIED', 'LOAN_VERIFIED', notes, actor, loan => ({
+    if (!LOAN_VERIFY_ROLES.includes(actor.role)) throw new Error('মাঠ যাচাই শুধু মাঠকর্মী করতে পারেন');
+    await this.transition(loanId, ['APPLIED'], 'FIELD_VERIFIED', 'LOAN_VERIFIED', notes, actor, loan => {
+      if (actor.role === 'FIELD_OFFICER' && Number(loan.fieldOfficerUserId) !== Number(actor.userId)) {
+        throw new Error('শুধু নিজের সমিতির / নিজের দায়িত্বের ঋণ আবেদন যাচাই করা যায়');
+      }
+      return {
       verifiedByUserId: actor.userId, verifiedByName: actor.name, verifiedAt: new Date().toISOString(), verificationNotes: notes.trim()
-    }));
+      };
+    });
   }
 
   async approve(loanId: number, notes: string, actor: Actor): Promise<void> {
+    if (!LOAN_APPROVE_ROLES.includes(actor.role)) throw new Error('ঋণ অনুমোদন শুধু শাখা ব্যবস্থাপক দিতে পারেন');
     await this.transition(loanId, ['FIELD_VERIFIED'], 'APPROVED', 'LOAN_APPROVED', notes || 'অনুমোদিত', actor, loan => {
       if (loan.appliedByUserId === actor.userId) {
         throw new Error('যিনি আবেদন করেছেন তিনি নিজে অনুমোদন দিতে পারবেন না (Maker-Checker নীতি)');
@@ -213,7 +229,7 @@ export class LoanLifecycleService {
   async reject(loanId: number, reason: string, actor: Actor): Promise<void> {
     if (!reason.trim()) throw new Error('প্রত্যাখ্যানের কারণ লিখুন');
     await this.transition(loanId, ['APPLIED', 'FIELD_VERIFIED', 'APPROVED'], 'REJECTED', 'LOAN_REJECTED', reason, actor, () => ({
-      rejectedByUserId: actor.userId, rejectedReason: reason.trim()
+      rejectedByUserId: actor.userId, rejectedByName: actor.name, rejectedAt: new Date().toISOString(), rejectedReason: reason.trim()
     }));
   }
 
@@ -241,6 +257,7 @@ export class LoanLifecycleService {
     let pre!: Loan;
     let schedule!: LoanSchedule;
     let accountNo = '';
+    if (!LOAN_DISBURSE_ROLES.includes(actor.role)) throw new Error('ঋণ বিতরণ (ভল্ট থেকে টাকা প্রদান) শুধু ক্যাশিয়ার করতে পারেন');
 
     return this.runner.run(actor, `DSB-${loanId}`, async s => {
       const loanSnap = await s.tx.get(this.runner.loanRef(loanId));

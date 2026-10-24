@@ -390,6 +390,11 @@
     color: #475569;
     border: 1px solid #cbd5e1;
   }
+  &.badge-rejected {
+    background-color: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+  }
 }
 
 /* Action Buttons Compact */
@@ -606,4 +611,35 @@
 
 .p-0 {
   padding: 0 !important;
+}
+
+/* প্রত্যাখ্যানের কারণ */
+.reject-reason {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.75rem;
+  line-height: 1.35;
+
+  .material-symbols-outlined { font-size: 15px; margin-top: 1px; }
+  .reject-meta { color: #c2410c; opacity: 0.85; font-size: 0.7rem; }
+}
+
+.btn-action-icon.btn-delete {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+
+  &:hover { background: #fee2e2; }
+}
+
+.delete-dialog {
+  width: min(480px, calc(100vw - 32px));
+
+  .modal-body p { margin: 0 0 0.5rem; }
 }

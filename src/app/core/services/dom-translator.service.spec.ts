@@ -1,13 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DomTranslatorService } from './dom-translator.service';
+import { DomTranslatorService, englishOrdinal } from './dom-translator.service';
 
 const DICT = {
   'রিফ্রেশ': 'Refresh',
   'জন মাঠকর্মী': 'field officers',
   'সঞ্চয় জমা': 'Savings Deposit',
   'সঞ্চয়': 'Savings',
-  'অনুসন্ধান করুন': 'Search'
+  'অনুসন্ধান করুন': 'Search',
+  'ম ঋণ চক্র': 'th loan cycle'
 };
 
 const flush = () => new Promise(r => setTimeout(r, 0));
@@ -39,6 +40,18 @@ describe('DomTranslatorService', () => {
     expect(service.translate('রহিমা বেগম')).toBe('রহিমা বেগম');
     expect(service.translate('English stays')).toBe('English stays');
     expect(service.translate('রিফ্রেশ (Refresh)')).toBe('Refresh');
+  });
+
+  it('uses the correct English ordinal suffix', async () => {
+    await service.apply('en');
+    // Angular "{{ loanCycle }}ম ঋণ চক্র" — সংখ্যা ASCII অঙ্কে আসে
+    expect(service.translate('2ম ঋণ চক্র')).toBe('2nd loan cycle');
+    expect(service.translate('1ম ঋণ চক্র')).toBe('1st loan cycle');
+    expect(service.translate('3ম ঋণ চক্র')).toBe('3rd loan cycle');
+    expect(service.translate('11ম ঋণ চক্র')).toBe('11th loan cycle');
+    expect(service.translate('রিফ্রেশ 2024')).toBe('Refresh 2024');
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111, 112].map(englishOrdinal))
+      .toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st', '111th', '112th']);
   });
 
   it('switches the screen to English, follows later updates and restores Bangla', async () => {

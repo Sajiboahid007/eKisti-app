@@ -2,7 +2,7 @@
   <div class="page-header">
     <div class="header-left">
       <h2>ঋণ আবেদন ও অনুমোদন (Maker-Checker)</h2>
-      <p class="sub-text">আবেদন → মাঠ যাচাই → শাখা ব্যবস্থাপকের অনুমোদন → ক্যাশিয়ারের বিতরণ। আবেদনকারী নিজের আবেদন অনুমোদন করতে পারেন না।</p>
+      <p class="sub-text">আবেদন → মাঠকর্মীর মাঠ যাচাই → শাখা ব্যবস্থাপকের অনুমোদন → ক্যাশিয়ারের বিতরণ। আবেদনকারী নিজের আবেদন অনুমোদন করতে পারেন না।</p>
     </div>
     <div class="header-right">
       <button class="btn btn-secondary btn-icon-only" (click)="load()" [disabled]="loading()" title="রিফ্রেশ" aria-label="রিফ্রেশ">
@@ -17,12 +17,13 @@
     </div>
   </div>
 
-  @if (success()) {
-    <div class="flow-alert success" role="status">
-      <span class="material-symbols-outlined">check_circle</span>
-      <span>{{ success() }}</span>
+  @if (authService.isLoanPipelineReadOnly()) {
+    <div class="flow-alert info" role="status">
+      <span class="material-symbols-outlined">visibility</span>
+      <span>আপনি শুধু তালিকা দেখতে পারবেন — মাঠ যাচাই মাঠকর্মী, অনুমোদন ও প্রত্যাখ্যান শাখা ব্যবস্থাপক এবং বিতরণ ক্যাশিয়ার করবেন।</span>
     </div>
   }
+
   @if (error()) {
     <div class="flow-alert danger" role="alert">
       <span class="material-symbols-outlined">error</span>
@@ -69,7 +70,10 @@
             @for (l of stageLoans(); track l.loanId) {
               <tr>
                 <td>
-                  <strong>{{ l.customerName }}</strong>
+                  <button type="button" class="customer-link" (click)="openCustomer(l)" title="গ্রাহকের তথ্য ও পরিচয় যাচাই">
+                    <strong>{{ l.customerName }}</strong>
+                    <span class="material-symbols-outlined">badge</span>
+                  </button>
                   <div class="sub-text">{{ l.loanAccountNo }} • {{ l.loanCycle || 1 }}ম চক্র</div>
                 </td>
                 <td class="text-right"><strong class="amount-bdt">{{ l.principalAmount | number }}</strong></td>
@@ -102,6 +106,9 @@
                   }
                   @if (canAct('REJECT', l)) {
                     <button class="btn btn-sm btn-danger" (click)="openAction('REJECT', l)">প্রত্যাখ্যান</button>
+                  }
+                  @if (authService.isLoanPipelineReadOnly()) {
+                    <span class="sub-text">শুধু দেখা</span>
                   }
                 </td>
               </tr>
@@ -159,5 +166,158 @@
         </button>
       </div>
     </div>
+  </div>
+}
+
+<!-- গ্রাহকের তথ্য ও পরিচয় যাচাই -->
+@if (customerLoan(); as cl) {
+  <div class="modal-backdrop" (click)="closeCustomer()">
+    <div class="modal-dialog customer-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle">
+      <div class="modal-header">
+        <div>
+          <h3 id="customerModalTitle">গ্রাহকের তথ্য ও পরিচয় যাচাই</h3>
+          <span class="sub-text">{{ cl.loanAccountNo }} • {{ statusLabel(cl.status) }}</span>
+        </div>
+        <button class="close-btn" (click)="closeCustomer()" aria-label="বন্ধ করুন"><span class="material-symbols-outlined">close</span></button>
+      </div>
+
+      <div class="modal-body customer-body">
+        @if (customerLoading()) {
+          <app-skeleton variant="table" [rows]="6" [columns]="2" label="গ্রাহকের তথ্য লোড হচ্ছে..." />
+        } @else if (customerError()) {
+          <div class="flow-alert danger"><span class="material-symbols-outlined">error</span><span>{{ customerError() }}</span></div>
+        } @else if (customerInfo(); as c) {
+          @if (cl.status === 'APPROVED') {
+            <div class="flow-alert info">
+              <span class="material-symbols-outlined">verified_user</span>
+              <span>টাকা দেওয়ার আগে গ্রাহকের মূল জাতীয় পরিচয়পত্র (NID) ও চেহারা নিচের ছবি ও তথ্যের সাথে মিলিয়ে নিন।</span>
+            </div>
+          }
+          @if (c.creditScore === 'BLACKLISTED' || c.status === 'CLOSED' || c.status === 'INACTIVE') {
+            <div class="flow-alert danger">
+              <span class="material-symbols-outlined">block</span>
+              <span>সতর্কতা: গ্রাহক {{ c.creditScore === 'BLACKLISTED' ? 'কালো তালিকাভুক্ত' : (c.status === 'CLOSED' ? 'হিসাব বন্ধ' : 'নিষ্ক্রিয়') }}{{ c.blacklistReason ? ' — ' + c.blacklistReason : '' }}</span>
+            </div>
+          }
+
+          <!-- পরিচয় -->
+          <div class="id-head">
+            <div class="id-photo">
+              @if (c.photoUrl) {
+                <img [src]="c.photoUrl" alt="গ্রাহকের ছবি" (click)="zoomImage.set({ url: c.photoUrl, title: 'গ্রাহকের ছবি' })" />
+              } @else {
+                <span class="material-symbols-outlined">person</span>
+                <small>ছবি নেই</small>
+              }
+            </div>
+            <div class="id-main">
+              <h4>{{ c.fullName }}</h4>
+              <div class="sub-text">{{ c.customerCode || ('#' + c.customerId) }} • সদস্য আইডি #{{ c.customerId }}</div>
+              <div class="id-nid">
+                <span class="label">NID</span>
+                <strong translate="no">{{ c.nidNumber || '—' }}</strong>
+              </div>
+              <div class="id-tags">
+                <span class="badge" [class.badge-danger]="c.creditScore === 'BLACKLISTED' || c.creditScore === 'RISKY'" [class.badge-warning]="c.creditScore === 'AVERAGE'" [class.badge-success]="!c.creditScore || c.creditScore === 'GOOD'">ক্রেডিট: {{ creditLabel(c.creditScore) }}</span>
+                <span class="badge badge-secondary">ঋণ চক্র {{ cl.loanCycle || 1 }}</span>
+                @if (c.groupNo) { <span class="badge badge-secondary">দল {{ c.groupNo }}{{ c.isGroupLeader ? ' (দলনেতা)' : '' }}</span> }
+              </div>
+            </div>
+          </div>
+
+          <div class="doc-row">
+            @for (d of [
+              { url: c.nidFrontPhotoUrl, title: 'NID সামনের পাশ' },
+              { url: c.nidBackPhotoUrl, title: 'NID পেছনের পাশ' },
+              { url: c.signaturePhotoUrl, title: 'স্বাক্ষর' }
+            ]; track d.title) {
+              <div class="doc-tile">
+                @if (d.url) {
+                  <img [src]="d.url" [alt]="d.title" (click)="zoomImage.set({ url: d.url!, title: d.title })" />
+                } @else {
+                  <span class="material-symbols-outlined">image_not_supported</span>
+                }
+                <span>{{ d.title }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- ঋণ -->
+          <h5 class="info-title">এই ঋণ</h5>
+          <dl class="info-grid">
+            <dt>আসল ঋণ (প্রদেয়)</dt><dd><strong class="amount-bdt">{{ cl.principalAmount | number }}</strong></dd>
+            <dt>কিস্তি</dt><dd>{{ cl.totalInstallments }} টি • ৳{{ cl.installmentAmount | number }}</dd>
+            <dt>উদ্দেশ্য</dt><dd>{{ cl.purposeOfLoan || '—' }}</dd>
+            <dt>আবেদনকারী</dt><dd>{{ cl.appliedByName || '—' }}</dd>
+            <dt>মাঠ যাচাই</dt><dd>{{ cl.verifiedByName || '—' }}</dd>
+            <dt>অনুমোদন</dt><dd>{{ cl.approvedByName || '—' }}</dd>
+          </dl>
+
+          <!-- ব্যক্তিগত -->
+          <h5 class="info-title">ব্যক্তিগত তথ্য</h5>
+          <dl class="info-grid">
+            <dt>পিতার নাম</dt><dd>{{ c.fatherName || '—' }}</dd>
+            <dt>মাতার নাম</dt><dd>{{ c.motherName || '—' }}</dd>
+            <dt>স্বামী / স্ত্রী</dt><dd>{{ c.spouseName || '—' }}</dd>
+            <dt>জন্ম তারিখ</dt><dd>{{ c.dateOfBirth || '—' }}</dd>
+            <dt>লিঙ্গ</dt><dd>{{ genderLabel(c.gender) }}</dd>
+            <dt>মোবাইল</dt><dd translate="no">{{ c.phonePrimary || '—' }}{{ c.phoneSecondary ? ', ' + c.phoneSecondary : '' }}</dd>
+            <dt>পেশা</dt><dd>{{ c.occupation || '—' }}{{ c.businessName ? ' (' + c.businessName + ')' : '' }}</dd>
+            <dt>মাসিক আয়</dt><dd>৳{{ c.monthlyIncome || 0 | number }}</dd>
+            <dt>বর্তমান ঠিকানা</dt><dd>{{ address(c.presentAddress) }} <span class="sub-text">({{ houseOwnershipOf(c) }} বাড়ি)</span></dd>
+            <dt>স্থায়ী ঠিকানা</dt><dd>{{ address(c.permanentAddress) }}</dd>
+          </dl>
+
+          <!-- জামিনদার -->
+          <h5 class="info-title">জামিনদার</h5>
+          <div class="guarantor-grid">
+            @for (g of guarantorsOf(c); track $index) {
+              <div class="guarantor-card">
+                @if (g.photoUrl) {
+                  <img [src]="g.photoUrl" alt="জামিনদারের ছবি" (click)="zoomImage.set({ url: g.photoUrl, title: 'জামিনদার: ' + g.name })" />
+                }
+                <div>
+                  <strong>{{ g.name }}</strong> <span class="sub-text">({{ g.relation || '—' }})</span>
+                  <div class="sub-text" translate="no">NID: {{ g.nidNumber || '—' }} • {{ g.phone || '—' }}</div>
+                  <div class="sub-text">{{ g.occupation || '' }}{{ g.address ? ' • ' + g.address : '' }}</div>
+                </div>
+              </div>
+            } @empty {
+              <span class="sub-text">কোনো জামিনদারের তথ্য নেই</span>
+            }
+          </div>
+
+          <!-- সিকিউরিটি -->
+          <h5 class="info-title">সিকিউরিটি / বন্ধক</h5>
+          @let col = collateralOf(c);
+          <dl class="info-grid">
+            <dt>ব্যাংক চেক</dt>
+            <dd>{{ col.hasBankCheque ? ('আছে — ' + (col.bankName || '') + ' চেক নং ' + (col.chequeNumber || '—')) : 'নেই' }}</dd>
+            <dt>৩০০ টাকার স্ট্যাম্প</dt>
+            <dd>{{ col.hasStamp ? ('আছে — নং ' + (col.stampNumber || '—')) : 'নেই' }}</dd>
+            @if (col.otherMortgageDetails) { <dt>অন্যান্য</dt><dd>{{ col.otherMortgageDetails }}</dd> }
+          </dl>
+        }
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeCustomer()">বন্ধ করুন</button>
+        @if (cl.status === 'APPROVED' && authService.canDisburseLoan() && customerInfo()) {
+          <button class="btn btn-success" (click)="closeCustomer(); disburse(cl)">
+            <span class="material-symbols-outlined">verified</span>
+            <span>পরিচয় মিলেছে — বিতরণ করুন</span>
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+@if (zoomImage(); as z) {
+  <div class="modal-backdrop image-zoom" (click)="zoomImage.set(null)">
+    <figure (click)="$event.stopPropagation()">
+      <img [src]="z.url" [alt]="z.title" />
+      <figcaption>{{ z.title }} <button class="close-btn" (click)="zoomImage.set(null)" aria-label="বন্ধ করুন"><span class="material-symbols-outlined">close</span></button></figcaption>
+    </figure>
   </div>
 }

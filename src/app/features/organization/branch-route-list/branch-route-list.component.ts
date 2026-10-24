@@ -7,6 +7,7 @@ import { KistiDatabaseService } from '../../../core/services/kisti-database.serv
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-branch-route-list',
@@ -19,6 +20,7 @@ export class BranchRouteListComponent implements OnInit {
   private kistiService = inject(KistiDatabaseService);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  private toast = inject(ToastService);
 
   readonly branches = signal<Branch[]>([]);
   readonly centers = signal<CenterOrSamity[]>([]);
@@ -40,7 +42,6 @@ export class BranchRouteListComponent implements OnInit {
   deleteReason: string = '';
 
   isSubmitting = signal<boolean>(false);
-  successMessage = signal<string>('');
   editReason: string = '';
 
   // Filters & Search
@@ -78,6 +79,21 @@ export class BranchRouteListComponent implements OnInit {
   readonly fieldOfficers = computed(() => {
     return this.authService.availableUsers().filter(u => u.role === 'FIELD_OFFICER' || u.role === 'BRANCH_MANAGER' || u.role === 'SUPER_ADMIN');
   });
+
+  /** সমিতির মাঠকর্মী অবশ্যই একই শাখার হতে হবে — নইলে মাঠকর্মীর ড্যাশবোর্ড/আদায় শিট তার সমিতি খুঁজে পায় না */
+  officersForBranch(branchId: number | string) {
+    return this.fieldOfficers().filter(u => u.role === 'SUPER_ADMIN' || Number(u.branchId) === Number(branchId));
+  }
+
+  /** শাখা বদলালে আগের শাখার মাঠকর্মী বাদ দিয়ে নতুন শাখার প্রথম মাঠকর্মী বসায় */
+  onRouteBranchChange(branchId: number | string) {
+    this.routeForm.branchId = Number(branchId);
+    const officers = this.officersForBranch(branchId);
+    if (!officers.some(o => Number(o.userId) === Number(this.routeForm.fieldOfficerUserId))) {
+      const fo = officers.find(o => o.role === 'FIELD_OFFICER') || officers[0];
+      this.routeForm.fieldOfficerUserId = fo ? fo.userId : 0;
+    }
+  }
 
   readonly managers = computed(() => {
     return this.authService.availableUsers().filter(u => u.role === 'BRANCH_MANAGER' || u.role === 'SUPER_ADMIN' || u.role === 'AREA_MANAGER');
@@ -254,7 +270,7 @@ export class BranchRouteListComponent implements OnInit {
 
       this.showBranchModal.set(false);
     } catch (err: any) {
-      alert('শাখা সংরক্ষণ ব্যর্থ হয়েছে: ' + (err.message || err));
+      this.toast.error('শাখা সংরক্ষণ ব্যর্থ হয়েছে: ' + (err.message || err));
     } finally {
       this.isSubmitting.set(false);
     }
@@ -279,7 +295,7 @@ export class BranchRouteListComponent implements OnInit {
       this.branches.update(prev => prev.map(b => b.branchId === branch.branchId ? { ...b, status: newStatus } : b));
       this.showToast(`শাখা "${branch.name}" এখন ${newStatus === 'ACTIVE' ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Inactive)'}`);
     } catch (err: any) {
-      alert('স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে: ' + (err.message || err));
+      this.toast.error('স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে: ' + (err.message || err));
     }
   }
 
@@ -326,6 +342,10 @@ export class BranchRouteListComponent implements OnInit {
 
   async submitRouteForm() {
     if (!this.routeForm.name.trim() || !this.routeForm.location.trim()) return;
+    if (!this.officersForBranch(this.routeForm.branchId).some(o => Number(o.userId) === Number(this.routeForm.fieldOfficerUserId))) {
+      this.toast.error('নির্বাচিত মাঠকর্মী এই শাখার নন — একই শাখার মাঠকর্মী নির্বাচন করুন (প্রয়োজনে আগে কর্মীর শাখা পরিবর্তন করুন)');
+      return;
+    }
 
     this.isSubmitting.set(true);
     const currentUser = {
@@ -380,7 +400,7 @@ export class BranchRouteListComponent implements OnInit {
 
       this.showRouteModal.set(false);
     } catch (err: any) {
-      alert('রুট সংরক্ষণ ব্যর্থ হয়েছে: ' + (err.message || err));
+      this.toast.error('রুট সংরক্ষণ ব্যর্থ হয়েছে: ' + (err.message || err));
     } finally {
       this.isSubmitting.set(false);
     }
@@ -404,7 +424,7 @@ export class BranchRouteListComponent implements OnInit {
       this.centers.update(prev => prev.map(c => c.centerId === center.centerId ? { ...c, status: newStatus } : c));
       this.showToast(`রুট "${center.name}" এখন ${newStatus === 'ACTIVE' ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Inactive)'}`);
     } catch (err: any) {
-      alert('স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে: ' + (err.message || err));
+      this.toast.error('স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে: ' + (err.message || err));
     }
   }
 
@@ -450,16 +470,13 @@ export class BranchRouteListComponent implements OnInit {
       }
       this.showDeleteModal.set(false);
     } catch (err: any) {
-      alert('মুছে ফেলা ব্যর্থ হয়েছে: ' + (err.message || err));
+      this.toast.error('মুছে ফেলা ব্যর্থ হয়েছে: ' + (err.message || err));
     } finally {
       this.isSubmitting.set(false);
     }
   }
 
   private showToast(msg: string) {
-    this.successMessage.set(msg);
-    setTimeout(() => {
-      this.successMessage.set('');
-    }, 4500);
+    this.toast.success(msg);
   }
 }

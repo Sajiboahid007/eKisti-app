@@ -1175,9 +1175,9 @@
               } @else if (editForm.category === 'HEAD_OFFICE') {
                 <input type="text" class="form-control bg-light" value="প্রধান কার্যালয় (হেড অফিস)" readonly disabled />
               } @else {
-                <select class="form-control" [(ngModel)]="editForm.branchId" name="branchId">
+                <select class="form-control" [ngModel]="editForm.branchId" (ngModelChange)="onEditBranchChange($event)" name="branchId">
                   @for (b of branches(); track b.branchId) {
-                    <option [value]="b.branchId">{{ b.name }} (শাখা #{{ b.branchId }})</option>
+                    <option [ngValue]="b.branchId">{{ b.name }} (শাখা #{{ b.branchId }})</option>
                   }
                 </select>
               }
@@ -1239,10 +1239,21 @@
                     <div class="card-content">
                       <strong>{{ center.name }}</strong>
                       <div class="sub-text">{{ center.location }} ({{ center.meetingDay }})</div>
+                      @if (editForm.role === 'FIELD_OFFICER' && centerCurrentOfficer(center)) {
+                        <div class="sub-text text-warning">বর্তমান মাঠকর্মী: {{ centerCurrentOfficer(center) }}{{ isCenterAssigned(center.centerId) ? ' → সংরক্ষণে এই কর্মীকে দেওয়া হবে' : '' }}</div>
+                      }
                     </div>
                   </label>
+                } @empty {
+                  <p class="form-hint">এই শাখায় কোনো রুট / সমিতি নেই — আগে "শাখা ও রুট/সমিতি" পাতায় সমিতি তৈরি করুন।</p>
                 }
               </div>
+              @if (orphanedCenters.length) {
+                <div class="flow-alert danger mt-2">
+                  <span class="material-symbols-outlined">warning</span>
+                  <span>আগের শাখার {{ orphanedCenters.length }}টি সমিতিতে ({{ orphanedCenters.map(c => c.name).join(', ') }}) এই কর্মী এখনো দায়িত্বপ্রাপ্ত। "শাখা ও রুট/সমিতি" পাতা থেকে সেগুলোতে ঐ শাখার অন্য মাঠকর্মী নির্ধারণ করুন।</span>
+                </div>
+              }
             </div>
           }
 

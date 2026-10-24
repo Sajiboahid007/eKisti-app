@@ -11,6 +11,12 @@ import { LanguageService } from '../../../core/services/language.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
 import { CustomerApplicationFormComponent } from '../customer-application-form/customer-application-form.component';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
+
+/** বিতরণ হয়ে চলমান ঋণ (বাকি হিসাবে ধরা হয়) */
+const RUNNING_LOAN_STATUSES: LoanStatus[] = ['DISBURSED', 'OVERDUE'];
+/** কখনো বিতরণ হয়নি — সদস্যের ঋণ ইতিহাসে দেখানো হয় না */
+const HIDDEN_LOAN_STATUSES: LoanStatus[] = ['REJECTED', 'CANCELLED'];
 
 // সদস্য বিবরণী প্রিন্টে কোন কোন অংশ থাকবে (সদস্যের তথ্য সব সময় থাকে)
 export interface CustomerPrintOptions {
@@ -34,6 +40,7 @@ export class CustomerListComponent implements OnInit {
   private memberService = inject(MemberService);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  private toast = inject(ToastService);
 
   readonly customers = signal<Customer[]>([]);
   readonly branches = signal<Branch[]>([]);
@@ -333,10 +340,7 @@ export class CustomerListComponent implements OnInit {
         await Promise.all([this.loadMemberHistories(customer.customerId), this.loadCustomerLoans(customer.customerId)]);
       }
       this.closeTransferModal();
-      this.notice.set({
-        type: 'success',
-        text: `সদস্য #${customer.customerId} (${customer.fullName}) ${this.getCenterName(transfer.toCenterId)} সমিতিতে স্থানান্তরিত হয়েছে (${transfer.loansMoved.length}টি চলমান ঋণসহ)`
-      });
+      this.toast.success(`সদস্য #${customer.customerId} (${customer.fullName}) ${this.getCenterName(transfer.toCenterId)} সমিতিতে স্থানান্তরিত হয়েছে (${transfer.loansMoved.length}টি চলমান ঋণসহ)`);
     } catch (err) {
       console.error('Transfer error:', err);
       this.transferError.set(this.errorText(err, 'স্থানান্তরে সমস্যা হয়েছে'));
@@ -383,7 +387,7 @@ export class CustomerListComponent implements OnInit {
         await this.loadMemberHistories(customer.customerId);
       }
       this.closeCreditModal();
-      this.notice.set({ type: 'success', text: `সদস্য #${customer.customerId} এর ক্রেডিট স্কোর ${this.getCreditScoreLabel(this.creditScoreValue)} করা হয়েছে` });
+      this.toast.success(`সদস্য #${customer.customerId} এর ক্রেডিট স্কোর ${this.getCreditScoreLabel(this.creditScoreValue)} করা হয়েছে`);
     } catch (err) {
       console.error('Credit score error:', err);
       this.creditError.set(this.errorText(err, 'ক্রেডিট স্কোর পরিবর্তনে সমস্যা হয়েছে'));
@@ -440,8 +444,9 @@ export class CustomerListComponent implements OnInit {
   async loadCustomerLoans(customerId: number) {
     this.loadingLoans.set(true);
     try {
+      // প্রত্যাখ্যাত / বাতিল আবেদন ঋণ ইতিহাসে দেখানো হয় না (কখনো বিতরণ হয়নি)
       const loans = await this.kistiService.getLoansByCustomerId(customerId);
-      this.selectedCustomerLoans.set(loans);
+      this.selectedCustomerLoans.set(loans.filter(l => !HIDDEN_LOAN_STATUSES.includes(l.status)));
     } catch (err) {
       console.error('Error loading customer loans:', err);
       this.selectedCustomerLoans.set([]);
@@ -602,15 +607,34 @@ export class CustomerListComponent implements OnInit {
   }
 
   getActiveLoansCount(loans: Loan[]): number {
-    return loans.filter(l => l.status === 'DISBURSED' || l.status === 'APPROVED' || l.status === 'OVERDUE').length;
+    return loans.filter(l => RUNNING_LOAN_STATUSES.includes(l.status)).length;
   }
 
   getTotalLoanAmount(loans: Loan[]): number {
     return loans.reduce((sum, l) => sum + (l.principalAmount || 0), 0);
   }
 
+  /** বাকি শুধু বিতরণকৃত চলমান ঋণের — আবেদন/প্রত্যাখ্যাত ঋণের outstandingBalance আসলে প্রস্তাবিত অঙ্ক */
   getTotalOutstanding(loans: Loan[]): number {
-    return loans.reduce((sum, l) => sum + (l.outstandingBalance || 0), 0);
+    return loans.filter(l => RUNNING_LOAN_STATUSES.includes(l.status)).reduce((sum, l) => sum + (l.outstandingBalance || 0), 0);
+  }
+
+  isRunningLoan(loan: Loan): boolean {
+    return RUNNING_LOAN_STATUSES.includes(loan.status);
+  }
+
+  /** ঋণ ইতিহাসের অবস্থা লেবেল */
+  loanStateLabel(loan: Loan): string {
+    switch (loan.status) {
+      case 'CLOSED': return '(পরিশোধিত)';
+      case 'DISBURSED': return '(চলমান)';
+      case 'OVERDUE': return '(বকেয়া)';
+      case 'WRITTEN_OFF': return '(অবলোপিত)';
+      case 'APPLIED': return '(আবেদন — মাঠ যাচাই বাকি)';
+      case 'FIELD_VERIFIED': return '(আবেদন — অনুমোদন বাকি)';
+      case 'APPROVED': return '(অনুমোদিত — বিতরণ বাকি)';
+      default: return `(${loan.status})`;
+    }
   }
 
   getTotalPaidAmount(loans: Loan[]): number {
@@ -818,10 +842,7 @@ export class CustomerListComponent implements OnInit {
       }
 
       this.closeDiscloseModal();
-      this.notice.set({
-        type: 'success',
-        text: `সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর হিসাব ${this.discloseNewStatus === 'CLOSED' ? 'সমাপ্ত/ক্লোজ' : 'নিষ্ক্রিয়'} করা হয়েছে। সঞ্চয় ফেরত ৳ ${refunded.toLocaleString()}, অবশিষ্ট সঞ্চয় ৳ ${currentSavings.toLocaleString()}।`
-      });
+      this.toast.success(`সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর হিসাব ${this.discloseNewStatus === 'CLOSED' ? 'সমাপ্ত/ক্লোজ' : 'নিষ্ক্রিয়'} করা হয়েছে। সঞ্চয় ফেরত ৳ ${refunded.toLocaleString()}, অবশিষ্ট সঞ্চয় ৳ ${currentSavings.toLocaleString()}।`);
     } catch (err) {
       console.error('Error disclosing account:', err);
       const partial = done.length ? ` (সম্পন্ন হয়েছে: ${done.join('; ')})` : '';
@@ -945,7 +966,7 @@ export class CustomerListComponent implements OnInit {
 
       this.closeEditSavingsModal();
       const cashierNote = txn.receiptNo?.startsWith('RCP-') ? ` — রসিদ ${txn.receiptNo}, টাকা অফিস ক্যাশিয়ারকে জমা দিন (ক্যাশ ক্লোজিং)` : '';
-      this.notice.set({ type: 'success', text: `সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর সঞ্চয় ব্যালেন্স এখন ৳ ${updatedBalance.toLocaleString()}${cashierNote}` });
+      this.toast.success(`সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর সঞ্চয় ব্যালেন্স এখন ৳ ${updatedBalance.toLocaleString()}${cashierNote}`);
     } catch (err) {
       console.error('Error updating savings:', err);
       this.savingsError.set(this.errorText(err, 'সঞ্চয় আপডেটে সমস্যা হয়েছে'));
@@ -980,7 +1001,7 @@ export class CustomerListComponent implements OnInit {
         this.selectedCustomerForDetails.update(c => c ? { ...c, status: 'ACTIVE' } : null);
       }
 
-      this.notice.set({ type: 'success', text: `সদস্য #${customer.customerId} এর অ্যাকাউন্ট সফলভাবে পুনরায় সক্রিয় করা হয়েছে` });
+      this.toast.success(`সদস্য #${customer.customerId} এর অ্যাকাউন্ট সফলভাবে পুনরায় সক্রিয় করা হয়েছে`);
     } catch (err) {
       console.error('Error reactivating customer:', err);
       this.notice.set({ type: 'danger', text: 'অ্যাকাউন্ট পুনরায় সক্রিয় করতে সমস্যা হয়েছে' + ': ' + this.errorText(err, '') });
@@ -1014,6 +1035,8 @@ export class CustomerListComponent implements OnInit {
   }
 
   openHistory(customer: Customer) {
+    // অডিট ইতিহাস শুধু অ্যাডমিন / সুপার অ্যাডমিন দেখতে পারবেন
+    if (!this.authService.isAdmin()) return;
     this.selectedCustomerForHistory.set(customer);
   }
 
@@ -1050,7 +1073,7 @@ export class CustomerListComponent implements OnInit {
 
       this.closeDeleteModal();
       await this.loadCustomers();
-      this.notice.set({ type: 'success', text: `গ্রাহক #${customer.customerId} সফলভাবে সফট-ডিলিট করা হয়েছে (হিস্ট্রি সংরক্ষিত)` });
+      this.toast.success(`গ্রাহক #${customer.customerId} সফলভাবে সফট-ডিলিট করা হয়েছে (হিস্ট্রি সংরক্ষিত)`);
     } catch (err) {
       console.error('Delete error:', err);
       this.notice.set({ type: 'danger', text: 'গ্রাহক ডিলিট করতে সমস্যা হয়েছে' + ': ' + this.errorText(err, '') });

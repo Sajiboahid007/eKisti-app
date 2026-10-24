@@ -1,0 +1,22 @@
+<div class="toast-stack no-print" aria-live="polite">
+  @for (t of toast.toasts(); track t.id) {
+    <div
+      class="toast-card"
+      [class]="'tone-' + t.kind"
+      [class.clickable]="!!t.link"
+      [attr.role]="t.kind === 'error' ? 'alert' : 'status'"
+      (mouseenter)="toast.pause(t.id)"
+      (mouseleave)="toast.resume(t.id)"
+      (click)="open(t)">
+      <span class="toast-icon material-symbols-outlined" aria-hidden="true">{{ icon(t.kind) }}</span>
+      <div class="toast-body">
+        <div class="toast-title">{{ t.title }}</div>
+        <div class="toast-msg">{{ t.message }}</div>
+      </div>
+      <button type="button" class="toast-close" aria-label="বন্ধ করুন" title="বন্ধ করুন" (click)="close(t, $event)">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+      <div class="toast-progress" [class.long]="t.kind === 'error'"></div>
+    </div>
+  }
+</div>

@@ -39,6 +39,9 @@
       <button class="pill-btn" [class.active]="selectedFilter === 'CLOSED'" (click)="setFilter('CLOSED')">
         পরিশোধিত ({{ getPermittedCount('CLOSED') }})
       </button>
+      <button class="pill-btn" [class.active]="selectedFilter === 'REJECTED'" (click)="setFilter('REJECTED')">
+        প্রত্যাখ্যাত ({{ getPermittedCount('REJECTED') }})
+      </button>
     </div>
   </div>
 
@@ -99,6 +102,18 @@
                     <div class="customer-cell">
                       <strong class="customer-name" [title]="loan.customerName">{{ loan.customerName }}</strong>
                       <div class="purpose-text" [title]="loan.purposeOfLoan">উদ্দেশ্য: {{ loan.purposeOfLoan }}</div>
+                      @if (isRejected(loan)) {
+                        @let rj = rejectionInfo(loan);
+                        <div class="reject-reason" [title]="rj.reason">
+                          <span class="material-symbols-outlined">block</span>
+                          <div>
+                            <strong>প্রত্যাখ্যানের কারণ:</strong> {{ rj.reason }}
+                            @if (rj.by || rj.at) {
+                              <div class="reject-meta">{{ rj.by }}{{ rj.by && rj.at ? ' • ' : '' }}{{ rj.at ? (rj.at | date:'dd MMM yyyy, hh:mm a') : '' }}</div>
+                            }
+                          </div>
+                        </div>
+                      }
                       <div class="route-info-badge" [title]="getCenterName(loan.centerId)">
                         <span class="material-symbols-outlined mini-icon">place</span>
                         <span class="route-text">{{ getCenterName(loan.centerId) }}</span>
@@ -115,7 +130,11 @@
                     <span class="amount-bdt text-success">{{ loan.totalPaidAmount | number }}</span>
                   </td>
                   <td class="amount-cell">
-                    <span class="amount-bdt text-danger font-bold">{{ loan.outstandingBalance | number }}</span>
+                    @if (loan.status === 'REJECTED' || loan.status === 'CANCELLED') {
+                      <span class="text-muted">—</span>
+                    } @else {
+                      <span class="amount-bdt text-danger font-bold">{{ loan.outstandingBalance | number }}</span>
+                    }
                   </td>
                   <td>
                     <div class="progress-block">
@@ -136,7 +155,11 @@
                   <td class="text-center">
                     @if (loan.status === 'CLOSED') {
                       <span class="badge badge-closed">পরিশোধিত</span>
-                    } @else if (loan.overdueAmount > 0) {
+                    } @else if (loan.status === 'REJECTED' || loan.status === 'CANCELLED') {
+                      <span class="badge badge-rejected" [title]="loan.rejectedReason || ''">{{ loan.status === 'REJECTED' ? 'প্রত্যাখ্যাত' : 'বাতিল' }}</span>
+                    } @else if (loan.status === 'WRITTEN_OFF') {
+                      <span class="badge badge-closed">অবলোপিত</span>
+                    } @else if (loan.status === 'OVERDUE' || loan.overdueAmount > 0) {
                       <span class="badge badge-overdue">বকেয়া</span>
                     } @else {
                       <span class="badge badge-active">চলমান</span>
@@ -157,6 +180,12 @@
                               title="অডিট ও হিস্ট্রি">
                         <span class="material-symbols-outlined">history</span>
                       </button>
+
+                      @if (canDeleteRejected(loan)) {
+                        <button class="btn-action-icon btn-delete" (click)="openDelete(loan)" title="প্রত্যাখ্যাত আবেদন মুছে ফেলুন" aria-label="প্রত্যাখ্যাত আবেদন মুছে ফেলুন">
+                          <span class="material-symbols-outlined">delete</span>
+                        </button>
+                      }
                     </div>
                   </td>
                 </tr>
@@ -217,4 +246,34 @@
     [historyList]="selectedLoanForHistory()!.history"
     (close)="closeHistory()">
   </app-history-modal>
+}
+
+<!-- প্রত্যাখ্যাত ঋণ আবেদন মুছে ফেলা -->
+@if (loanToDelete(); as dl) {
+  <div class="modal-backdrop" (click)="closeDelete()">
+    <div class="modal-dialog delete-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="deleteLoanTitle">
+      <div class="modal-header">
+        <h3 id="deleteLoanTitle">প্রত্যাখ্যাত আবেদন মুছে ফেলুন</h3>
+        <button class="close-btn" (click)="closeDelete()" aria-label="বন্ধ করুন"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <p><strong>{{ dl.loanAccountNo }}</strong> — {{ dl.customerName }} (৳{{ dl.principalAmount | number }})</p>
+        <p class="sub-text">প্রত্যাখ্যানের কারণ: {{ rejectionInfo(dl).reason }}</p>
+        <p class="sub-text">আবেদনটি তালিকা থেকে সরে যাবে; অডিট হিস্ট্রিতে রেকর্ড থেকে যাবে। এতে কোনো টাকার লেনদেন হয়নি।</p>
+        <label class="form-label" for="deleteLoanReason">মুছে ফেলার কারণ *</label>
+        <textarea id="deleteLoanReason" class="form-control" rows="3" [ngModel]="deleteReason()" (ngModelChange)="deleteReason.set($event)"
+          placeholder="যেমন: ভুল তথ্যে আবেদন, গ্রাহক নতুন করে আবেদন করবেন"></textarea>
+        @if (deleteError()) {
+          <div class="flow-alert danger mt-2"><span class="material-symbols-outlined">error</span><span>{{ deleteError() }}</span></div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeDelete()" [disabled]="deleting()">বাতিল</button>
+        <button class="btn btn-danger" (click)="confirmDelete()" [disabled]="deleting() || !deleteReason().trim()">
+          <span class="material-symbols-outlined">delete</span>
+          <span>{{ deleting() ? 'মুছে ফেলা হচ্ছে...' : 'মুছে ফেলুন' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
 }

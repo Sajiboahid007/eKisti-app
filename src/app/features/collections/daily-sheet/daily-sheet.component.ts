@@ -174,11 +174,9 @@ export class DailySheetComponent implements OnInit {
       // Branch manager sees routes belonging to their branch
       permitted = centers.filter(c => c.branchId === user.branchId);
     } else if (user.role === 'FIELD_OFFICER') {
-      // Field officer sees ONLY their assigned routes (others hidden)
-      permitted = centers.filter(c => 
-        c.fieldOfficerUserId === user.userId || 
-        (user.assignedCenterIds && user.assignedCenterIds.includes(c.centerId))
-      );
+      // মাঠকর্মী শুধু সেই রুট/সমিতি দেখবেন যেখানে সমিতিতে তাকেই দায়িত্বপ্রাপ্ত করা আছে
+      // (কর্মীর পুরোনো assignedCenterIds তালিকা নয় — সমিতির fieldOfficerUserId-ই একমাত্র উৎস)
+      permitted = centers.filter(c => Number(c.fieldOfficerUserId) === Number(user.userId) && !c.isDeleted);
     } else {
       permitted = centers;
     }
@@ -228,10 +226,8 @@ export class DailySheetComponent implements OnInit {
 
       // Enforce role-based isolation on loans
       if (currentUser.role === 'FIELD_OFFICER') {
-        activeLoans = activeLoans.filter(l =>
-          l.fieldOfficerUserId === currentUser.userId ||
-          (currentUser.assignedCenterIds && currentUser.assignedCenterIds.includes(l.centerId))
-        );
+        // নিজের দায়িত্বের সমিতি না হলে কোনো ঋণ দেখাবে না
+        if (!this.filteredCenters().some(c => c.centerId === centerId)) activeLoans = [];
       } else if (currentUser.role === 'BRANCH_MANAGER' || currentUser.role === 'CASHIER') {
         activeLoans = activeLoans.filter(l => l.branchId === currentUser.branchId);
       } else if (this.authService.isAreaScoped()) {

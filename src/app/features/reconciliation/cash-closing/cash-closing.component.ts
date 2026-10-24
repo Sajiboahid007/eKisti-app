@@ -5,12 +5,15 @@ import { PaymentCollection, Branch, DailyReconciliation } from '../../../core/mo
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
 import { FieldCashBreakdown, RECEIPT_TYPE_LABELS, fieldCashBreakdown, receiptTypeOf } from '../../../core/finance/field-cash';
 
 /** একজন মাঠকর্মীর কাছে জমা বাকি থাকা রসিদের গুচ্ছ */
 interface OfficerHandoverGroup {
   userId: number;
   name: string;
+  branchId: number;
+  branchName: string;
   receipts: PaymentCollection[];
   cashAmount: number;     // নগদ — ভল্টে গুনে নিতে হবে
   digitalAmount: number;  // বিকাশ/নগদ/ব্যাংক — TrxID দিয়ে যাচাই
@@ -23,6 +26,9 @@ interface OfficerHandoverGroup {
 
 type Tab = 'pending' | 'history';
 type StatusFilter = 'ALL' | DailyReconciliation['cashierStatus'];
+
+/** শাখা ফিল্টারে "সকল শাখা" */
+const ALL_BRANCHES = 0;
 
 // বাংলাদেশি টাকার নোট ও কয়েন
 const DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
@@ -42,8 +48,10 @@ function toLocalDayKey(value: string | Date): string {
 export class CashClosingComponent implements OnInit {
   private kistiService = inject(KistiDatabaseService);
   readonly authService = inject(AuthStateService);
+  private toast = inject(ToastService);
 
   readonly denominationList = DENOMINATIONS;
+  readonly ALL_BRANCHES = ALL_BRANCHES;
 
   // ---------- ডেটা ----------
   readonly branches = signal<Branch[]>([]);
@@ -54,8 +62,8 @@ export class CashClosingComponent implements OnInit {
 
   // ---------- UI অবস্থা ----------
   readonly activeTab = signal<Tab>('pending');
-  readonly selectedBranchId = signal<number>(0);
-  readonly successMessage = signal<string>('');
+  readonly selectedBranchId = signal<number>(ALL_BRANCHES);
+  private branchInitialized = false;
   readonly historyDateFrom = signal<string>('');
   readonly historyDateTo = signal<string>('');
   readonly historyStatus = signal<StatusFilter>('ALL');
@@ -66,6 +74,8 @@ export class CashClosingComponent implements OnInit {
   readonly denominationCounts = signal<Record<number, number>>({});
   readonly useDenominations = signal<boolean>(true);
   readonly manualCashAmount = signal<number | null>(null);
+  /** ক্যাশিয়ার নিজে পরিমাণ বদলালে আর স্বয়ংক্রিয়ভাবে প্রত্যাশিত নগদ বসানো হবে না */
+  private manualAmountEdited = false;
   readonly closingNotes = signal<string>('');
   readonly confirmStep = signal<boolean>(false);
   readonly submitting = signal<boolean>(false);
@@ -82,34 +92,59 @@ export class CashClosingComponent implements OnInit {
     this.branches().filter(b => this.authService.canAccessBranch(b.branchId))
   );
 
+  /** একাধিক শাখা দেখার অনুমতি থাকলেই "সকল শাখা" অপশন দেখাবে */
+  readonly canSeeAllBranches = computed(() => this.accessibleBranches().length > 1);
+
+  readonly isAllBranches = computed(() => this.selectedBranchId() === ALL_BRANCHES && this.canSeeAllBranches());
+
+  /** নির্দিষ্ট একটি শাখা নির্বাচিত থাকলে সেটি, "সকল শাখা" হলে null */
   readonly selectedBranch = computed(() =>
-    this.branches().find(b => b.branchId === this.selectedBranchId()) || null
+    this.isAllBranches() ? null : this.accessibleBranches().find(b => b.branchId === this.selectedBranchId()) || null
   );
 
-  /** নির্বাচিত শাখার এখনো জমা না হওয়া রসিদ (মাঠকর্মী শুধু নিজেরটা দেখবেন) */
+  /** বর্তমান ফিল্টারের আওতাভুক্ত শাখা — অনুমতির বাইরের শাখার তথ্য কখনো দেখাবে না */
+  readonly scopeBranches = computed(() => {
+    if (this.isAllBranches()) return this.accessibleBranches();
+    const b = this.selectedBranch();
+    return b ? [b] : [];
+  });
+
+  private readonly scopeBranchIds = computed(() => new Set(this.scopeBranches().map(b => b.branchId)));
+
+  /** আওতাভুক্ত শাখাগুলোর মোট ভল্ট ক্যাশ */
+  readonly scopeVaultCash = computed(() =>
+    this.scopeBranches().reduce((s, b) => s + (b.currentVaultCash || 0), 0)
+  );
+
+  /** আওতাভুক্ত শাখার এখনো জমা না হওয়া রসিদ (মাঠকর্মী শুধু নিজেরটা দেখবেন) */
   readonly pendingReceipts = computed(() => {
-    const branchId = this.selectedBranchId();
+    const branchIds = this.scopeBranchIds();
     const user = this.authService.currentUser();
     return this.collections().filter(c =>
       !c.isHandedOverToBranch &&
       !c.isReversed &&
-      Number(c.branchId) === branchId &&
+      branchIds.has(Number(c.branchId)) &&
       (!this.authService.isFieldOfficer() || c.collectedByUserId === user.userId)
     );
   });
 
   readonly officerGroups = computed<OfficerHandoverGroup[]>(() => {
-    const map = new Map<number, OfficerHandoverGroup>();
+    // শাখা + মাঠকর্মী অনুযায়ী গুচ্ছ — প্রতিটি ক্লোজিং একটি শাখার ভল্টে যায়
+    const map = new Map<string, OfficerHandoverGroup>();
     for (const c of this.pendingReceipts()) {
-      let g = map.get(c.collectedByUserId);
+      const branchId = Number(c.branchId);
+      const key = `${branchId}_${c.collectedByUserId}`;
+      let g = map.get(key);
       if (!g) {
         g = {
           userId: c.collectedByUserId,
           name: c.collectedByName || `কর্মী #${c.collectedByUserId}`,
+          branchId,
+          branchName: this.getBranchName(branchId),
           receipts: [], cashAmount: 0, digitalAmount: 0, totalAmount: 0,
           oldestDate: c.collectionDate, isOverdue: false, breakdown: fieldCashBreakdown([])
         };
-        map.set(c.collectedByUserId, g);
+        map.set(key, g);
       }
       const amount = c.totalAmountCollected || 0;
       g.receipts.push(c);
@@ -128,7 +163,7 @@ export class CashClosingComponent implements OnInit {
   });
 
   readonly branchReconciliations = computed(() =>
-    this.reconciliations().filter(r => Number(r.branchId) === this.selectedBranchId())
+    this.reconciliations().filter(r => this.scopeBranchIds().has(Number(r.branchId)))
   );
 
   readonly filteredHistory = computed(() => {
@@ -157,6 +192,12 @@ export class CashClosingComponent implements OnInit {
   });
 
   // ---------- মডাল হিসাব ----------
+  /** যে শাখার ভল্টে এই ক্লোজিং জমা হবে */
+  readonly closingBranch = computed(() => {
+    const g = this.closingGroup();
+    return g ? this.branches().find(b => b.branchId === g.branchId) || null : null;
+  });
+
   readonly selectedReceipts = computed(() => {
     const ids = this.selectedReceiptIds();
     return (this.closingGroup()?.receipts || []).filter(r => ids.has(r.receiptId));
@@ -222,12 +263,15 @@ export class CashClosingComponent implements OnInit {
       this.collections.set(collectionList);
       this.reconciliations.set(reconciliationList);
 
-      // প্রথমবার: নিজের শাখা, না থাকলে প্রথম অনুমোদিত শাখা
+      // প্রথমবার: নিজের শাখা; না থাকলে একাধিক শাখায় "সকল শাখা", নইলে একমাত্র শাখা
       const accessible = this.accessibleBranches();
-      if (!accessible.some(b => b.branchId === this.selectedBranchId())) {
+      const current = this.selectedBranchId();
+      const stillValid = current === ALL_BRANCHES ? this.canSeeAllBranches() : accessible.some(b => b.branchId === current);
+      if (!this.branchInitialized || !stillValid) {
         const own = accessible.find(b => b.branchId === this.authService.currentUser().branchId);
-        this.selectedBranchId.set((own || accessible[0])?.branchId || 0);
+        this.selectedBranchId.set(own?.branchId ?? (accessible.length > 1 ? ALL_BRANCHES : accessible[0]?.branchId ?? ALL_BRANCHES));
       }
+      this.branchInitialized = true;
     } catch (err) {
       console.error('Error loading reconciliation data:', err);
       this.loadError.set('ক্যাশ ক্লোজিং ডেটা লোড করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।');
@@ -246,8 +290,10 @@ export class CashClosingComponent implements OnInit {
     this.closingGroup.set(group);
     this.selectedReceiptIds.set(new Set(group.receipts.map(r => r.receiptId)));
     this.denominationCounts.set({});
-    this.useDenominations.set(true);
-    this.manualCashAmount.set(null);
+    // ডিফল্ট: সরাসরি পরিমাণ, প্রত্যাশিত নগদ আগে থেকেই বসানো
+    this.useDenominations.set(false);
+    this.manualAmountEdited = false;
+    this.syncManualAmount();
     this.closingNotes.set('');
     this.confirmStep.set(false);
     this.closingError.set('');
@@ -262,6 +308,7 @@ export class CashClosingComponent implements OnInit {
     const next = new Set(this.selectedReceiptIds());
     if (next.has(receiptId)) next.delete(receiptId); else next.add(receiptId);
     this.selectedReceiptIds.set(next);
+    this.syncManualAmount();
     this.confirmStep.set(false);
   }
 
@@ -270,6 +317,7 @@ export class CashClosingComponent implements OnInit {
     if (!group) return;
     const allSelected = this.selectedReceiptIds().size === group.receipts.length;
     this.selectedReceiptIds.set(allSelected ? new Set() : new Set(group.receipts.map(r => r.receiptId)));
+    this.syncManualAmount();
     this.confirmStep.set(false);
   }
 
@@ -286,7 +334,13 @@ export class CashClosingComponent implements OnInit {
 
   setManualAmount(value: number | string | null) {
     this.manualCashAmount.set(value === null || value === '' ? null : Number(value));
+    this.manualAmountEdited = true;
     this.confirmStep.set(false);
+  }
+
+  /** রসিদ নির্বাচন বদলালে (ক্যাশিয়ার হাতে না বদলানো পর্যন্ত) প্রত্যাশিত নগদ বসায় */
+  private syncManualAmount() {
+    if (!this.manualAmountEdited) this.manualCashAmount.set(this.expectedCash());
   }
 
   reviewClosing() {
@@ -310,7 +364,7 @@ export class CashClosingComponent implements OnInit {
     this.closingError.set('');
     try {
       const record = await this.kistiService.reconcileFieldOfficerCash({
-        branchId: this.selectedBranchId(),
+        branchId: group.branchId,
         fieldOfficerUserId: group.userId,
         fieldOfficerName: group.name,
         receiptIds: this.selectedReceipts().map(r => r.receiptId),
@@ -321,7 +375,7 @@ export class CashClosingComponent implements OnInit {
       });
 
       this.closingGroup.set(null);
-      this.showSuccess(
+      this.toast.success(
         record.cashierStatus === 'ACCEPTED'
           ? `ক্লোজিং #${record.reconciliationId} সম্পন্ন — ${group.name} থেকে ৳${record.cashHandedOverAmount.toLocaleString('en-IN')} ভল্টে জমা হয়েছে`
           : `ক্লোজিং #${record.reconciliationId} অমিলসহ সংরক্ষিত — ${record.shortageOrDeficitAmount > 0 ? 'ঘাটতি' : 'অতিরিক্ত'} ৳${Math.abs(record.shortageOrDeficitAmount).toLocaleString('en-IN')}`
@@ -363,12 +417,5 @@ export class CashClosingComponent implements OnInit {
     this.historyDateFrom.set('');
     this.historyDateTo.set('');
     this.historyStatus.set('ALL');
-  }
-
-  private showSuccess(msg: string) {
-    this.successMessage.set(msg);
-    setTimeout(() => {
-      if (this.successMessage() === msg) this.successMessage.set('');
-    }, 6000);
   }
 }

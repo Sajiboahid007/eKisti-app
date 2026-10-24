@@ -144,6 +144,14 @@ export class KistiDatabaseService {
     }
   }
 
+  /** একটি গ্রাহক (মুছে ফেলা হলে null) */
+  async getCustomerById(customerId: number): Promise<Customer | null> {
+    const snap = await getDoc(doc(this.firestore, 'customers', String(customerId)));
+    if (!snap.exists()) return null;
+    const c = snap.data() as Customer;
+    return c.isDeleted ? null : c;
+  }
+
   /**
    * Updates an existing customer with full edit history
    */
@@ -524,6 +532,28 @@ export class KistiDatabaseService {
       actor: this.auditHistoryService.actorStamp(changedByUser)
     });
     await batch.commit();
+  }
+
+  /**
+   * প্রত্যাখ্যাত / বাতিল ঋণ আবেদন মুছে ফেলা (সফট ডিলিট, অডিটসহ)।
+   * এগুলো কখনো বিতরণ হয়নি — কোনো টাকার লেনদেন নেই, তাই খতিয়ানে প্রভাব নেই।
+   */
+  async softDeleteRejectedLoan(
+    loanId: number,
+    deletedByUser: { userId: number; name: string; role: string },
+    reason: string
+  ): Promise<void> {
+    if (!reason.trim()) throw new Error('মুছে ফেলার কারণ লিখুন');
+    const snap = await getDoc(doc(this.firestore, 'loans', loanId.toString()));
+    if (!snap.exists()) throw new Error('ঋণ পাওয়া যায়নি');
+    const loan = snap.data() as Loan;
+    if (loan.status !== 'REJECTED' && loan.status !== 'CANCELLED') {
+      throw new Error('শুধু প্রত্যাখ্যাত বা বাতিল ঋণ আবেদন মুছে ফেলা যায়');
+    }
+    if ((loan.totalPaidAmount || 0) > 0 || loan.disbursementDate) {
+      throw new Error('এই ঋণে লেনদেন আছে — মুছে ফেলা যাবে না');
+    }
+    await this.softDeleteRecord('loans', loanId, deletedByUser, reason.trim());
   }
 
   /**

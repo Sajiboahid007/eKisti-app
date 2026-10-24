@@ -7,6 +7,7 @@ import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth
 import { LanguageService } from '../../../core/services/language.service';
 import { StaffRole, UserStaff, Role, Branch, UserCategory } from '../../../core/models/database.models';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
 import { toDhakaDayKey } from '../../../core/finance/dates';
 
 @Component({
@@ -22,6 +23,7 @@ export class UserFormComponent implements OnInit {
   private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  private toast = inject(ToastService);
 
   submitting = signal<boolean>(false);
   loadingRoles = signal<boolean>(true);
@@ -135,17 +137,17 @@ export class UserFormComponent implements OnInit {
 
   async onSubmit() {
     if (!this.name.trim() || !this.phone.trim() || !this.email.trim()) {
-      alert(this.lang.isBangla() ? 'অনুগ্রহ করে নাম, মোবাইল এবং ইমেইল প্রদান করুন' : 'Please provide name, phone and email');
+      this.toast.warning(this.lang.isBangla() ? 'অনুগ্রহ করে নাম, মোবাইল এবং ইমেইল প্রদান করুন' : 'Please provide name, phone and email');
       return;
     }
 
     if (!this.authService.isSuperAdmin() && !this.authService.isAdmin()) {
-      alert(this.lang.isBangla() ? 'শুধুমাত্র সিস্টেম অ্যাডমিন নতুন ইউজার তৈরি করতে পারেন' : 'Admin access only');
+      this.toast.error(this.lang.isBangla() ? 'শুধুমাত্র সিস্টেম অ্যাডমিন নতুন ইউজার তৈরি করতে পারেন' : 'Admin access only');
       return;
     }
 
     if (this.isAreaRole && this.assignedBranchIds.length === 0) {
-      alert(this.lang.isBangla() ? 'এরিয়া ম্যানেজারের জন্য অন্তত একটি শাখা নির্বাচন করুন' : 'Select at least one branch for the area manager');
+      this.toast.warning(this.lang.isBangla() ? 'এরিয়া ম্যানেজারের জন্য অন্তত একটি শাখা নির্বাচন করুন' : 'Select at least one branch for the area manager');
       return;
     }
 
@@ -171,7 +173,8 @@ export class UserFormComponent implements OnInit {
           role: this.role,
           branchId,
           branchName,
-          assignedCenterIds: (!isSystemOrHO && this.role === 'FIELD_OFFICER') ? [101] : [],
+          // সমিতি পরে কর্মী এডিট বা "শাখা ও রুট/সমিতি" পাতা থেকে দেওয়া হয় (আগে সব নতুন মাঠকর্মী ভুলভাবে ১০১ পেতেন)
+          assignedCenterIds: [],
           assignedBranchIds: this.isAreaRole ? [...this.assignedBranchIds] : [],
           nidNumber: this.nidNumber.trim() || `19852692518000${Date.now().toString().slice(-3)}`,
           salary: Number(this.salary) || (this.category === 'SYSTEM_ADMIN' ? 70000 : (this.category === 'HEAD_OFFICE' ? 50000 : 25000)),
@@ -190,7 +193,7 @@ export class UserFormComponent implements OnInit {
       const matchedRole = this.dynamicRoles().find(r => r.code === this.role);
       this.authService.syncUserFromDb(newStaffDoc, matchedRole);
 
-      alert(
+      this.toast.success(
         this.lang.isBangla()
           ? `অভিনন্দন! নতুন ব্যবহারকারী #${newStaffDoc.userId} (${this.name}) সফলভাবে সংরক্ষিত হয়েছে!`
           : `Success! New User #${newStaffDoc.userId} (${this.name}) has been saved to database!`
@@ -200,7 +203,7 @@ export class UserFormComponent implements OnInit {
       this.router.navigate(['/users'], { queryParams: { tab: targetTab } });
     } catch (err) {
       console.error('Error creating user in database:', err);
-      alert('ইউজার তৈরিতে সমস্যা হয়েছে');
+      this.toast.error('ইউজার তৈরিতে সমস্যা হয়েছে');
     } finally {
       this.submitting.set(false);
     }

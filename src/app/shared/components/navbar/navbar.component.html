@@ -29,6 +29,9 @@
       <span class="net-text">{{ isOnline() ? (lang.isBangla() ? 'অনলাইন' : 'Online') : (lang.isBangla() ? 'অফলাইন' : 'Offline') }}</span>
     </span>
 
+    <!-- নোটিফিকেশন বেল -->
+    <app-notification-bell />
+
     <!-- Language Toggle Button -->
     <button class="nav-lang-btn" (click)="lang.toggleLanguage()" [title]="lang.isBangla() ? 'Switch to English' : 'বাংলায় দেখুন'">
       <span class="material-symbols-outlined lang-icon">translate</span>
@@ -69,28 +72,5 @@
         </optgroup>
       </select>
     </div>
-
-    <!-- Active User Profile Badge -->
-    <div class="user-profile">
-      <div class="user-avatar" [ngClass]="{
-        'avatar-admin': authService.isSystemAdmin(),
-        'avatar-ho': authService.isHeadOfficeUser(),
-        'avatar-branch': authService.isBranchStaff()
-      }">
-        {{ authService.currentUser().name.charAt(0) }}
-      </div>
-      <div class="user-info">
-        <div class="user-name">{{ authService.currentUser().name }}</div>
-        <div class="user-role-badge">
-          {{ lang.isBangla() ? authService.currentUser().roleTitleBangla : authService.currentUser().roleTitleEnglish }}
-        </div>
-      </div>
-    </div>
-
-    <!-- Logout Button -->
-    <button class="btn btn-sm btn-logout" (click)="logout()" [title]="lang.t('logout')">
-      <span class="material-symbols-outlined">logout</span>
-      <span class="logout-label">{{ lang.t('logout') }}</span>
-    </button>
   </div>
 </header>

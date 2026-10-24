@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { Firestore, collection, getDocs, query, where, QueryConstraint } from '@angular/fire/firestore';
@@ -137,6 +137,24 @@ export class DashboardComponent implements OnInit {
   readonly overdueResult = signal<OverdueRunResult | null>(null);
   readonly overdueError = signal<string>('');
   readonly foCashLimit = signal<number>(DEFAULT_GENERAL_SETTINGS.foCashInHandLimit);
+
+  /** একই URL-এ রোল বদলালে রাউটার কম্পোনেন্ট পুনরায় লোড করে না — তাই নিজে থেকেই নতুন ব্যবহারকারীর ডেটা আনা হয় */
+  private loadedForUserId: number | null = null;
+  /** পুরোনো (আগের রোলের) লোড দেরিতে শেষ হলে নতুন ডেটা যেন মুছে না দেয় */
+  private loadSeq = 0;
+
+  constructor() {
+    effect(() => {
+      const userId = this.authService.currentUser().userId;
+      untracked(() => {
+        if (this.loadedForUserId === null || this.loadedForUserId === userId) return;
+        this.selectedBranchId.set(0);
+        this.overdueResult.set(null);
+        this.overdueAutoRunDone = false;
+        void this.loadDashboardData().then(() => this.autoRunOverdueEngine());
+      });
+    });
+  }
 
   // UI টগল
   readonly showTrendTable = signal<boolean>(false);
@@ -523,6 +541,8 @@ export class DashboardComponent implements OnInit {
   }
 
   async loadDashboardData() {
+    const seq = ++this.loadSeq;
+    this.loadedForUserId = this.authService.currentUser().userId;
     this.loading.set(true);
     this.todayKey.set(todayDhaka());
     try {
@@ -545,6 +565,7 @@ export class DashboardComponent implements OnInit {
         this.fetchAll<CenterOrSamity>('centers'),
         this.fetchAll<LoanProduct>('loanProducts')
       ]);
+      if (seq !== this.loadSeq) return;
 
       const inScope = (b: number) => branchIds === null || branchIds.includes(Number(b));
       const user = this.authService.currentUser();
@@ -565,7 +586,7 @@ export class DashboardComponent implements OnInit {
     } catch (err) {
       console.error('Dashboard data loading error from Firestore:', err);
     } finally {
-      this.loading.set(false);
+      if (seq === this.loadSeq) this.loading.set(false);
     }
   }
 

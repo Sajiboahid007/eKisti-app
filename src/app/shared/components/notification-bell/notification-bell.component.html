@@ -1,0 +1,43 @@
+<button type="button" class="bell-btn" [class.has-items]="notifications.totalCount() > 0"
+        (click)="toggle()" aria-haspopup="true" [attr.aria-expanded]="open()"
+        aria-controls="notificationPanel" title="নোটিফিকেশন" aria-label="নোটিফিকেশন">
+  <span class="material-symbols-outlined bell-icon">{{ notifications.totalCount() > 0 ? 'notifications_active' : 'notifications' }}</span>
+  @if (notifications.totalCount() > 0) {
+    <span class="bell-count" translate="no">{{ countText(notifications.totalCount()) }}</span>
+  }
+</button>
+
+@if (open()) {
+  <div class="bell-panel" id="notificationPanel" role="dialog" aria-label="নোটিফিকেশন">
+    <div class="panel-header">
+      <span class="panel-title">নোটিফিকেশন</span>
+      @if (notifications.totalCount() > 0) {
+        <span class="panel-total" translate="no">{{ countText(notifications.totalCount()) }}</span>
+      }
+    </div>
+
+    @if (notifications.items().length) {
+      <ul class="panel-list">
+        @for (item of notifications.items(); track item.key) {
+          <li>
+            <button type="button" class="panel-item" (click)="go(item)">
+              <span class="item-icon" [class]="'tone-' + item.tone">
+                <span class="material-symbols-outlined">{{ item.icon }}</span>
+              </span>
+              <span class="item-body">
+                <span class="item-title">{{ item.title }}</span>
+                <span class="item-detail">{{ item.detail }}</span>
+              </span>
+              <span class="item-count" translate="no">{{ countText(item.count) }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="panel-empty">
+        <span class="material-symbols-outlined">task_alt</span>
+        <span>কোনো বাকি কাজ নেই</span>
+      </div>
+    }
+  </div>
+}

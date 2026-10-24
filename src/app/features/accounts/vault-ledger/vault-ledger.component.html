@@ -5,8 +5,9 @@
       <p class="sub-text">শাখার প্রতিটি নগদ আসা-যাওয়ার খতিয়ান — ভল্ট স্থিতি এই খতিয়ানের চলতি যোগফল</p>
     </div>
     <div class="header-right">
-      @if (branches().length > 1) {
+      @if (canSeeAllBranches()) {
         <select class="form-control branch-select" [ngModel]="branchId()" (ngModelChange)="branchId.set(+$event); load()">
+          <option [ngValue]="ALL_BRANCHES">সকল শাখা</option>
           @for (b of branches(); track b.branchId) { <option [ngValue]="b.branchId">{{ b.name }}</option> }
         </select>
       }
@@ -21,19 +22,31 @@
     </div>
   }
 
-  @if (branch(); as b) {
+  @if (scopeBranches().length) {
     <div class="kpi-row">
-      <div class="kpi"><span class="kpi-label">ভল্ট নগদ</span><strong class="amount-bdt">{{ b.currentVaultCash || 0 | number:'1.0-2' }}</strong></div>
-      <div class="kpi"><span class="kpi-label">ব্যাংক স্থিতি</span><strong class="amount-bdt">{{ b.currentBankBalance || 0 | number:'1.0-2' }}</strong></div>
+      <div class="kpi"><span class="kpi-label">ভল্ট নগদ</span><strong class="amount-bdt">{{ scopeTotals().vault | number:'1.0-2' }}</strong></div>
+      <div class="kpi"><span class="kpi-label">ব্যাংক স্থিতি</span><strong class="amount-bdt">{{ scopeTotals().bank | number:'1.0-2' }}</strong></div>
       <div class="kpi"><span class="kpi-label">সময়কালে আসা / যাওয়া</span><strong><span class="text-success">+{{ totals().inn | number }}</span> / <span class="text-danger">−{{ totals().out | number }}</span></strong></div>
-      <div class="kpi" [class.closed]="dayClosed()">
-        <span class="kpi-label">আজ ({{ today }})</span>
-        <strong>{{ dayClosed() ? 'দিবস সমাপ্ত 🔒' : 'খোলা' }}</strong>
-        @if (dayClosed()) { <span class="sub-text">{{ dayStatus()!.closedBy.name }}</span> }
-      </div>
+      @if (isAllBranches()) {
+        <div class="kpi" [class.closed]="closedBranchCount() === scopeBranches().length">
+          <span class="kpi-label">আজ ({{ today }})</span>
+          <strong>{{ closedBranchCount() }} / {{ scopeBranches().length }} শাখা সমাপ্ত</strong>
+        </div>
+      } @else {
+        <div class="kpi" [class.closed]="dayClosed()">
+          <span class="kpi-label">আজ ({{ today }})</span>
+          <strong>{{ dayClosed() ? 'দিবস সমাপ্ত 🔒' : 'খোলা' }}</strong>
+          @if (dayClosed()) { <span class="sub-text">{{ dayStatus()!.closedBy.name }}</span> }
+        </div>
+      }
     </div>
 
-    @if (!hasLedger()) {
+    @if (isAllBranches()) {
+      <div class="flow-alert info">
+        <span class="material-symbols-outlined">info</span>
+        <span>সকল শাখার খতিয়ান দেখছেন। ব্যাংক জমা, খরচ, তহবিল বা দিবস/মাস সমাপনী করতে উপরে একটি শাখা নির্বাচন করুন।</span>
+      </div>
+    } @else if (!hasLedger()) {
       <div class="flow-alert info">
         <span class="material-symbols-outlined">info</span>
         <span>এই শাখার ভল্ট খতিয়ান এখনো চালু হয়নি। ভল্টের প্রকৃত নগদ গুনে "প্রারম্ভিক স্থিতি" দিয়ে শুরু করুন।
@@ -42,6 +55,7 @@
       </div>
     }
 
+    @if (!isAllBranches()) {
     <div class="action-row">
       @for (o of operations; track o) {
         <button class="btn btn-secondary" (click)="open(o)" [disabled]="dayClosed()">
@@ -58,6 +72,7 @@
         <button class="btn btn-danger" (click)="open('REOPEN')"><span class="material-symbols-outlined">lock_open</span><span>দিন পুনরায় খুলুন</span></button>
       }
     </div>
+    }
 
     <div class="tab-bar" role="tablist">
       <button role="tab" class="tab-btn" [class.active]="tab() === 'LEDGER'" (click)="tab.set('LEDGER')">ভল্ট খতিয়ান</button>
@@ -88,12 +103,13 @@
             } @else {
               <div class="table-container border-0">
                 <table class="data-table">
-                  <thead><tr><th>নং</th><th>তারিখ ও সময়</th><th>বিবরণ</th><th>রেফারেন্স</th><th class="text-right">জমা</th><th class="text-right">খরচ/বের</th><th class="text-right">স্থিতি</th><th>কর্মী</th></tr></thead>
+                  <thead><tr><th>নং</th><th>তারিখ ও সময়</th>@if (isAllBranches()) { <th>শাখা</th> }<th>বিবরণ</th><th>রেফারেন্স</th><th class="text-right">জমা</th><th class="text-right">খরচ/বের</th><th class="text-right">স্থিতি</th><th>কর্মী</th></tr></thead>
                   <tbody>
                     @for (v of ledger(); track v.vaultTransactionId) {
                       <tr>
                         <td>#{{ v.vaultTransactionId }}</td>
                         <td>{{ v.businessDate }}<div class="sub-text">{{ v.createdAt | date:'hh:mm a' }}</div></td>
+                        @if (isAllBranches()) { <td>{{ branchName(v.branchId) }}</td> }
                         <td>{{ typeLabel(v.type) }}@if (v.note) { <div class="sub-text">{{ v.note }}</div> }</td>
                         <td>@if (v.slipNo) { স্লিপ {{ v.slipNo }} } @if (v.refType) { <span class="sub-text">{{ v.refType }} #{{ v.refId }}</span> }</td>
                         <td class="text-right">@if (v.direction === 'IN') { <span class="amount-bdt text-success">{{ v.amount | number }}</span> }</td>
@@ -113,12 +129,13 @@
             } @else {
               <div class="table-container border-0">
                 <table class="data-table">
-                  <thead><tr><th>ভাউচার</th><th>তারিখ</th><th>খাত</th><th>বিবরণ / প্রাপক</th><th class="text-right">টাকা</th><th>অনুমোদনকারী</th></tr></thead>
+                  <thead><tr><th>ভাউচার</th><th>তারিখ</th>@if (isAllBranches()) { <th>শাখা</th> }<th>খাত</th><th>বিবরণ / প্রাপক</th><th class="text-right">টাকা</th><th>অনুমোদনকারী</th></tr></thead>
                   <tbody>
                     @for (e of expenses(); track e.expenseId) {
                       <tr>
                         <td>#{{ e.expenseId }}@if (e.voucherNo) { <div class="sub-text">{{ e.voucherNo }}</div> }</td>
                         <td>{{ e.businessDate }}</td>
+                        @if (isAllBranches()) { <td>{{ branchName(e.branchId) }}</td> }
                         <td>{{ e.head }}</td>
                         <td>{{ e.description }}@if (e.paidTo) { <div class="sub-text">প্রাপক: {{ e.paidTo }}</div> }</td>
                         <td class="text-right amount-bdt">{{ e.amount | number }}</td>
@@ -133,11 +150,12 @@
           @case ('SUMMARIES') {
             <div class="table-container border-0">
               <table class="data-table">
-                <thead><tr><th>তারিখ</th><th class="text-right">প্রারম্ভিক ভল্ট</th><th class="text-right">আসা</th><th class="text-right">যাওয়া</th><th class="text-right">সমাপনী ভল্ট</th><th class="text-right">আদায়</th><th class="text-right">বিতরণ</th><th class="text-right">খরচ</th><th>PAR>৩০</th><th>সমাপনকারী</th></tr></thead>
+                <thead><tr><th>তারিখ</th>@if (isAllBranches()) { <th>শাখা</th> }<th class="text-right">প্রারম্ভিক ভল্ট</th><th class="text-right">আসা</th><th class="text-right">যাওয়া</th><th class="text-right">সমাপনী ভল্ট</th><th class="text-right">আদায়</th><th class="text-right">বিতরণ</th><th class="text-right">খরচ</th><th>PAR>৩০</th><th>সমাপনকারী</th></tr></thead>
                 <tbody>
                   @for (s of summaries(); track s.summaryId) {
                     <tr>
                       <td>{{ s.date }}</td>
+                      @if (isAllBranches()) { <td>{{ branchName(s.branchId) }}</td> }
                       <td class="text-right">{{ s.openingVault | number }}</td>
                       <td class="text-right text-success">{{ vaultInOut(s, 'IN') | number }}</td>
                       <td class="text-right text-danger">{{ vaultInOut(s, 'OUT') | number }}</td>
@@ -149,7 +167,7 @@
                       <td>{{ s.createdBy.name }}</td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="10" class="text-center text-muted">এখনো কোনো দিবস সমাপনী হয়নি</td></tr>
+                    <tr><td [attr.colspan]="isAllBranches() ? 11 : 10" class="text-center text-muted">এখনো কোনো দিবস সমাপনী হয়নি</td></tr>
                   }
                 </tbody>
               </table>
@@ -158,11 +176,12 @@
               <h4 class="section-title">মাসিক পোর্টফোলিও স্ন্যাপশট</h4>
               <div class="table-container border-0">
                 <table class="data-table">
-                  <thead><tr><th>মাস</th><th class="text-right">চলমান ঋণ</th><th class="text-right">বাকি আসল</th><th>PAR>১</th><th>PAR>৩০</th><th>OTR</th><th>CRR</th><th class="text-right">প্রয়োজনীয় সঞ্চিতি</th></tr></thead>
+                  <thead><tr><th>মাস</th>@if (isAllBranches()) { <th>শাখা</th> }<th class="text-right">চলমান ঋণ</th><th class="text-right">বাকি আসল</th><th>PAR>১</th><th>PAR>৩০</th><th>OTR</th><th>CRR</th><th class="text-right">প্রয়োজনীয় সঞ্চিতি</th></tr></thead>
                   <tbody>
                     @for (m of snapshots(); track m.snapshotId) {
                       <tr>
                         <td>{{ m.month }}</td>
+                        @if (isAllBranches()) { <td>{{ branchName(m.branchId) }}</td> }
                         <td class="text-right">{{ m.loansCount }}</td>
                         <td class="text-right">{{ m.outstandingPrincipal | number }}</td>
                         <td>{{ m.par1Percent }}%</td>

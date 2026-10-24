@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { NavbarComponent } from './shared/components/navbar/navbar.component';
 import { SidebarComponent } from './shared/components/sidebar/sidebar.component';
+import { ToastComponent } from './shared/components/toast/toast.component';
 import { AuthStateService } from './core/services/auth-state.service';
 import { LanguageService } from './core/services/language.service';
 import { DomTranslatorService } from './core/services/dom-translator.service';
@@ -11,7 +12,7 @@ import { filter } from 'rxjs/operators';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, NavbarComponent, SidebarComponent],
+  imports: [CommonModule, RouterOutlet, NavbarComponent, SidebarComponent, ToastComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })

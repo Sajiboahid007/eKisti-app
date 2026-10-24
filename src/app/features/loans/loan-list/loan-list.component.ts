@@ -2,11 +2,19 @@ import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Loan, Branch, CenterOrSamity } from '../../../core/models/database.models';
+import { Loan, LoanStatus, Branch, CenterOrSamity } from '../../../core/models/database.models';
+import { ToastService } from '../../../core/services/toast.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+
+/** বিতরণ হয়ে চলমান (বকেয়াসহ) */
+const RUNNING_STATUSES: LoanStatus[] = ['DISBURSED', 'OVERDUE'];
+/** বিতরণকৃত সব ঋণ — চলমান, পরিশোধিত ও অবলোপিত */
+const PORTFOLIO_STATUSES: LoanStatus[] = ['DISBURSED', 'OVERDUE', 'CLOSED', 'WRITTEN_OFF'];
+/** আবেদন প্রত্যাখ্যাত / বাতিল — কখনো বিতরণ হয়নি */
+const REJECTED_STATUSES: LoanStatus[] = ['REJECTED', 'CANCELLED'];
 
 @Component({
   selector: 'app-loan-list',
@@ -18,6 +26,13 @@ import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.
 export class LoanListComponent implements OnInit {
   private kistiService = inject(KistiDatabaseService);
   readonly authService = inject(AuthStateService);
+  private toast = inject(ToastService);
+
+  // প্রত্যাখ্যাত ঋণ মুছে ফেলা
+  readonly loanToDelete = signal<Loan | null>(null);
+  readonly deleteReason = signal<string>('');
+  readonly deleting = signal<boolean>(false);
+  readonly deleteError = signal<string>('');
 
   readonly loans = signal<Loan[]>([]);
   readonly branches = signal<Branch[]>([]);
@@ -132,16 +147,19 @@ export class LoanListComponent implements OnInit {
     return all;
   }
 
-  filteredLoans(): Loan[] {
-    let list = this.getPermittedLoans();
-
-    if (this.selectedFilter === 'ACTIVE') {
-      list = list.filter(l => l.status === 'DISBURSED');
-    } else if (this.selectedFilter === 'OVERDUE') {
-      list = list.filter(l => (l.overdueAmount || 0) > 0);
-    } else if (this.selectedFilter === 'CLOSED') {
-      list = list.filter(l => l.status === 'CLOSED');
+  /** ট্যাব অনুযায়ী ঋণ — "সব ঋণ" = বিতরণকৃত পোর্টফোলিও (আবেদন প্রবাহ ও প্রত্যাখ্যাত বাদ) */
+  private byTab(list: Loan[], tab: string): Loan[] {
+    switch (tab) {
+      case 'ACTIVE': return list.filter(l => RUNNING_STATUSES.includes(l.status));
+      case 'OVERDUE': return list.filter(l => RUNNING_STATUSES.includes(l.status) && (l.status === 'OVERDUE' || (l.overdueAmount || 0) > 0));
+      case 'CLOSED': return list.filter(l => l.status === 'CLOSED');
+      case 'REJECTED': return list.filter(l => REJECTED_STATUSES.includes(l.status));
+      default: return list.filter(l => PORTFOLIO_STATUSES.includes(l.status));
     }
+  }
+
+  filteredLoans(): Loan[] {
+    let list = this.byTab(this.getPermittedLoans(), this.selectedFilter);
 
     const q = this.searchQuery.trim().toLowerCase();
     if (!q) return list;
@@ -154,12 +172,7 @@ export class LoanListComponent implements OnInit {
   }
 
   getPermittedCount(status?: string): number {
-    const list = this.getPermittedLoans();
-    if (!status || status === 'ALL') return list.length;
-    if (status === 'ACTIVE') return list.filter(l => l.status === 'DISBURSED').length;
-    if (status === 'OVERDUE') return list.filter(l => (l.overdueAmount || 0) > 0).length;
-    if (status === 'CLOSED') return list.filter(l => l.status === 'CLOSED').length;
-    return list.length;
+    return this.byTab(this.getPermittedLoans(), status || 'ALL').length;
   }
 
   getBranchName(branchId: number): string {
@@ -223,6 +236,57 @@ export class LoanListComponent implements OnInit {
       pages.push(i);
     }
     return pages;
+  }
+
+  isRejected(loan: Loan): boolean {
+    return REJECTED_STATUSES.includes(loan.status);
+  }
+
+  /** প্রত্যাখ্যানের কারণ — নতুন রেকর্ডে loan-এ, পুরোনো রেকর্ডে হিস্ট্রি থেকে */
+  rejectionInfo(loan: Loan): { reason: string; by: string; at: string } {
+    const entry = [...(loan.history || [])].reverse().find(h => String(h.action) === 'LOAN_REJECTED');
+    return {
+      reason: loan.rejectedReason || entry?.reason || 'কারণ উল্লেখ নেই',
+      by: loan.rejectedByName || entry?.changedByName || '',
+      at: loan.rejectedAt || entry?.timestamp || ''
+    };
+  }
+
+  /** শাখা ব্যবস্থাপক / অ্যাডমিন (যারা প্রত্যাখ্যান করতে পারেন) মুছতে পারবেন */
+  canDeleteRejected(loan: Loan): boolean {
+    return this.isRejected(loan) && this.authService.canApproveLoans();
+  }
+
+  openDelete(loan: Loan) {
+    this.loanToDelete.set(loan);
+    this.deleteReason.set('');
+    this.deleteError.set('');
+  }
+
+  closeDelete() {
+    if (!this.deleting()) this.loanToDelete.set(null);
+  }
+
+  async confirmDelete() {
+    const loan = this.loanToDelete();
+    if (!loan || this.deleting()) return;
+    if (!this.deleteReason().trim()) {
+      this.deleteError.set('মুছে ফেলার কারণ লিখুন');
+      return;
+    }
+    const u = this.authService.currentUser();
+    this.deleting.set(true);
+    this.deleteError.set('');
+    try {
+      await this.kistiService.softDeleteRejectedLoan(loan.loanId, { userId: u.userId, name: u.name, role: u.role }, this.deleteReason());
+      this.loans.update(list => list.filter(l => l.loanId !== loan.loanId));
+      this.loanToDelete.set(null);
+      this.toast.success(`প্রত্যাখ্যাত আবেদন ${loan.loanAccountNo} (${loan.customerName}) মুছে ফেলা হয়েছে`);
+    } catch (err: any) {
+      this.deleteError.set(err?.message || 'মুছে ফেলা যায়নি');
+    } finally {
+      this.deleting.set(false);
+    }
   }
 
   openHistory(loan: Loan) {

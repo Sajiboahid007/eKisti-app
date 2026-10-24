@@ -1,0 +1,188 @@
+:host {
+  position: relative;
+  display: inline-flex;
+}
+
+.bell-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background-color: #fff;
+  color: var(--text-secondary, #475569);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  .bell-icon { font-size: 22px; }
+
+  &:hover { background-color: #f1f5f9; color: var(--primary, #0f766e); }
+  &:focus-visible { outline: 2px solid var(--primary, #0f766e); outline-offset: 2px; }
+
+  &.has-items {
+    color: var(--primary, #0f766e);
+    .bell-icon { animation: bell-ring 4s ease-in-out infinite; transform-origin: 50% 10%; }
+  }
+}
+
+.bell-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background-color: var(--danger, #ef4444);
+  color: #fff;
+  border: 2px solid #fff;
+  box-sizing: content-box;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.bell-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background-color: #fff;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+  z-index: 1000;
+  overflow: hidden;
+  animation: panel-in 0.14s ease-out;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+
+  .panel-title { font-size: 0.95rem; font-weight: 700; color: var(--text-primary, #0f172a); }
+
+  .panel-total {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--danger, #ef4444);
+    background-color: var(--danger-bg, #fef2f2);
+    border: 1px solid var(--danger-border, #fecaca);
+    border-radius: 9999px;
+    padding: 0.1rem 0.5rem;
+  }
+}
+
+.panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.panel-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.65rem;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+
+  &:hover, &:focus-visible { background-color: #f1f5f9; outline: none; }
+}
+
+.item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  .material-symbols-outlined { font-size: 20px; }
+
+  &.tone-warning { background-color: #fffbeb; color: #b45309; }
+  &.tone-info { background-color: #eff6ff; color: #1d4ed8; }
+  &.tone-success { background-color: #f0fdf4; color: #15803d; }
+}
+
+.item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+
+  .item-title { font-size: 0.875rem; font-weight: 700; color: var(--text-primary, #0f172a); }
+  .item-detail { font-size: 0.775rem; color: var(--text-secondary, #475569); line-height: 1.35; }
+}
+
+.item-count {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background-color: var(--danger, #ef4444);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 1.75rem 1rem;
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.875rem;
+  font-weight: 600;
+
+  .material-symbols-outlined { font-size: 36px; color: #22c55e; }
+}
+
+@keyframes bell-ring {
+  0%, 82%, 100% { transform: rotate(0); }
+  85% { transform: rotate(14deg); }
+  88% { transform: rotate(-12deg); }
+  91% { transform: rotate(8deg); }
+  94% { transform: rotate(-5deg); }
+  97% { transform: rotate(2deg); }
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bell-btn.has-items .bell-icon, .bell-panel { animation: none; }
+}
+
+@media print {
+  :host { display: none !important; }
+}

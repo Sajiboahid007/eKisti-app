@@ -2,6 +2,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Firestore, collection, getDocs } from '@angular/fire/firestore';
 import { StaffRole, UserStaff, Role, UserCategory } from '../models/database.models';
+import { LOAN_APPROVE_ROLES, LOAN_DISBURSE_ROLES, LOAN_VERIFY_ROLES } from './loan-lifecycle.service';
 
 export interface ActiveUserSession {
   userId: number;
@@ -239,15 +240,22 @@ export class AuthStateService {
 
   // Permission checks
   readonly canManageUsers = computed(() => this.isSuperAdmin() || this.isAdmin());
-  readonly canApproveLoans = computed(() => ['BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
-  readonly canDisburseLoan = computed(() => ['BRANCH_MANAGER', 'CASHIER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
+  readonly canApproveLoans = computed(() => LOAN_APPROVE_ROLES.includes(this.currentUser().role));
+  /** ঋণ বিতরণ = ভল্ট থেকে নগদ প্রদান — তাই ক্যাশিয়ার */
+  readonly canDisburseLoan = computed(() => LOAN_DISBURSE_ROLES.includes(this.currentUser().role));
   readonly canCollectKisti = computed(() => ['FIELD_OFFICER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER'].includes(this.currentUser().role));
   readonly canVerifyCash = computed(() => ['CASHIER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
 
   // ঋণ অনুমোদন প্রবাহ (Maker-Checker)
   readonly canApplyLoan = computed(() => ['FIELD_OFFICER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
-  readonly canVerifyLoan = computed(() => ['FIELD_OFFICER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'REGIONAL_MANAGER'].includes(this.currentUser().role));
-  readonly canSeeLoanPipeline = computed(() => this.canApplyLoan() || this.canVerifyLoan() || this.canApproveLoans() || this.canDisburseLoan());
+  /** মাঠ যাচাই — মাঠকর্মী সরেজমিনে করেন */
+  readonly canVerifyLoan = computed(() => LOAN_VERIFY_ROLES.includes(this.currentUser().role));
+  /** মাঠকর্মী যাচাই, BM অনুমোদন, ক্যাশিয়ার বিতরণ; বাকিরা শুধু তালিকা দেখেন */
+  readonly canSeeLoanPipeline = computed(() => this.canApplyLoan() || this.canVerifyLoan() || this.canApproveLoans() || this.canDisburseLoan() || this.isCashier());
+  readonly isLoanPipelineReadOnly = computed(() => !this.canVerifyLoan() && !this.canApproveLoans() && !this.canDisburseLoan());
+
+  // রিপোর্ট — মাঠকর্মী দেখেন না
+  readonly canViewReports = computed(() => !this.isFieldOfficer());
 
   // হিসাব, ভল্ট ও সমাপনী
   readonly canManageAccounts = computed(() => ['CASHIER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));

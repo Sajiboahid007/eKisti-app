@@ -11,6 +11,9 @@ import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.
 
 type Tab = 'LEDGER' | 'EXPENSES' | 'SUMMARIES';
 
+/** শাখা ফিল্টারে "সকল শাখা" — শুধু দেখা যায়, লেনদেন/সমাপনী একটি শাখা বেছে করতে হয় */
+const ALL_BRANCHES = 0;
+
 const OPERATION_LABELS: Record<VaultOperation, { label: string; icon: string; hint: string }> = {
   BANK_DEPOSIT: { label: 'ব্যাংকে জমা', icon: 'account_balance', hint: 'ভল্টের নগদ ব্যাংক হিসাবে জমা (স্লিপ নং আবশ্যক)' },
   BANK_WITHDRAW: { label: 'ব্যাংক থেকে উত্তোলন', icon: 'local_atm', hint: 'ব্যাংক থেকে চেক দিয়ে ভল্টে নগদ আনা' },
@@ -41,6 +44,7 @@ export class VaultLedgerComponent implements OnInit {
   readonly expenseHeads = EXPENSE_HEADS;
   readonly opLabels = OPERATION_LABELS;
   readonly operations: VaultOperation[] = ['BANK_DEPOSIT', 'BANK_WITHDRAW', 'EXPENSE', 'HO_TRANSFER_IN', 'HO_TRANSFER_OUT'];
+  readonly ALL_BRANCHES = ALL_BRANCHES;
 
   readonly branches = signal<Branch[]>([]);
   readonly branchId = signal<number>(0);
@@ -51,6 +55,8 @@ export class VaultLedgerComponent implements OnInit {
   readonly summaries = signal<DailyBranchSummary[]>([]);
   readonly snapshots = signal<MonthlyPortfolioSnapshot[]>([]);
   readonly dayStatus = signal<PeriodClosing | null>(null);
+  /** "সকল শাখা": কয়টি শাখার আজকের দিবস সমাপনী হয়েছে */
+  readonly closedBranchCount = signal<number>(0);
   readonly hasLedger = signal<boolean>(true);
   readonly loading = signal<boolean>(true);
   readonly tab = signal<Tab>('LEDGER');
@@ -70,7 +76,22 @@ export class VaultLedgerComponent implements OnInit {
   readonly progress = signal<string>('');
 
   readonly today = todayDhaka();
-  readonly branch = computed(() => this.branches().find(b => b.branchId === this.branchId()) || null);
+  /** একাধিক শাখা দেখার অনুমতি থাকলেই "সকল শাখা" অপশন দেখাবে */
+  readonly canSeeAllBranches = computed(() => this.branches().length > 1);
+  readonly isAllBranches = computed(() => this.branchId() === ALL_BRANCHES && this.canSeeAllBranches());
+  readonly branch = computed(() =>
+    this.isAllBranches() ? null : this.branches().find(b => b.branchId === this.branchId()) || null
+  );
+  /** বর্তমান ফিল্টারের আওতাভুক্ত শাখা (অনুমতির বাইরের শাখা কখনো নয়) */
+  readonly scopeBranches = computed(() => {
+    if (this.isAllBranches()) return this.branches();
+    const b = this.branch();
+    return b ? [b] : [];
+  });
+  readonly scopeTotals = computed(() => this.scopeBranches().reduce(
+    (t, b) => ({ vault: t.vault + (Number(b.currentVaultCash) || 0), bank: t.bank + (Number(b.currentBankBalance) || 0) }),
+    { vault: 0, bank: 0 }
+  ));
   readonly dayClosed = computed(() => this.dayStatus()?.status === 'CLOSED');
   readonly totals = computed(() => {
     let inn = 0, out = 0;
@@ -83,11 +104,12 @@ export class VaultLedgerComponent implements OnInit {
     const accessible = all.filter(b => this.authService.canAccessBranch(b.branchId));
     this.branches.set(accessible);
     const own = accessible.find(b => b.branchId === this.authService.currentUser().branchId);
-    this.branchId.set((own || accessible[0])?.branchId || 0);
+    this.branchId.set(own?.branchId ?? (accessible.length > 1 ? ALL_BRANCHES : accessible[0]?.branchId ?? ALL_BRANCHES));
     await this.load();
   }
 
   async load() {
+    if (this.isAllBranches()) return this.loadAll();
     if (!this.branchId()) { this.loading.set(false); return; }
     this.loading.set(true);
     try {
@@ -113,6 +135,40 @@ export class VaultLedgerComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** সকল অনুমোদিত শাখার খতিয়ান একসাথে (শুধু দেখা) */
+  private async loadAll() {
+    this.loading.set(true);
+    try {
+      const all = await this.kisti.getBranches();
+      const accessible = all.filter(b => this.authService.canAccessBranch(b.branchId));
+      this.branches.set(accessible);
+      const ids = new Set(accessible.map(b => b.branchId));
+      const inScope = (x: { branchId: number }) => ids.has(Number(x.branchId));
+      const [ledger, expenses, summaries, snapshots, statuses] = await Promise.all([
+        this.cash.getVaultTransactions(null, this.from(), this.to()),
+        this.cash.getExpenses(null, this.from(), this.to()),
+        Promise.all(accessible.map(b => this.cash.getDailySummaries(b.branchId))),
+        Promise.all(accessible.map(b => this.cash.getMonthlySnapshots(b.branchId))),
+        Promise.all(accessible.map(b => this.cash.getDayStatus(b.branchId)))
+      ]);
+      this.ledger.set(ledger.filter(inScope));
+      this.expenses.set(expenses.filter(inScope));
+      this.summaries.set(summaries.flat().sort((a, b) => b.date.localeCompare(a.date) || a.branchId - b.branchId));
+      this.snapshots.set(snapshots.flat().sort((a, b) => b.month.localeCompare(a.month) || a.branchId - b.branchId));
+      this.closedBranchCount.set(statuses.filter(s => s?.status === 'CLOSED').length);
+      this.dayStatus.set(null);
+      this.hasLedger.set(true);
+    } catch (err: any) {
+      this.notice.set({ kind: 'danger', text: err?.message || 'তথ্য লোড করা যায়নি' });
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  branchName(branchId: number): string {
+    return this.branches().find(b => b.branchId === Number(branchId))?.name || `শাখা #${branchId}`;
   }
 
   setRange(days: number) {

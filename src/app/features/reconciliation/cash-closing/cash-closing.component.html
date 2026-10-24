@@ -5,8 +5,9 @@
       <p class="sub-text">মাঠকর্মী কর্তৃক সংগৃহীত নগদ টাকা গণনা, যাচাই ও শাখার ক্যাশ ভল্টে গ্রহণ</p>
     </div>
     <div class="header-right">
-      @if (accessibleBranches().length > 1) {
+      @if (canSeeAllBranches()) {
         <select class="form-control branch-select" [ngModel]="selectedBranchId()" (ngModelChange)="onBranchChange($event)" [disabled]="loading()">
+          <option [ngValue]="ALL_BRANCHES">সকল শাখা</option>
           @for (b of accessibleBranches(); track b.branchId) {
             <option [ngValue]="b.branchId">{{ b.name }}</option>
           }
@@ -18,16 +19,6 @@
       </button>
     </div>
   </div>
-
-  @if (successMessage()) {
-    <div class="alert-banner success" role="status">
-      <span class="material-symbols-outlined">check_circle</span>
-      <span>{{ successMessage() }}</span>
-      <button class="banner-close" (click)="successMessage.set('')" aria-label="বন্ধ করুন">
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-  }
 
   @if (!canVerify()) {
     <div class="alert-banner info">
@@ -45,7 +36,7 @@
       <p>{{ loadError() }}</p>
       <button class="btn btn-primary" (click)="loadData()">আবার চেষ্টা করুন</button>
     </div>
-  } @else if (!selectedBranch()) {
+  } @else if (scopeBranches().length === 0) {
     <div class="card empty-state">
       <span class="material-symbols-outlined">domain_disabled</span>
       <p>আপনার অ্যাকাউন্টে কোনো শাখা নির্ধারিত নেই।</p>
@@ -59,8 +50,8 @@
         </div>
         <div class="stat-info">
           <div class="stat-label">শাখা ভল্ট ব্যালেন্স (Vault Cash)</div>
-          <div class="stat-val amount-bdt">{{ selectedBranch()!.currentVaultCash || 0 | number:'1.2-2' }}</div>
-          <div class="stat-subtext">{{ selectedBranch()!.name }} • নিরাপদ সংরক্ষিত ক্যাশ</div>
+          <div class="stat-val amount-bdt">{{ scopeVaultCash() | number:'1.2-2' }}</div>
+          <div class="stat-subtext">{{ isAllBranches() ? 'সকল শাখা (' + scopeBranches().length + ' টি)' : selectedBranch()!.name }} • নিরাপদ সংরক্ষিত ক্যাশ</div>
         </div>
       </div>
 
@@ -123,13 +114,16 @@
         </div>
       } @else {
         <div class="officer-grid">
-          @for (g of officerGroups(); track g.userId) {
+          @for (g of officerGroups(); track g.branchId + '_' + g.userId) {
             <div class="card officer-card" [class.overdue]="g.isOverdue">
               <div class="officer-head">
                 <div class="officer-avatar">{{ g.name.charAt(0) }}</div>
                 <div class="officer-meta">
                   <strong>{{ g.name }}</strong>
                   <span class="sub-text">অফিসার আইডি #{{ g.userId }} • {{ g.receipts.length }} টি রসিদ</span>
+                  @if (isAllBranches()) {
+                    <span class="sub-text">{{ g.branchName }}</span>
+                  }
                 </div>
                 @if (g.isOverdue) {
                   <span class="badge badge-danger" title="আগের দিনের আদায় এখনো জমা হয়নি">বিলম্বিত</span>
@@ -213,6 +207,7 @@
                 <tr>
                   <th>ক্লোজিং নং</th>
                   <th>তারিখ ও সময়</th>
+                  @if (isAllBranches()) { <th>শাখা</th> }
                   <th>মাঠকর্মী</th>
                   <th class="text-right">প্রত্যাশিত নগদ</th>
                   <th class="text-right">গৃহীত নগদ</th>
@@ -233,6 +228,7 @@
                       <div>{{ r.verifiedAt || r.submittedAt | date:'dd MMM yyyy' }}</div>
                       <div class="sub-text">{{ r.verifiedAt || r.submittedAt | date:'hh:mm a' }}</div>
                     </td>
+                    @if (isAllBranches()) { <td>{{ getBranchName(r.branchId) }}</td> }
                     <td><strong>{{ r.fieldOfficerName }}</strong></td>
                     <td class="amount-bdt text-right">{{ r.actualCashCollected | number }}</td>
                     <td class="amount-bdt text-right"><strong>{{ r.cashHandedOverAmount | number }}</strong></td>
@@ -280,7 +276,7 @@
           <span class="material-symbols-outlined text-primary">point_of_sale</span>
           <div>
             <h3>ক্যাশ গণনা ও ভল্টে গ্রহণ</h3>
-            <span class="sub-text">{{ g.name }} • {{ selectedBranch()?.name }}</span>
+            <span class="sub-text">{{ g.name }} • {{ g.branchName }}</span>
           </div>
         </div>
         <button class="close-btn" (click)="closeClosing()" [disabled]="submitting()">
@@ -383,7 +379,7 @@
             <span>
               নিশ্চিত করুন: <strong>{{ selectedReceipts().length }}</strong> টি রসিদ জমা নেওয়া হবে এবং ভল্টে
               <strong>৳{{ countedCash() | number }}</strong> যোগ হবে
-              (৳{{ selectedBranch()?.currentVaultCash || 0 | number }} → ৳{{ (selectedBranch()?.currentVaultCash || 0) + countedCash() | number }})।
+              (৳{{ closingBranch()?.currentVaultCash || 0 | number }} → ৳{{ (closingBranch()?.currentVaultCash || 0) + countedCash() | number }})।
               এটি পরে পরিবর্তন করা যাবে না।
             </span>
           </div>
@@ -478,12 +474,6 @@
               @for (d of slipDenominations(s); track d.note) {
                 <span>৳{{ d.note }} × {{ d.count }} = {{ d.note * d.count | number }}</span>
               }
-            </div>
-          }
-
-          @if (s.vaultBalanceBefore !== undefined) {
-            <div class="slip-vault">
-              ভল্ট ব্যালেন্স: ৳{{ s.vaultBalanceBefore | number }} → <strong>৳{{ s.vaultBalanceAfter | number }}</strong>
             </div>
           }
 

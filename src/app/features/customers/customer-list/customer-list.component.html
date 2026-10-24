@@ -113,10 +113,12 @@
                     <span class="material-symbols-outlined">edit</span>
                   </a>
 
-                  <!-- Audit History -->
+                  <!-- Audit History (শুধু অ্যাডমিন / সুপার অ্যাডমিন) -->
+                  @if (authService.isAdmin()) {
                   <button class="btn-action-icon btn-view" (click)="openHistory(customer)" title="পরিবর্তনের ইতিহাস (অডিট লগ)">
                     <span class="material-symbols-outlined">history</span>
                   </button>
+                  }
 
                   <!-- Soft Delete Customer -->
                   @if (authService.canApproveLoans()) {
@@ -470,8 +472,7 @@
                 <td>
                   <div class="date-status-cell">
                     <span class="font-mono">{{ loan.actualClosedDate || loan.expectedClosingDate }}</span>
-                    <span class="sub-status" [class.closed]="loan.status === 'CLOSED'">{{ loan.status === 'CLOSED' ?
-                      '(পরিশোধিত)' : '(চলমান)' }}</span>
+                    <span class="sub-status" [class.closed]="loan.status === 'CLOSED'">{{ loanStateLabel(loan) }}</span>
                   </div>
                 </td>
                 <td>
@@ -484,7 +485,9 @@
                   <strong class="text-success">৳{{ loan.totalPaidAmount | number }}</strong>
                 </td>
                 <td>
-                  @if (loan.outstandingBalance > 0) {
+                  @if (!isRunningLoan(loan) && loan.status !== 'CLOSED' && loan.status !== 'WRITTEN_OFF') {
+                  <span class="text-muted">—</span>
+                  } @else if (loan.outstandingBalance > 0) {
                   <strong class="text-danger">৳{{ loan.outstandingBalance | number }}</strong>
                   } @else {
                   <span class="text-success font-semibold">৳ 0</span>
@@ -856,11 +859,13 @@
     </div>
 
     <div class="modal-footer no-print py-2">
+      @if (authService.isAdmin()) {
       <button class="btn btn-sm btn-outline-secondary" (click)="openHistory(selectedCustomerForDetails()!)"
         title="পরিবর্তনের ইতিহাস (অডিট লগ)">
         <span class="material-symbols-outlined">history</span>
         <span>হিস্ট্রি</span>
       </button>
+      }
       @if (authService.canTransferMember()) {
       <button class="btn btn-sm btn-outline-primary" (click)="openTransferModal(selectedCustomerForDetails()!)"
         title="সদস্যকে অন্য সমিতি / শাখা / মাঠকর্মীর কাছে স্থানান্তর">

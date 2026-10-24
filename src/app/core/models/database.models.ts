@@ -379,6 +379,8 @@ export interface Loan extends SoftDeletable {
   verificationNotes?: string;
   approvedByName?: string;
   rejectedByUserId?: number;
+  rejectedByName?: string;
+  rejectedAt?: string;
   rejectedReason?: string;
   disbursedByUserId?: number;
   disbursedByName?: string;

@@ -10,6 +10,7 @@ import { Customer, LoanProduct, InstallmentFrequency, Branch, CenterOrSamity, Us
 import { EMPTY_CALENDAR, LoanSchedule, WorkingCalendar, buildSchedule } from '../../../core/finance/schedule';
 import { formatBnDate, todayDhaka, weekdayBn } from '../../../core/finance/dates';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
 
 export interface DisbursementReceiptData {
   loanId: number;
@@ -75,6 +76,7 @@ export class LoanDisburseComponent implements OnInit {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);
+  private toast = inject(ToastService);
 
   readonly customers = signal<Customer[]>([]);
   readonly products = signal<LoanProduct[]>([]);
@@ -513,6 +515,7 @@ export class LoanDisburseComponent implements OnInit {
           customLoanAccountNo: this.customLoanAccountNo()
         }, actor);
         this.approvedLoan.set(result.loan);
+        this.toast.success(`ঋণ ${result.loan.loanAccountNo} সফলভাবে বিতরণ হয়েছে — ৳${Number(result.loan.principalAmount || 0).toLocaleString('en-IN')}`, 'ঋণ বিতরণ সম্পন্ন');
         this.selectedReceiptForPrint.set(this.buildReceipt(cust, result.loan.loanId, result.loan.loanAccountNo, result.loan.disbursementDate, {
           name: loan.approvedByName || user.name, role: loan.approvedByName ? 'শাখা ব্যবস্থাপক (অনুমোদনকারী)' : user.role
         }));
@@ -532,6 +535,7 @@ export class LoanDisburseComponent implements OnInit {
           proposedFirstDueDate: this.firstInstallmentDueDate()
         }, actor);
         this.successMessage.set(`ঋণ আবেদন ${loan.loanAccountNo} জমা হয়েছে — এখন মাঠ যাচাই ও শাখা ব্যবস্থাপকের অনুমোদনের অপেক্ষায়।`);
+        this.toast.success(`ঋণ আবেদন ${loan.loanAccountNo} জমা হয়েছে`, 'আবেদন জমা হয়েছে', '/loans/approvals');
         setTimeout(() => this.router.navigate(['/loans/approvals']), 1500);
       }
     } catch (err: any) {

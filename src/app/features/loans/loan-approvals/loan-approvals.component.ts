@@ -2,10 +2,12 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { Loan, LoanStatus } from '../../../core/models/database.models';
+import { Customer, Loan, LoanStatus } from '../../../core/models/database.models';
+import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LoanLifecycleService } from '../../../core/services/loan-lifecycle.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
 
 type Stage = 'APPLIED' | 'FIELD_VERIFIED' | 'APPROVED';
 type ActionKind = 'VERIFY' | 'APPROVE' | 'REJECT';
@@ -30,12 +32,13 @@ export class LoanApprovalsComponent implements OnInit {
   private lifecycle = inject(LoanLifecycleService);
   private router = inject(Router);
   readonly authService = inject(AuthStateService);
+  private toast = inject(ToastService);
+  private kisti = inject(KistiDatabaseService);
 
   readonly checklist = VERIFICATION_CHECKLIST;
   readonly loans = signal<Loan[]>([]);
   readonly loading = signal<boolean>(true);
   readonly error = signal<string>('');
-  readonly success = signal<string>('');
   readonly stage = signal<Stage>('APPLIED');
 
   readonly action = signal<{ kind: ActionKind; loan: Loan } | null>(null);
@@ -43,6 +46,13 @@ export class LoanApprovalsComponent implements OnInit {
   readonly checked = signal<Set<number>>(new Set());
   readonly busy = signal<boolean>(false);
   readonly actionError = signal<string>('');
+
+  // গ্রাহকের পরিচয় যাচাই মডাল — বিতরণের আগে ক্যাশিয়ার মূল NID/ছবির সাথে মিলিয়ে নেবেন
+  readonly customerLoan = signal<Loan | null>(null);
+  readonly customerInfo = signal<Customer | null>(null);
+  readonly customerLoading = signal<boolean>(false);
+  readonly customerError = signal<string>('');
+  readonly zoomImage = signal<{ url: string; title: string } | null>(null);
 
   readonly stageLoans = computed(() => this.loans().filter(l => l.status === this.stage()));
   /** বর্তমান ধাপের বিবরণ — একটিমাত্র টেক্সট বাইন্ডিং (প্রতি ক্লিকে নতুন টেক্সট নোড তৈরি হয় না) */
@@ -54,9 +64,9 @@ export class LoanApprovalsComponent implements OnInit {
   });
 
   readonly stages: { key: Stage; label: string; icon: string; hint: string }[] = [
-    { key: 'APPLIED', label: 'মাঠ যাচাই বাকি', icon: 'edit_note', hint: 'মাঠকর্মী/BM সরেজমিনে যাচাই করবেন' },
+    { key: 'APPLIED', label: 'মাঠ যাচাই বাকি', icon: 'edit_note', hint: 'দায়িত্বপ্রাপ্ত মাঠকর্মী সরেজমিনে যাচাই করবেন' },
     { key: 'FIELD_VERIFIED', label: 'অনুমোদন বাকি', icon: 'fact_check', hint: 'শাখা ব্যবস্থাপক অনুমোদন দেবেন (আবেদনকারী নিজে নয়)' },
-    { key: 'APPROVED', label: 'বিতরণ বাকি', icon: 'payments', hint: 'ক্যাশিয়ার/BM ভল্ট থেকে টাকা দেবেন' }
+    { key: 'APPROVED', label: 'বিতরণ বাকি', icon: 'payments', hint: 'ক্যাশিয়ার ভল্ট থেকে টাকা দিয়ে বিতরণ সম্পন্ন করবেন' }
   ];
 
   async ngOnInit() {
@@ -77,7 +87,10 @@ export class LoanApprovalsComponent implements OnInit {
 
   canAct(kind: ActionKind, loan: Loan): boolean {
     const me = this.authService.currentUser().userId;
-    if (kind === 'VERIFY') return this.authService.canVerifyLoan();
+    if (kind === 'VERIFY') {
+      // মাঠকর্মী শুধু নিজের দায়িত্বের ঋণ যাচাই করবেন
+      return this.authService.canVerifyLoan() && (!this.authService.isFieldOfficer() || Number(loan.fieldOfficerUserId) === Number(me));
+    }
     if (kind === 'APPROVE') return this.authService.canApproveLoans() && loan.appliedByUserId !== me;
     return this.authService.canApproveLoans();
   }
@@ -118,13 +131,13 @@ export class LoanApprovalsComponent implements OnInit {
       if (a.kind === 'VERIFY') {
         const notes = `${this.notes().trim()} [যাচাই: ${this.checklist.join('; ')}]`;
         await this.lifecycle.verify(a.loan.loanId, notes, actor);
-        this.success.set(`${a.loan.loanAccountNo} মাঠ যাচাই সম্পন্ন — এখন অনুমোদনের অপেক্ষায়`);
+        this.toast.success(`${a.loan.loanAccountNo} মাঠ যাচাই সম্পন্ন — এখন অনুমোদনের অপেক্ষায়`);
       } else if (a.kind === 'APPROVE') {
         await this.lifecycle.approve(a.loan.loanId, this.notes(), actor);
-        this.success.set(`${a.loan.loanAccountNo} অনুমোদিত — এখন বিতরণের অপেক্ষায়`);
+        this.toast.success(`${a.loan.loanAccountNo} অনুমোদিত — এখন বিতরণের অপেক্ষায়`);
       } else {
         await this.lifecycle.reject(a.loan.loanId, this.notes(), actor);
-        this.success.set(`${a.loan.loanAccountNo} প্রত্যাখ্যাত`);
+        this.toast.success(`${a.loan.loanAccountNo} প্রত্যাখ্যাত`);
       }
       this.action.set(null);
       await this.load();
@@ -133,6 +146,59 @@ export class LoanApprovalsComponent implements OnInit {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  async openCustomer(loan: Loan) {
+    this.customerLoan.set(loan);
+    this.customerInfo.set(null);
+    this.customerError.set('');
+    this.customerLoading.set(true);
+    try {
+      const c = await this.kisti.getCustomerById(loan.customerId);
+      if (this.customerLoan()?.loanId !== loan.loanId) return;
+      if (c) this.customerInfo.set(c);
+      else this.customerError.set(`গ্রাহক #${loan.customerId} পাওয়া যায়নি`);
+    } catch (err: any) {
+      this.customerError.set(err?.message || 'গ্রাহকের তথ্য লোড করা যায়নি');
+    } finally {
+      this.customerLoading.set(false);
+    }
+  }
+
+  closeCustomer() {
+    this.customerLoan.set(null);
+    this.customerInfo.set(null);
+    this.zoomImage.set(null);
+  }
+
+  ownershipLabel(v: string | undefined): string {
+    return ({ OWN: 'নিজস্ব', RENTED: 'ভাড়া', FAMILY: 'পারিবারিক' } as Record<string, string>)[v || ''] || '—';
+  }
+
+  genderLabel(v: string | undefined): string {
+    return ({ MALE: 'পুরুষ', FEMALE: 'মহিলা', OTHER: 'অন্যান্য' } as Record<string, string>)[v || ''] || '—';
+  }
+
+  creditLabel(v: string | undefined): string {
+    return ({ GOOD: 'ভালো', AVERAGE: 'মধ্যম', RISKY: 'ঝুঁকিপূর্ণ', BLACKLISTED: 'কালো তালিকাভুক্ত' } as Record<string, string>)[v || 'GOOD'] || String(v);
+  }
+
+  /** পুরোনো রেকর্ডে জামিনদার/বন্ধক না-ও থাকতে পারে */
+  guarantorsOf(c: Customer) {
+    return [c.primaryGuarantor, c.secondaryGuarantor].filter((g): g is NonNullable<typeof g> => !!g && !!g.name);
+  }
+
+  collateralOf(c: Customer): Partial<Customer['collateral']> {
+    return c.collateral || {};
+  }
+
+  houseOwnershipOf(c: Customer): string {
+    return this.ownershipLabel((c.presentAddress as Customer['presentAddress'] | undefined)?.houseOwnership);
+  }
+
+  address(a: { villageOrStreet?: string; postOffice?: string; thanaOrUpazila?: string; district?: string } | undefined): string {
+    if (!a) return '—';
+    return [a.villageOrStreet, a.postOffice, a.thanaOrUpazila, a.district].filter(Boolean).join(', ') || '—';
   }
 
   disburse(loan: Loan) {

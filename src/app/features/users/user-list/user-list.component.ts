@@ -7,6 +7,7 @@ import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth
 import { LanguageService } from '../../../core/services/language.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-user-list',
@@ -20,6 +21,7 @@ export class UserListComponent implements OnInit {
   private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  private toast = inject(ToastService);
 
   // 4-Tab State: 'admins' (সুপার অ্যাডমিন ও অ্যাডমিন) | 'head_office' (প্রধান কার্যালয়) | 'branch_staff' (শাখা ও মাঠকর্মী) | 'roles' (পদবী ও রোল ব্যবস্থাপনা)
   readonly activeTab = signal<'admins' | 'head_office' | 'branch_staff' | 'roles'>('admins');
@@ -251,13 +253,13 @@ export class UserListComponent implements OnInit {
 
   async saveNewRole() {
     if (!this.roleForm.code.trim() || !this.roleForm.nameBn.trim() || !this.roleForm.nameEn.trim()) {
-      alert(this.lang.isBangla() ? 'অনুগ্রহ করে রোল কোড, বাংলা ও ইংরেজি নাম প্রদান করুন।' : 'Please provide Role Code, Bangla and English title.');
+      this.toast.warning(this.lang.isBangla() ? 'অনুগ্রহ করে রোল কোড, বাংলা ও ইংরেজি নাম প্রদান করুন।' : 'Please provide Role Code, Bangla and English title.');
       return;
     }
 
     const cleanCode = this.roleForm.code.trim().toUpperCase().replace(/\s+/g, '_');
     if (this.rolesList().some(r => r.code === cleanCode)) {
-      alert(this.lang.isBangla() ? `রোল কোড "${cleanCode}" ইতিমধ্যে রয়েছে। অন্য কোড দিন।` : `Role code "${cleanCode}" already exists.`);
+      this.toast.warning(this.lang.isBangla() ? `রোল কোড "${cleanCode}" ইতিমধ্যে রয়েছে। অন্য কোড দিন।` : `Role code "${cleanCode}" already exists.`);
       return;
     }
 
@@ -284,10 +286,10 @@ export class UserListComponent implements OnInit {
       this.authService.syncUsersFromDb(this.staffList(), this.rolesList());
       this.closeAddRole();
 
-      alert(this.lang.isBangla() ? `নতুন পদবী "${newRole.nameBn}" সফলভাবে তৈরি হয়েছে!` : `Role "${newRole.nameEn}" created successfully!`);
+      this.toast.success(this.lang.isBangla() ? `নতুন পদবী "${newRole.nameBn}" সফলভাবে তৈরি হয়েছে!` : `Role "${newRole.nameEn}" created successfully!`);
     } catch (err) {
       console.error('Error creating role:', err);
-      alert(this.lang.isBangla() ? 'রোল তৈরি করতে সমস্যা হয়েছে।' : 'Error creating role.');
+      this.toast.error(this.lang.isBangla() ? 'রোল তৈরি করতে সমস্যা হয়েছে।' : 'Error creating role.');
     } finally {
       this.isSavingRole.set(false);
     }
@@ -319,7 +321,7 @@ export class UserListComponent implements OnInit {
     if (!role) return;
 
     if (!this.roleForm.nameBn.trim() || !this.roleForm.nameEn.trim()) {
-      alert(this.lang.isBangla() ? 'অনুগ্রহ করে পদবীর বাংলা ও ইংরেজি নাম দিন।' : 'Please provide Bangla and English title.');
+      this.toast.warning(this.lang.isBangla() ? 'অনুগ্রহ করে পদবীর বাংলা ও ইংরেজি নাম দিন।' : 'Please provide Bangla and English title.');
       return;
     }
 
@@ -348,10 +350,10 @@ export class UserListComponent implements OnInit {
       this.authService.syncUsersFromDb(this.staffList(), this.rolesList());
       this.closeEditRole();
 
-      alert(this.lang.isBangla() ? `পদবী "${role.nameBn}" এর তথ্য সফলভাবে আপডেট হয়েছে!` : `Role updated successfully!`);
+      this.toast.success(this.lang.isBangla() ? `পদবী "${role.nameBn}" এর তথ্য সফলভাবে আপডেট হয়েছে!` : `Role updated successfully!`);
     } catch (err) {
       console.error('Error updating role:', err);
-      alert(this.lang.isBangla() ? 'পদবী তথ্য হালনাগাদ করতে সমস্যা হয়েছে।' : 'Error updating role.');
+      this.toast.error(this.lang.isBangla() ? 'পদবী তথ্য হালনাগাদ করতে সমস্যা হয়েছে।' : 'Error updating role.');
     } finally {
       this.isSavingRole.set(false);
     }
@@ -359,13 +361,13 @@ export class UserListComponent implements OnInit {
 
   openDeleteRole(role: Role) {
     if (role.isSystem) {
-      alert(this.lang.isBangla() ? 'সিস্টেমের মূল পদবী ডিলিট করা সম্ভব নয়।' : 'System default roles cannot be deleted.');
+      this.toast.warning(this.lang.isBangla() ? 'সিস্টেমের মূল পদবী ডিলিট করা সম্ভব নয়।' : 'System default roles cannot be deleted.');
       return;
     }
 
     const staffWithRole = this.staffList().filter(s => s.role === role.code);
     if (staffWithRole.length > 0) {
-      alert(
+      this.toast.warning(
         this.lang.isBangla()
           ? `এই পদবীতে বর্তমানে ${staffWithRole.length} জন কর্মী নিযুক্ত আছেন। প্রথমে কর্মীদের পদবী পরিবর্তন করুন।`
           : `Cannot delete: ${staffWithRole.length} staff member(s) are currently assigned to this role.`
@@ -389,7 +391,7 @@ export class UserListComponent implements OnInit {
     if (!role) return;
 
     if (!this.roleDeleteReason.trim()) {
-      alert(this.lang.isBangla() ? 'পদবী বাতিলের কারণ উল্লেখ করুন।' : 'Please provide reason for deletion.');
+      this.toast.warning(this.lang.isBangla() ? 'পদবী বাতিলের কারণ উল্লেখ করুন।' : 'Please provide reason for deletion.');
       return;
     }
 
@@ -406,10 +408,10 @@ export class UserListComponent implements OnInit {
       this.rolesList.update(list => list.filter(r => r.roleId !== role.roleId));
       this.closeDeleteRole();
 
-      alert(this.lang.isBangla() ? `পদবী "${role.nameBn}" সফট-ডিলিট করা হয়েছে।` : `Role deleted successfully.`);
+      this.toast.success(this.lang.isBangla() ? `পদবী "${role.nameBn}" সফট-ডিলিট করা হয়েছে।` : `Role deleted successfully.`);
     } catch (err) {
       console.error('Error deleting role:', err);
-      alert(this.lang.isBangla() ? 'পদবী ডিলিট করতে সমস্যা হয়েছে।' : 'Error deleting role.');
+      this.toast.error(this.lang.isBangla() ? 'পদবী ডিলিট করতে সমস্যা হয়েছে।' : 'Error deleting role.');
     } finally {
       this.isDeletingRole.set(false);
     }
@@ -431,7 +433,7 @@ export class UserListComponent implements OnInit {
       this.rolesList.update(list => list.map(r => r.roleId === role.roleId ? { ...r, status: newStatus } : r));
     } catch (err) {
       console.error('Error toggling role status:', err);
-      alert(this.lang.isBangla() ? 'স্ট্যাটাস পরিবর্তনে সমস্যা হয়েছে।' : 'Error changing role status.');
+      this.toast.error(this.lang.isBangla() ? 'স্ট্যাটাস পরিবর্তনে সমস্যা হয়েছে।' : 'Error changing role status.');
     }
   }
 
@@ -536,8 +538,12 @@ export class UserListComponent implements OnInit {
       nidNumber: staff.nidNumber || '',
       category,
       role: staff.role,
-      branchId: staff.branchId,
-      assignedCenterIds: [...(staff.assignedCenterIds || [])],
+      branchId: Number(staff.branchId),
+      // নিজের শাখার সমিতিগুলো: কর্মীর তালিকা + যেসব সমিতিতে তিনিই দায়িত্বপ্রাপ্ত মাঠকর্মী
+      assignedCenterIds: this.centers()
+        .filter(c => Number(c.branchId) === Number(staff.branchId) &&
+          ((staff.assignedCenterIds || []).includes(c.centerId) || Number(c.fieldOfficerUserId) === Number(staff.userId)))
+        .map(c => c.centerId),
       assignedBranchIds: [...(staff.assignedBranchIds || [])],
       salary: staff.salary || 25000,
       status: (staff.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE') as 'ACTIVE' | 'INACTIVE'
@@ -580,7 +586,33 @@ export class UserListComponent implements OnInit {
   }
 
   getAvailableCentersForSelectedBranch(): CenterOrSamity[] {
-    return this.centers().filter(c => c.branchId === this.editForm.branchId);
+    return this.centers().filter(c => Number(c.branchId) === Number(this.editForm.branchId) && !c.isDeleted);
+  }
+
+  /** শাখা বদলালে আগের শাখার সমিতি নির্বাচন থেকে বাদ যায় */
+  onEditBranchChange(branchId: number | string) {
+    this.editForm.branchId = Number(branchId);
+    const allowed = new Set(this.getAvailableCentersForSelectedBranch().map(c => c.centerId));
+    this.editForm.assignedCenterIds = this.editForm.assignedCenterIds.filter(id => allowed.has(id));
+  }
+
+  /** সমিতিতে বর্তমানে অন্য কোন মাঠকর্মী দায়িত্বপ্রাপ্ত (সংরক্ষণে এই কর্মীকে দেওয়া হবে) */
+  centerCurrentOfficer(center: CenterOrSamity): string {
+    const staff = this.selectedStaffForEdit();
+    if (!center.fieldOfficerUserId || Number(center.fieldOfficerUserId) === Number(staff?.userId)) return '';
+    return this.staffList().find(s => Number(s.userId) === Number(center.fieldOfficerUserId))?.name || `কর্মী #${center.fieldOfficerUserId}`;
+  }
+
+  /**
+   * অন্য শাখায় বদলি হলে আগের শাখার যেসব সমিতিতে এই মাঠকর্মী এখনো দায়িত্বপ্রাপ্ত —
+   * সেগুলোতে নতুন মাঠকর্মী না দিলে আদায় শিটে কেউ পাবে না
+   */
+  get orphanedCenters(): CenterOrSamity[] {
+    const staff = this.selectedStaffForEdit();
+    if (!staff || this.editForm.category !== 'BRANCH_STAFF') return [];
+    return this.centers().filter(c =>
+      Number(c.fieldOfficerUserId) === Number(staff.userId) &&
+      Number(c.branchId) !== Number(this.editForm.branchId) && !c.isDeleted);
   }
 
   onEditCategoryChange(cat: UserCategory) {
@@ -614,12 +646,12 @@ export class UserListComponent implements OnInit {
     if (!staff) return;
 
     if (!this.editForm.name.trim() || !this.editForm.phone.trim()) {
-      alert(this.lang.isBangla() ? 'অনুগ্রহ করে কর্মীর নাম ও ফোন নম্বর লিখুন' : 'Please provide staff name and phone');
+      this.toast.warning(this.lang.isBangla() ? 'অনুগ্রহ করে কর্মীর নাম ও ফোন নম্বর লিখুন' : 'Please provide staff name and phone');
       return;
     }
 
     if (this.isEditAreaRole && this.editForm.assignedBranchIds.length === 0) {
-      alert(this.lang.isBangla() ? 'এরিয়া ম্যানেজারের জন্য অন্তত একটি শাখা নির্বাচন করুন' : 'Select at least one branch for the area manager');
+      this.toast.warning(this.lang.isBangla() ? 'এরিয়া ম্যানেজারের জন্য অন্তত একটি শাখা নির্বাচন করুন' : 'Select at least one branch for the area manager');
       return;
     }
 
@@ -643,7 +675,8 @@ export class UserListComponent implements OnInit {
         role: this.editForm.role,
         branchId,
         branchName,
-        assignedCenterIds: isSystemOrHO ? [] : [...this.editForm.assignedCenterIds],
+        assignedCenterIds: isSystemOrHO ? [] : this.editForm.assignedCenterIds.filter(id =>
+          this.getAvailableCentersForSelectedBranch().some(c => c.centerId === id)),
         assignedBranchIds: this.isEditAreaRole ? [...this.editForm.assignedBranchIds] : [],
         salary: Number(this.editForm.salary),
         status: this.editForm.status
@@ -655,6 +688,21 @@ export class UserListComponent implements OnInit {
         { userId: currentUser.userId, name: currentUser.name, role: currentUser.role },
         reason
       );
+
+      // মাঠকর্মী: নির্বাচিত সমিতির দায়িত্বও তাকে দেওয়া হয় — আদায় শিট/ড্যাশবোর্ড সমিতির fieldOfficerUserId দেখে
+      if (this.editForm.role === 'FIELD_OFFICER' && !isSystemOrHO) {
+        const actor = { userId: currentUser.userId, name: currentUser.name, role: currentUser.role };
+        const toAssign = this.getAvailableCentersForSelectedBranch().filter(c =>
+          (updatedFields.assignedCenterIds || []).includes(c.centerId) && Number(c.fieldOfficerUserId) !== Number(staff.userId));
+        for (const c of toAssign) {
+          await this.kistiService.updateCenter(c.centerId, { fieldOfficerUserId: staff.userId }, actor,
+            `মাঠকর্মী নির্ধারণ: ${updatedFields.name} (কর্মী #${staff.userId}) — ${reason}`);
+        }
+        if (toAssign.length) {
+          const ids = new Set(toAssign.map(c => c.centerId));
+          this.centers.update(list => list.map(c => ids.has(c.centerId) ? { ...c, fieldOfficerUserId: staff.userId } : c));
+        }
+      }
 
       // Update in local list
       this.staffList.update(list => list.map(item => {
@@ -675,10 +723,10 @@ export class UserListComponent implements OnInit {
       }
 
       this.closeEditStaff();
-      alert(this.lang.isBangla() ? `কর্মী #${staff.userId} এর তথ্য সফলভাবে আপডেট হয়েছে` : `Staff #${staff.userId} updated successfully`);
+      this.toast.success(this.lang.isBangla() ? `কর্মী #${staff.userId} এর তথ্য সফলভাবে আপডেট হয়েছে` : `Staff #${staff.userId} updated successfully`);
     } catch (err) {
       console.error('Error saving staff edit:', err);
-      alert(this.lang.isBangla() ? 'তথ্য সংরক্ষণ করতে ত্রুটি হয়েছে' : 'Error updating staff record');
+      this.toast.error(this.lang.isBangla() ? 'তথ্য সংরক্ষণ করতে ত্রুটি হয়েছে' : 'Error updating staff record');
     } finally {
       this.isSavingStaff.set(false);
     }
@@ -722,7 +770,7 @@ export class UserListComponent implements OnInit {
     if (!staff) return;
 
     if (!this.deleteReason.trim()) {
-      alert(this.lang.isBangla() ? 'অনুগ্রহ করে কর্মী বাতিলের কারণ উল্লেখ করুন' : 'Please provide reason for deletion');
+      this.toast.warning(this.lang.isBangla() ? 'অনুগ্রহ করে কর্মী বাতিলের কারণ উল্লেখ করুন' : 'Please provide reason for deletion');
       return;
     }
 
@@ -738,10 +786,10 @@ export class UserListComponent implements OnInit {
 
       this.staffList.update(list => list.filter(item => item.userId !== staff.userId));
       this.closeDeleteStaff();
-      alert(this.lang.isBangla() ? `কর্মী #${staff.userId} সফলভাবে সফট-ডিলিট করা হয়েছে` : `Staff #${staff.userId} deleted successfully`);
+      this.toast.success(this.lang.isBangla() ? `কর্মী #${staff.userId} সফলভাবে সফট-ডিলিট করা হয়েছে` : `Staff #${staff.userId} deleted successfully`);
     } catch (err) {
       console.error('Delete staff error:', err);
-      alert(this.lang.isBangla() ? 'কর্মী ডিলিট করতে ত্রুটি হয়েছে' : 'Error deleting staff');
+      this.toast.error(this.lang.isBangla() ? 'কর্মী ডিলিট করতে ত্রুটি হয়েছে' : 'Error deleting staff');
     } finally {
       this.isDeletingStaff.set(false);
     }
@@ -752,7 +800,7 @@ export class UserListComponent implements OnInit {
   // ==========================================
   async toggleUserStatus(user: UserStaff) {
     if (!this.authService.canManageUsers()) {
-      alert(this.lang.isBangla() ? 'শুধুমাত্র অনুমোদিত ব্যবহারকারী স্ট্যাটাস পরিবর্তন করতে পারেন' : 'Access denied');
+      this.toast.error(this.lang.isBangla() ? 'শুধুমাত্র অনুমোদিত ব্যবহারকারী স্ট্যাটাস পরিবর্তন করতে পারেন' : 'Access denied');
       return;
     }
 
@@ -777,7 +825,7 @@ export class UserListComponent implements OnInit {
       }));
     } catch (err) {
       console.error('Toggle error:', err);
-      alert(this.lang.isBangla() ? 'স্ট্যাটাস পরিবর্তনে সমস্যা হয়েছে' : 'Error toggling status');
+      this.toast.error(this.lang.isBangla() ? 'স্ট্যাটাস পরিবর্তনে সমস্যা হয়েছে' : 'Error toggling status');
     }
   }
 }

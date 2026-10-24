@@ -12,6 +12,7 @@ import { SettingsService } from '../../../core/services/settings.service';
 import { isValidBdNid, isValidBdMobile } from '../../../core/finance/validation';
 import { Customer, Branch, CenterOrSamity, CustomerNominee, DocumentVersion } from '../../../core/models/database.models';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { ToastService } from '../../../core/services/toast.service';
 
 type FlowMessage = { type: 'success' | 'danger' | 'warning' | 'info'; text: string };
 type KycDocType = DocumentVersion['docType'];
@@ -34,6 +35,7 @@ export class CustomerFormComponent implements OnInit {
   private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  private toast = inject(ToastService);
 
   readonly branches = signal<Branch[]>([]);
   readonly centers = signal<CenterOrSamity[]>([]);
@@ -561,12 +563,14 @@ export class CustomerFormComponent implements OnInit {
       if (this.isEditMode()) {
         await this.kistiService.updateCustomer(this.customerId()!, this.buildPayload(), actor, this.updateReason);
         this.showMessage('success', `গ্রাহক #${this.customerId()} এর তথ্য সফলভাবে আপডেট ও হিস্ট্রি সংরক্ষণ করা হয়েছে`);
+        this.toast.success(`গ্রাহক #${this.customerId()} এর তথ্য সফলভাবে আপডেট হয়েছে`);
         this.updateReason = '';
         this.formSubmitted.emit(this.customer);
       } else {
         const newCust = await this.kistiService.createCustomer(this.buildPayload(), actor, 'নতুন সদস্য হিসেবে অন্তর্ভুক্ত');
         this.createdCustomerId.set(newCust.customerId);
         this.showMessage('success', `সফল! নতুন গ্রাহক আইডি #${newCust.customerId} (${newCust.fullName}) তৈরি হয়েছে`);
+        this.toast.success(`নতুন গ্রাহক #${newCust.customerId} (${newCust.fullName}) তৈরি হয়েছে`, 'সদস্য ভর্তি সম্পন্ন');
 
         const admission = Number(this.admissionFee) || 0;
         const passbook = Number(this.passbookFee) || 0;
@@ -627,6 +631,7 @@ export class CustomerFormComponent implements OnInit {
       await this.loadDocumentVersions(id);
       const label = this.kycDocTypes.find(d => d.type === type)?.label || type;
       this.showMessage('success', `${label} সফলভাবে আপলোড হয়েছে (পুরাতন সংস্করণ সংরক্ষিত থাকবে)`);
+      this.toast.success(`${label} সফলভাবে আপলোড হয়েছে`);
     } catch (err) {
       console.error('KYC upload error:', err);
       this.showMessage('danger', 'ডকুমেন্ট আপলোডে সমস্যা: ' + this.errorText(err, 'অজানা সমস্যা'));

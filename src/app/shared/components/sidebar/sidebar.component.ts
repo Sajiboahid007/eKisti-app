@@ -5,6 +5,7 @@ import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
+import { NotificationService } from '../../../core/services/notification.service';
 import { InnerPage, innerPageOf, resolveActiveSection } from './active-section';
 
 const SECTION_KEY = 'ekisti_nav_section';
@@ -19,7 +20,20 @@ const SECTION_KEY = 'ekisti_nav_section';
 export class SidebarComponent {
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  readonly notifications = inject(NotificationService);
   private router = inject(Router);
+
+  /** ব্যাজে দেখানোর সংখ্যা — ৯৯-এর বেশি হলে 99+ */
+  badgeText(count: number): string {
+    return count > 99 ? '99+' : String(count);
+  }
+
+  /** ব্যাজের টুলটিপ — যেমন "৩টি কাজ বাকি" */
+  badgeTitle(count: number): string {
+    if (!this.lang.isBangla()) return `${count} pending`;
+    const bn = String(count).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[+d]);
+    return `${bn}টি কাজ বাকি`;
+  }
 
   /** যে মেনু সক্রিয় — ভেতরের পেজে যেখান থেকে এসেছেন সেটি থাকে (রিফ্রেশেও মনে থাকে) */
   readonly section = signal<string | null>(null);
@@ -89,5 +103,9 @@ export class SidebarComponent {
     if (path && path !== this.section()) this.expandOverride.update(o => { const { [path]: _, ...rest } = o; return rest; });
     this.section.set(path);
     try { if (path) sessionStorage.setItem(SECTION_KEY, path); } catch { /* storage unavailable */ }
+  }
+
+  logout() {
+    this.authService.logout();
   }
 }

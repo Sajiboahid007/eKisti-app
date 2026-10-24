@@ -26,13 +26,6 @@
   </div>
 
   <!-- Success Toast -->
-  @if (successMessage()) {
-    <div class="alert alert-success mb-3">
-      <span class="material-symbols-outlined alert-icon">check_circle</span>
-      <span>{{ successMessage() }}</span>
-    </div>
-  }
-
   <!-- Stats Bar -->
   <div class="stats-grid mb-3">
     <div class="stat-card">
@@ -502,7 +495,7 @@
 
           <div class="form-group">
             <label>{{ lang.isBangla() ? 'শাখা' : 'Branch' }} <span class="required">*</span></label>
-            <select class="form-control" [(ngModel)]="routeForm.branchId" name="branchId" required>
+            <select class="form-control" [ngModel]="routeForm.branchId" (ngModelChange)="onRouteBranchChange($event)" name="branchId" required>
               @for (b of branches(); track b.branchId) {
                 <option [value]="b.branchId">{{ b.name }} ({{ b.branchCode }})</option>
               }
@@ -544,10 +537,13 @@
           <div class="form-group">
             <label>{{ lang.isBangla() ? 'দায়িত্বপ্রাপ্ত মাঠকর্মী (FO)' : 'Assigned Field Officer (FO)' }} <span class="required">*</span></label>
             <select class="form-control" [(ngModel)]="routeForm.fieldOfficerUserId" name="fieldOfficerUserId" required>
-              @for (fo of fieldOfficers(); track fo.userId) {
+              @for (fo of officersForBranch(routeForm.branchId); track fo.userId) {
                 <option [value]="fo.userId">{{ fo.name }} ({{ fo.role }})</option>
               }
             </select>
+            @if (officersForBranch(routeForm.branchId).length === 0) {
+              <small class="text-danger">এই শাখায় কোনো মাঠকর্মী নেই — আগে কর্মী যোগ করুন বা কর্মীর শাখা পরিবর্তন করুন</small>
+            }
           </div>
 
           <div class="form-group">

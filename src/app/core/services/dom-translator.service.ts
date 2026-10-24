@@ -5,6 +5,15 @@ import { LanguageCode } from './language.service';
 const ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
 const BN_CHAR = /[ঀ-৿]/;
 const BN_DIGITS = /[০-৯]/g;
+/** বাংলা "২ম / ২য়" অনুবাদে সব সংখ্যার পরে "th" আসে — ইংরেজি ক্রমবাচক প্রত্যয় ঠিক করা হয় */
+const ORDINAL = /\b(\d+)(?:st|nd|rd|th)\b/g;
+
+/** 1 → "1st", 2 → "2nd", 3 → "3rd", 11–13 → "th", 21 → "21st" */
+export function englishOrdinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] || 'th'}`;
+}
 /** যেখানে অনুবাদ চলবে না */
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'CODE']);
 /** ইংরেজি লম্বা হলে ফন্ট এর চেয়ে ছোট করা হবে না (পড়ার সুবিধা) */
@@ -84,6 +93,7 @@ export class DomTranslatorService {
     }
     out = out
       .replace(BN_DIGITS, d => String(d.charCodeAt(0) - 0x09E6))
+      .replace(ORDINAL, (_, n: string) => englishOrdinal(Number(n)))
       // "মিরপুর শাখা (Mirpur Branch)" → "Mirpur Branch", দুবার নয়
       .replace(/(?<![\w&'.-])([A-Za-z][\w&'. -]*?) \(\1\)/g, '$1');
     return lead + out + trail;
