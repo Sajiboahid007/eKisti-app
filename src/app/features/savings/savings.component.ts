@@ -46,6 +46,8 @@ interface StatementRow {
   styleUrl: './savings.component.scss'
 })
 export class SavingsComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private kisti = inject(KistiDatabaseService);
   private cash = inject(CashService);
   private settings = inject(SettingsService);

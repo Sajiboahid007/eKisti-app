@@ -7,6 +7,7 @@ import { ToastComponent } from './shared/components/toast/toast.component';
 import { AuthStateService } from './core/services/auth-state.service';
 import { LanguageService } from './core/services/language.service';
 import { DomTranslatorService } from './core/services/dom-translator.service';
+import { SettingsService } from './core/services/settings.service';
 import { filter } from 'rxjs/operators';
 
 @Component({
@@ -21,6 +22,7 @@ export class App {
   private router = inject(Router);
   private lang = inject(LanguageService);
   private translator = inject(DomTranslatorService);
+  private settings = inject(SettingsService);
 
   readonly isLoginPage = signal<boolean>(
     typeof window !== 'undefined' ? window.location.pathname.includes('/login') : false
@@ -29,6 +31,13 @@ export class App {
   constructor() {
     // ভাষা বদলালে পুরো স্ক্রিন (সব পেজ, বার্তা, ডায়ালগ) সেই ভাষায়
     effect(() => { void this.translator.apply(this.lang.currentLang()); });
+
+    // প্রতিষ্ঠানের নাম (সেটিংস থেকে) — ব্রাউজার ট্যাবের শিরোনামেও
+    void this.settings.getOrganization();
+    effect(() => {
+      const o = this.settings.org();
+      if (typeof document !== 'undefined') document.title = o.tagline ? `${o.appName} — ${o.tagline}` : o.appName;
+    });
 
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))

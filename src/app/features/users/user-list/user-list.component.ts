@@ -7,7 +7,8 @@ import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth
 import { LanguageService } from '../../../core/services/language.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
-import { ToastService } from '../../../core/services/toast.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Component({
   selector: 'app-user-list',
@@ -17,6 +18,8 @@ import { ToastService } from '../../../core/services/toast.service';
   styleUrl: './user-list.component.scss'
 })
 export class UserListComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private kistiService = inject(KistiDatabaseService);
   private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);

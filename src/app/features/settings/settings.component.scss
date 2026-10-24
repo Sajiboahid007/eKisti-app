@@ -146,3 +146,26 @@
   .quick-row { grid-template-columns: 1fr auto; .quick-name { grid-column: 1 / -1; grid-row: 1; } }
   .ceiling-row .form-control { max-width: none; flex: 1; }
 }
+
+/* প্রতিষ্ঠানের নামের লাইভ প্রিভিউ (নেভবারের মতো) */
+.org-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+
+  .material-symbols-outlined {
+    font-size: 26px;
+    color: #fff;
+    background: var(--primary);
+    border-radius: 10px;
+    padding: 6px;
+  }
+  div { display: flex; flex-direction: column; line-height: 1.25; }
+  strong { font-size: 1.05rem; }
+  small { color: var(--text-muted); font-size: 0.75rem; }
+}

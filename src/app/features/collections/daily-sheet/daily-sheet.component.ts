@@ -11,7 +11,8 @@ import { CollectionView, amountForInstallments, collectionView, describeAllocati
 import { formatBnDate, todayDhaka, toDhakaDayKey } from '../../../core/finance/dates';
 import { AuthStateService, ActiveUserSession } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
-import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { SettingsService } from '../../../core/services/settings.service';
 
 /**
  * মাঠ শিটের একটি সারি — কিস্তির নির্ধারিত তারিখ অনুযায়ী (দৈনিক/সাপ্তাহিক/মাসিক সব ঋণে সঠিক),
@@ -35,6 +36,8 @@ export interface DailySheetItem {
   styleUrl: './daily-sheet.component.scss'
 })
 export class DailySheetComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private kistiService = inject(KistiDatabaseService);
   private finance = inject(FinanceService);
   private cashService = inject(CashService);

@@ -915,6 +915,24 @@ export interface GeneralSettings {
   updatedAt?: string;
 }
 
+/**
+ * প্রতিষ্ঠানের পরিচিতি — সেটিংস থেকে পরিবর্তনযোগ্য (settings/organization)।
+ * নেভবার, লগইন পাতা, ব্রাউজার ট্যাব ও সব প্রিন্ট স্লিপের শিরোনামে ব্যবহৃত হয়।
+ */
+export interface OrganizationProfile {
+  appName: string;                // সফটওয়্যারের নাম, যেমন "eKisti"
+  taglineBn: string;              // নামের নিচের লেখা (বাংলা)
+  taglineEn: string;              // নামের নিচের লেখা (English)
+  orgNameBn: string;              // প্রতিষ্ঠানের পূর্ণ নাম (বাংলা)
+  orgNameEn: string;              // প্রতিষ্ঠানের পূর্ণ নাম (English)
+  address: string;                // প্রধান কার্যালয়ের ঠিকানা
+  hotline: string;                // হটলাইন / যোগাযোগ নম্বর
+  email: string;
+  website: string;
+  registrationNo: string;         // MRA সনদ / নিবন্ধন নম্বর
+  updatedAt?: string;
+}
+
 export interface Holiday {
   date: string;                   // "YYYY-MM-DD" (ডকুমেন্ট আইডিও)
   name: string;

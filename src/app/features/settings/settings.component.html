@@ -1,8 +1,8 @@
 <div class="page-container">
   <div class="page-header">
     <div class="header-left">
-      <h2>সেটিংস — ঋণ নীতি, ছুটি ও সাধারণ নীতি</h2>
-      <p class="sub-text">ঋণ প্রোডাক্ট, কর্মদিবস ক্যালেন্ডার ও প্রতিষ্ঠানের সাধারণ নীতি — প্রতিটি পরিবর্তন অডিট লগে সংরক্ষিত হয়</p>
+      <h2>সেটিংস — প্রতিষ্ঠান, ঋণ নীতি, ছুটি ও সাধারণ নীতি</h2>
+      <p class="sub-text">প্রতিষ্ঠানের পরিচিতি, ঋণ প্রোডাক্ট, কর্মদিবস ক্যালেন্ডার ও সাধারণ নীতি — প্রতিটি পরিবর্তন অডিট লগে সংরক্ষিত হয়</p>
     </div>
     <div class="header-right">
       <button class="btn btn-secondary" (click)="load()" [disabled]="loading() || busy()" title="রিফ্রেশ"><span class="material-symbols-outlined">refresh</span></button>
@@ -10,6 +10,9 @@
   </div>
 
   <div class="tab-bar" role="tablist">
+    <button role="tab" class="tab-btn" [class.active]="tab() === 'ORGANIZATION'" (click)="setTab('ORGANIZATION')">
+      <span class="material-symbols-outlined">apartment</span>প্রতিষ্ঠান
+    </button>
     <button role="tab" class="tab-btn" [class.active]="tab() === 'PRODUCTS'" (click)="setTab('PRODUCTS')">
       <span class="material-symbols-outlined">inventory_2</span>ঋণ প্রোডাক্ট ({{ products().length }})
     </button>
@@ -315,6 +318,83 @@
         </div>
       }
 
+      @case ('ORGANIZATION') {
+        @let o = orgDraft();
+        <div class="card">
+          <div class="card-body form-stack">
+            <div class="sub-section">
+              <h4>সফটওয়্যারের নাম ও পরিচিতি</h4>
+              <p class="sub-text">উপরের নেভবার, লগইন পাতা ও ব্রাউজার ট্যাবে দেখাবে।</p>
+              <div class="org-preview" aria-hidden="true">
+                <span class="material-symbols-outlined">account_balance</span>
+                <div>
+                  <strong translate="no">{{ o.appName || '—' }}</strong>
+                  <small translate="no">{{ o.taglineBn || o.taglineEn }}</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="orgAppName">সফটওয়্যারের নাম *</label>
+                <input id="orgAppName" class="form-control" maxlength="40" [ngModel]="o.appName" (ngModelChange)="patchOrg('appName', $event)" placeholder="যেমন: eKisti" />
+              </div>
+              <div class="form-group">
+                <label for="orgReg">নিবন্ধন / MRA সনদ নম্বর</label>
+                <input id="orgReg" class="form-control" [ngModel]="o.registrationNo" (ngModelChange)="patchOrg('registrationNo', $event)" placeholder="যেমন: MRA-০০০০০-০০০০০-০০০০০" />
+              </div>
+              <div class="form-group">
+                <label for="orgTagBn">নামের নিচের লেখা (বাংলা)</label>
+                <input id="orgTagBn" class="form-control" maxlength="80" [ngModel]="o.taglineBn" (ngModelChange)="patchOrg('taglineBn', $event)" />
+              </div>
+              <div class="form-group">
+                <label for="orgTagEn">নামের নিচের লেখা (English)</label>
+                <input id="orgTagEn" class="form-control" maxlength="80" [ngModel]="o.taglineEn" (ngModelChange)="patchOrg('taglineEn', $event)" translate="no" />
+              </div>
+            </div>
+
+            <div class="sub-section">
+              <h4>প্রতিষ্ঠানের তথ্য</h4>
+              <p class="sub-text">রসিদ, ভাউচার, ক্যাশ ক্লোজিং স্লিপ, পাসবই, ভর্তি ফরম ও আইডি কার্ডের শিরোনামে ছাপা হবে।</p>
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="orgNameBn">প্রতিষ্ঠানের নাম (বাংলা) *</label>
+                <input id="orgNameBn" class="form-control" [ngModel]="o.orgNameBn" (ngModelChange)="patchOrg('orgNameBn', $event)" />
+              </div>
+              <div class="form-group">
+                <label for="orgNameEn">প্রতিষ্ঠানের নাম (English)</label>
+                <input id="orgNameEn" class="form-control" [ngModel]="o.orgNameEn" (ngModelChange)="patchOrg('orgNameEn', $event)" translate="no" />
+              </div>
+              <div class="form-group span-2">
+                <label for="orgAddress">প্রধান কার্যালয়ের ঠিকানা</label>
+                <input id="orgAddress" class="form-control" [ngModel]="o.address" (ngModelChange)="patchOrg('address', $event)" placeholder="বাড়ি/রোড, এলাকা, উপজেলা, জেলা" />
+              </div>
+              <div class="form-group">
+                <label for="orgHotline">হটলাইন / যোগাযোগ নম্বর</label>
+                <input id="orgHotline" class="form-control" type="tel" inputmode="tel" [ngModel]="o.hotline" (ngModelChange)="patchOrg('hotline', $event)" placeholder="যেমন: 01XXXXXXXXX" />
+              </div>
+              <div class="form-group">
+                <label for="orgEmail">ই-মেইল</label>
+                <input id="orgEmail" class="form-control" type="email" [ngModel]="o.email" (ngModelChange)="patchOrg('email', $event)" translate="no" />
+              </div>
+              <div class="form-group">
+                <label for="orgWeb">ওয়েবসাইট</label>
+                <input id="orgWeb" class="form-control" [ngModel]="o.website" (ngModelChange)="patchOrg('website', $event)" translate="no" placeholder="www.example.com" />
+              </div>
+            </div>
+            <p class="sub-text">প্রতিটি শাখার নিজস্ব ঠিকানা ও ফোন নম্বর "শাখা ও রুট/সমিতি" পাতা থেকে দেওয়া হয় — রসিদে শাখার লাইনে সেটি ছাপা হয়।</p>
+
+            <div class="form-actions">
+              @if (o.updatedAt) { <span class="sub-text">শেষ পরিবর্তন: {{ o.updatedAt | date:'dd/MM/yyyy hh:mm a' }}</span> }
+              <button class="btn btn-secondary" type="button" (click)="resetOrgToDefault()" [disabled]="busy()">ডিফল্ট নাম</button>
+              <button class="btn btn-primary" (click)="saveOrganization()" [disabled]="busy()">
+                <span class="material-symbols-outlined">save</span>{{ busy() ? 'সংরক্ষণ হচ্ছে...' : 'সংরক্ষণ করুন' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
       @case ('GENERAL') {
         <div class="card">
           <div class="card-body form-stack">

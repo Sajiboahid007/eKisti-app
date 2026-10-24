@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
 import { AuthStateService } from './core/services/auth-state.service';
+import { SettingsService } from './core/services/settings.service';
 
 /**
  * AuthStateService injects Firestore and loads staff on construction,
@@ -12,12 +13,19 @@ function createAuthStub(authenticated: boolean) {
   return { isAuthenticated: signal(authenticated) };
 }
 
+/** SettingsService reads the organization profile from Firestore — stubbed the same way */
+function createSettingsStub() {
+  const org = signal({ appName: 'eKisti', tagline: '', name: 'eKisti', nameBn: 'eKisti', nameEn: 'eKisti', contactLine: '' });
+  return { org, getOrganization: async () => ({}) };
+}
+
 async function setup(authenticated: boolean, render = true) {
   await TestBed.configureTestingModule({
     imports: [App],
     providers: [
       provideRouter([]),
-      { provide: AuthStateService, useValue: createAuthStub(authenticated) }
+      { provide: AuthStateService, useValue: createAuthStub(authenticated) },
+      { provide: SettingsService, useValue: createSettingsStub() }
     ]
   }).compileComponents();
 

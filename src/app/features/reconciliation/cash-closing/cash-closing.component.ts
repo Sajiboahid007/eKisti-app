@@ -6,7 +6,8 @@ import { AuthStateService } from '../../../core/services/auth-state.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { ToastService } from '../../../core/services/toast.service';
-import { FieldCashBreakdown, RECEIPT_TYPE_LABELS, fieldCashBreakdown, receiptTypeOf } from '../../../core/finance/field-cash';
+import { FieldCashBreakdown, RECEIPT_TYPE_LABELS, fieldCashBreakdown, receiptTypeOf } from '../../../core/finance/field-cash';
+import { SettingsService } from '../../../core/services/settings.service';
 
 /** একজন মাঠকর্মীর কাছে জমা বাকি থাকা রসিদের গুচ্ছ */
 interface OfficerHandoverGroup {
@@ -46,6 +47,8 @@ function toLocalDayKey(value: string | Date): string {
   styleUrl: './cash-closing.component.scss'
 })
 export class CashClosingComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private kistiService = inject(KistiDatabaseService);
   readonly authService = inject(AuthStateService);
   private toast = inject(ToastService);

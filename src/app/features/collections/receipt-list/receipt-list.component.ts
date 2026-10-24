@@ -10,7 +10,8 @@ import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.
 import { FinanceService } from '../../../core/services/finance.service';
 import { formatBnDate, toDhakaDayKey } from '../../../core/finance/dates';
 import { isSettledStatus, remainingOf } from '../../../core/finance/allocation';
-import { RECEIPT_TYPE_LABELS, receiptTypeOf } from '../../../core/finance/field-cash';
+import { RECEIPT_TYPE_LABELS, receiptTypeOf } from '../../../core/finance/field-cash';
+import { SettingsService } from '../../../core/services/settings.service';
 
 type PaymentMethod = PaymentCollection['paymentMethod'];
 type HandoverFilter = 'ALL' | 'PENDING' | 'HANDED_OVER';
@@ -31,6 +32,8 @@ function toLocalDayKey(value: string | Date): string {
   styleUrl: './receipt-list.component.scss'
 })
 export class ReceiptListComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private kistiService = inject(KistiDatabaseService);
   private finance = inject(FinanceService);
   private route = inject(ActivatedRoute);

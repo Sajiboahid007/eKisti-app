@@ -264,7 +264,8 @@
         <!-- Receipt Voucher Design -->
         <div class="receipt-voucher">
           <div class="voucher-top">
-            <div class="org-name">eKisti মাইক্রোফাইন্যান্স সিস্টেম</div>
+            <div class="org-name" translate="no">{{ org().name }}</div>
+            @if (org().hotline) { <div class="branch-line" translate="no">{{ org().contactLine }}</div> }
             <div class="branch-line">
               {{ getBranch(rec.branchId)?.name || ('শাখা #' + rec.branchId) }}
               @if (getBranch(rec.branchId)?.address) {

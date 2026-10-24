@@ -4,7 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
-import { NotificationBellComponent } from '../notification-bell/notification-bell.component';
+import { NotificationBellComponent } from '../notification-bell/notification-bell.component';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Component({
   selector: 'app-navbar',
@@ -14,6 +15,8 @@ import { NotificationBellComponent } from '../notification-bell/notification-bel
   styleUrl: './navbar.component.scss'
 })
 export class NavbarComponent {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
 

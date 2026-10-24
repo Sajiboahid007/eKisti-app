@@ -1,7 +1,8 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, inject, computed, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Branch, CenterOrSamity } from '../../../core/models/database.models';
+import { SettingsService } from '../../../core/services/settings.service';
 
 // সদস্য ভর্তি আবেদন ফরম (ফাঁকা) — গ্রাহক হাতে পূরণ করে শাখা অফিসে জমা দেবেন।
 // ফিল্ডগুলো CustomerFormComponent / Customer মডেলের সাথে মিল রেখে সাজানো।
@@ -13,6 +14,8 @@ import { Branch, CenterOrSamity } from '../../../core/models/database.models';
   styleUrl: './customer-application-form.component.scss'
 })
 export class CustomerApplicationFormComponent {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   readonly branches = input<Branch[]>([]);
   readonly centers = input<CenterOrSamity[]>([]);
   readonly closed = output<void>();

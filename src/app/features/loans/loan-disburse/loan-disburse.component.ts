@@ -70,6 +70,8 @@ export interface DisbursementReceiptData {
   styleUrl: './loan-disburse.component.scss'
 })
 export class LoanDisburseComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private kistiService = inject(KistiDatabaseService);
   private lifecycle = inject(LoanLifecycleService);
   private settings = inject(SettingsService);

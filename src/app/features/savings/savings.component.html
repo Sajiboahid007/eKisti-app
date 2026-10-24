@@ -241,7 +241,8 @@
       </div>
       <div class="modal-body">
         <div class="print-only statement-print-head">
-          <strong>eKisti মাইক্রোফাইন্যান্স — সঞ্চয় পাসবুক স্টেটমেন্ট</strong>
+          <strong><span translate="no">{{ org().name }}</span> — সঞ্চয় পাসবুক স্টেটমেন্ট</strong>
+          @if (org().contactLine) { <div translate="no">{{ org().contactLine }}</div> }
           <div>{{ c.fullName }} (#{{ c.customerId }}) • ফোন {{ c.phonePrimary }} • NID {{ c.nidNumber }} • {{ branchName(c.branchId) }} / {{ centerName(c.centerId) }} • প্রিন্ট: {{ today }}</div>
         </div>
 

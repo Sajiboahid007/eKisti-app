@@ -105,6 +105,8 @@ const PENDING_APPROVAL_STATUSES = ['APPLIED', 'FIELD_VERIFIED'];
   styleUrl: './dashboard.component.scss'
 })
 export class DashboardComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private firestore = inject(Firestore);
   private destroyRef = inject(DestroyRef);
   readonly authService = inject(AuthStateService);

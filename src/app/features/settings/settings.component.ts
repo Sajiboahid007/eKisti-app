@@ -1,15 +1,15 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Branch, GeneralSettings, Holiday, InstallmentFrequency, LoanProduct } from '../../core/models/database.models';
+import { Branch, GeneralSettings, Holiday, InstallmentFrequency, LoanProduct, OrganizationProfile } from '../../core/models/database.models';
 import { AuthStateService } from '../../core/services/auth-state.service';
 import { KistiDatabaseService } from '../../core/services/kisti-database.service';
-import { DEFAULT_GENERAL_SETTINGS, SettingsService } from '../../core/services/settings.service';
+import { DEFAULT_GENERAL_SETTINGS, DEFAULT_ORGANIZATION, SettingsService } from '../../core/services/settings.service';
 import { buildSchedule } from '../../core/finance/schedule';
 import { todayDhaka } from '../../core/finance/dates';
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component';
 
-type Tab = 'PRODUCTS' | 'HOLIDAYS' | 'GENERAL';
+type Tab = 'ORGANIZATION' | 'PRODUCTS' | 'HOLIDAYS' | 'GENERAL';
 type Notice = { kind: 'success' | 'danger' | 'info' | 'warning'; text: string };
 
 /** MRA-র বহুল উদ্ধৃত সর্বোচ্চ সার্ভিস চার্জ (বার্ষিক, হ্রাসমান) — সর্বশেষ সার্কুলার যাচাই করুন */
@@ -122,6 +122,9 @@ export class SettingsComponent implements OnInit {
   // ---------- সাধারণ নীতি ----------
   readonly general = signal<GeneralSettings>({ ...DEFAULT_GENERAL_SETTINGS });
 
+  // ---------- প্রতিষ্ঠানের পরিচিতি ----------
+  readonly orgDraft = signal<OrganizationProfile>({ ...DEFAULT_ORGANIZATION });
+
   async ngOnInit() {
     this.buildQuickRows();
     await this.load();
@@ -130,12 +133,14 @@ export class SettingsComponent implements OnInit {
   async load() {
     this.loading.set(true);
     try {
-      const [branches, products, holidays, general] = await Promise.all([
+      const [branches, products, holidays, general, organization] = await Promise.all([
         this.kisti.getBranches(),
         this.kisti.getLoanProducts(),
         this.settings.getHolidays(true),
-        this.settings.getGeneralSettings(true)
+        this.settings.getGeneralSettings(true),
+        this.settings.getOrganization(true)
       ]);
+      this.orgDraft.set({ ...organization });
       this.branches.set(branches.filter(b => !b.isDeleted));
       this.products.set(products);
       this.holidays.set([...holidays].sort((a, b) => a.date.localeCompare(b.date)));
@@ -144,6 +149,28 @@ export class SettingsComponent implements OnInit {
       this.notice.set({ kind: 'danger', text: err?.message || 'সেটিংস লোড করা যায়নি' });
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  patchOrg<K extends keyof OrganizationProfile>(key: K, value: OrganizationProfile[K]) {
+    this.orgDraft.update(o => ({ ...o, [key]: value }));
+  }
+
+  resetOrgToDefault() {
+    this.orgDraft.set({ ...DEFAULT_ORGANIZATION, updatedAt: this.orgDraft().updatedAt });
+  }
+
+  async saveOrganization() {
+    this.busy.set(true);
+    this.notice.set(null);
+    try {
+      await this.settings.saveOrganization(this.orgDraft(), this.actor());
+      this.orgDraft.set({ ...this.settings.organization() });
+      this.notice.set({ kind: 'success', text: 'প্রতিষ্ঠানের পরিচিতি সংরক্ষিত হয়েছে — নেভবার, লগইন পাতা ও সব প্রিন্ট স্লিপে নতুন নাম দেখাবে' });
+    } catch (err: any) {
+      this.notice.set({ kind: 'danger', text: err?.message || 'সংরক্ষণ করা যায়নি' });
+    } finally {
+      this.busy.set(false);
     }
   }
 

@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { StaffRole } from '../../../core/models/database.models';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Component({
   selector: 'app-login',
@@ -14,6 +15,8 @@ import { StaffRole } from '../../../core/models/database.models';
   styleUrl: './login.component.scss'
 })
 export class LoginComponent {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private router = inject(Router);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);

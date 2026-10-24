@@ -1,9 +1,10 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { Firestore, collection, doc, getDoc, getDocs, writeBatch } from '@angular/fire/firestore';
-import { GeneralSettings, Holiday, LoanProduct } from '../models/database.models';
+import { GeneralSettings, Holiday, LoanProduct, OrganizationProfile } from '../models/database.models';
 import { WorkingCalendar } from '../finance/schedule';
 import { AuditHistoryService, diffFields, stripUndefined } from './audit-history.service';
 import { CounterService } from './counter.service';
+import { LanguageService } from './language.service';
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   weeklyOffDays: [5],             // শুক্রবার
@@ -12,6 +13,19 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   savingsInterestAnnualPercent: 0, // ⚖️ প্রতিষ্ঠানের নীতি অনুযায়ী সেট করুন
   lockSavingsWithdrawalWithActiveLoan: true,
   foCashInHandLimit: 50000
+};
+
+export const DEFAULT_ORGANIZATION: OrganizationProfile = {
+  appName: 'eKisti',
+  taglineBn: 'স্মার্ট লোকাল লোন ও কিস্তি ব্যবস্থাপনা',
+  taglineEn: 'Smart Microfinance & Loan Management',
+  orgNameBn: 'ই-কিস্তি মাইক্রোফাইন্যান্স লিমিটেড',
+  orgNameEn: 'eKisti Microfinance Ltd.',
+  address: '',
+  hotline: '',
+  email: '',
+  website: '',
+  registrationNo: ''
 };
 
 type Actor = { userId: number; name: string; role: string };
@@ -26,6 +40,39 @@ export class SettingsService {
   private counters = inject(CounterService);
 
   readonly general = signal<GeneralSettings>(DEFAULT_GENERAL_SETTINGS);
+  private lang = inject(LanguageService);
+
+  /** প্রতিষ্ঠানের পরিচিতি (Firestore থেকে; না থাকলে ডিফল্ট) */
+  readonly organization = signal<OrganizationProfile>(DEFAULT_ORGANIZATION);
+  private organizationLoaded = false;
+
+  /** বর্তমান ভাষায় দেখানোর জন্য প্রস্তুত মান — টেমপ্লেটে translate="no" দিয়ে ব্যবহার করুন */
+  readonly org = computed(() => {
+    const o = this.organization();
+    const en = this.lang.currentLang() === 'en';
+    const nameBn = o.orgNameBn || o.orgNameEn || o.appName;
+    const nameEn = o.orgNameEn || o.orgNameBn || o.appName;
+    const contact = [
+      o.address,
+      o.hotline ? `${en ? 'Hotline' : 'হটলাইন'}: ${o.hotline}` : '',
+      o.email,
+      o.website,
+      o.registrationNo ? `${en ? 'Reg. No.' : 'নিবন্ধন নং'}: ${o.registrationNo}` : ''
+    ].filter(Boolean).join(' • ');
+    return {
+      appName: o.appName || DEFAULT_ORGANIZATION.appName,
+      tagline: en ? (o.taglineEn || o.taglineBn) : (o.taglineBn || o.taglineEn),
+      name: en ? nameEn : nameBn,
+      nameBn,
+      nameEn,
+      address: o.address,
+      hotline: o.hotline,
+      email: o.email,
+      website: o.website,
+      registrationNo: o.registrationNo,
+      contactLine: contact
+    };
+  });
   private holidaysCache: Holiday[] | null = null;
 
   async getGeneralSettings(force = false): Promise<GeneralSettings> {
@@ -56,6 +103,57 @@ export class SettingsService {
     });
     await batch.commit();
     this.general.set(value);
+  }
+
+  // ---------- প্রতিষ্ঠানের পরিচিতি ----------
+
+  async getOrganization(force = false): Promise<OrganizationProfile> {
+    if (this.organizationLoaded && !force) return this.organization();
+    try {
+      const snap = await getDoc(doc(this.firestore, 'settings', 'organization'));
+      const value = { ...DEFAULT_ORGANIZATION, ...(snap.exists() ? (snap.data() as OrganizationProfile) : {}) };
+      this.organization.set(value);
+      this.organizationLoaded = true;
+      return value;
+    } catch (err) {
+      // লগইনের আগে বা অফলাইনে পড়া না গেলে ডিফল্ট নাম দেখাবে
+      console.warn('Organization profile could not be loaded:', err);
+      return this.organization();
+    }
+  }
+
+  async saveOrganization(next: OrganizationProfile, actor: Actor): Promise<void> {
+    const prev = await this.getOrganization(true);
+    const clean = (v: unknown) => String(v ?? '').trim();
+    const value: OrganizationProfile = {
+      appName: clean(next.appName),
+      taglineBn: clean(next.taglineBn),
+      taglineEn: clean(next.taglineEn),
+      orgNameBn: clean(next.orgNameBn),
+      orgNameEn: clean(next.orgNameEn),
+      address: clean(next.address),
+      hotline: clean(next.hotline),
+      email: clean(next.email),
+      website: clean(next.website),
+      registrationNo: clean(next.registrationNo),
+      updatedAt: new Date().toISOString()
+    };
+    if (!value.appName) throw new Error('সফটওয়্যারের নাম লিখুন');
+    if (!value.orgNameBn && !value.orgNameEn) throw new Error('প্রতিষ্ঠানের নাম লিখুন');
+    if (value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) throw new Error('সঠিক ই-মেইল দিন');
+    const batch = writeBatch(this.firestore);
+    batch.set(doc(this.firestore, 'settings', 'organization'), value);
+    this.audit.writeAuditLog(batch, {
+      entityType: 'settings',
+      entityId: 'organization',
+      action: 'UPDATE',
+      reason: 'প্রতিষ্ঠানের পরিচিতি পরিবর্তন',
+      changes: diffFields(prev as any, value as any),
+      actor: this.audit.actorStamp(actor)
+    });
+    await batch.commit();
+    this.organization.set(value);
+    this.organizationLoaded = true;
   }
 
   // ---------- ছুটির ক্যালেন্ডার ----------

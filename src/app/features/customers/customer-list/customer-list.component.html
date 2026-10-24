@@ -166,7 +166,8 @@
       <!-- Official Print Header (Visible ONLY on Print) -->
       <div class="print-official-header">
         <div class="org-titles">
-          <h2>ই-কিস্তি মাইক্রোফাইন্যান্স লিমিটেড (eKisti Microfinance Ltd.)</h2>
+          <h2 translate="no">{{ org().nameBn }}{{ org().nameEn !== org().nameBn ? ' (' + org().nameEn + ')' : '' }}</h2>
+          @if (org().contactLine) { <p translate="no">{{ org().contactLine }}</p> }
           <p>সদস্য বিস্তারিত তথ্য ও ঋণ বিবরণী প্রোফাইল (Member Profile & Loan Statement)</p>
         </div>
         <div class="print-meta-bar">
@@ -1009,7 +1010,7 @@
               <span class="material-symbols-outlined logo-glyph">diversity_3</span>
             </div>
             <div class="company-titles">
-              <h3 class="company-name">eKisti Microfinance Ltd.</h3>
+              <h3 class="company-name" translate="no">{{ org().name }}</h3>
               <p class="company-sub">সদস্য সঞ্চয় ও ঋণ পাসবুক পরিচয়পত্র</p>
             </div>
           </div>

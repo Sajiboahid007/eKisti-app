@@ -519,7 +519,7 @@ Concurrent edits on the same loan are detected through `Loan.ledgerVersion` and 
 | `journalEntries` | 100001+ | Double-entry journal (chart of accounts in `core/finance/accounts.ts`) |
 | `auditLogs`, `loanStatusHistory`, `creditScoreHistory`, `staffAssignments`, `documentVersions`, `smsLogs` | auto ID | History / logs |
 | `periodClosings`, `dailyBranchSummaries`, `monthlyPortfolioSnapshots` | `${branchId}_${date}` | Day/month closing & frozen figures |
-| `settings/general`, `holidays/{date}`, `meetings/{centerId}_{date}`, `systemJobs/*`, `savingsInterestPostings/*` | fixed IDs | Policy, calendar, attendance, job markers |
+| `settings/general`, `settings/organization` (app name, tagline, org name, address, hotline — shown in navbar/login/print headers via `SettingsService.org`), `holidays/{date}`, `meetings/{centerId}_{date}`, `systemJobs/*`, `savingsInterestPostings/*` | fixed IDs | Policy, calendar, attendance, job markers |
 
 ### Policy values that must be confirmed (⚖️)
 MRA classification day ranges & provision rates (`core/finance/classification.ts`), service-charge cap, savings interest rate, late-fee policy (fines are currently not charged), rebate % on early settlement (`LoanProduct.earlySettlementRebatePercent`, default 100).

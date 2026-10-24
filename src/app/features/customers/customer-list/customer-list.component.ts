@@ -11,7 +11,8 @@ import { LanguageService } from '../../../core/services/language.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
 import { CustomerApplicationFormComponent } from '../customer-application-form/customer-application-form.component';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
-import { ToastService } from '../../../core/services/toast.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { SettingsService } from '../../../core/services/settings.service';
 
 /** বিতরণ হয়ে চলমান ঋণ (বাকি হিসাবে ধরা হয়) */
 const RUNNING_LOAN_STATUSES: LoanStatus[] = ['DISBURSED', 'OVERDUE'];
@@ -34,6 +35,8 @@ export interface CustomerPrintOptions {
   styleUrl: './customer-list.component.scss'
 })
 export class CustomerListComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম/ঠিকানা (সেটিংস → প্রতিষ্ঠান) */
+  readonly org = inject(SettingsService).org;
   private router = inject(Router);
   private firestore = inject(Firestore);
   private kistiService = inject(KistiDatabaseService);
