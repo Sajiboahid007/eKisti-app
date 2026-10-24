@@ -9,6 +9,16 @@
     </div>
   } @else {
     @let l = loan()!;
+    <div class="detail-topbar">
+      <button type="button" class="btn btn-secondary btn-back" (click)="goBack()">
+        <span class="material-symbols-outlined">arrow_back</span><span>ফিরে যান</span>
+      </button>
+      <nav class="crumbs" aria-label="breadcrumb">
+        <a routerLink="/loans">ঋণ হিসাব</a>
+        <span class="material-symbols-outlined">chevron_right</span>
+        <span>{{ l.loanAccountNo }}</span>
+      </nav>
+    </div>
     <!-- Loan Header Banner -->
     <div class="loan-header-card">
       <div class="header-main">
@@ -163,7 +173,10 @@
               <tbody>
                 @for (inst of installments(); track inst.installmentId) {
                   @let b = statusBadge(inst);
-                  <tr [class.paid-row]="inst.status === 'PAID' || inst.status === 'ADVANCE'" [class.muted-row]="inst.status === 'RESCHEDULED' || inst.status === 'WAIVED'">
+                  @let rcpts = installmentReceipts(inst);
+                  <tr [class.paid-row]="inst.status === 'PAID' || inst.status === 'ADVANCE'" [class.muted-row]="inst.status === 'RESCHEDULED' || inst.status === 'WAIVED'"
+                      [class.clickable-row]="inst.paidTotalAmount > 0 || rcpts.length" (click)="openReceipts(inst)"
+                      [title]="inst.paidTotalAmount > 0 || rcpts.length ? 'রসিদ, আদায়কারী ও সময় দেখতে ক্লিক করুন' : ''">
                     <td><span class="inst-no-badge">#{{ inst.installmentNo }}</span></td>
                     <td><span class="font-mono">{{ inst.dueDate }}</span><div class="sub-text">{{ dayLabel(inst.dueDate, true) }}</div></td>
                     <td class="amount-bdt text-right">{{ inst.expectedPrincipal | number }}</td>
@@ -178,9 +191,10 @@
                     <td>@if (inst.paidDate) { {{ inst.paidDate | date:'dd MMM yy' }} } @else { <span class="text-muted">—</span> }</td>
                     <td><span class="badge badge-xs" [ngClass]="b.cls">{{ b.label }}</span></td>
                     <td>
-                      @for (rid of inst.receiptIds || (inst.collectionReceiptId ? [inst.collectionReceiptId] : []); track rid) {
-                        <span class="receipt-tag">#{{ rid }}</span>
+                      @for (r of rcpts; track r.receipt.receiptId) {
+                        <span class="receipt-tag" [class.reversed]="r.receipt.isReversed">#{{ r.receipt.receiptId }}</span>
                       }
+                      @if (rcpts.length) { <span class="material-symbols-outlined row-more">chevron_right</span> }
                     </td>
                   </tr>
                 }
@@ -395,6 +409,74 @@
                 [disabled]="busy() || ((kind === 'RESCHEDULE' || kind === 'WRITE_OFF') && !reason().trim()) || (kind === 'COLLECT' && advanceNeeded() && !allowAdvance())">
           {{ busy() ? 'প্রক্রিয়াধীন...' : 'নিশ্চিত করুন' }}
         </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- কিস্তির রসিদ বিবরণ: কে, কখন, কীভাবে টাকা নিয়েছেন -->
+@if (receiptInst(); as inst) {
+  @let rcpts = installmentReceipts(inst);
+  <div class="modal-backdrop" (click)="receiptInst.set(null)">
+    <div class="modal-dialog receipt-detail-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>কিস্তি #{{ inst.installmentNo }} — আদায়ের বিবরণ</h3>
+        <button class="close-btn" (click)="receiptInst.set(null)"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body modal-stack">
+        <div class="inst-summary">
+          <div><span class="sub-text">নির্ধারিত তারিখ</span><strong>{{ inst.dueDate }}</strong><span class="sub-text">{{ dayLabel(inst.dueDate, true) }}</span></div>
+          <div><span class="sub-text">দেয়</span><strong class="amount-bdt">{{ inst.expectedTotalAmount | number }}</strong></div>
+          <div><span class="sub-text">পরিশোধিত</span><strong class="amount-bdt text-success">{{ inst.paidTotalAmount | number }}</strong></div>
+          <div><span class="sub-text">অবস্থা</span><span class="badge badge-xs" [ngClass]="statusBadge(inst).cls">{{ statusBadge(inst).label }}</span></div>
+        </div>
+
+        @if (rcpts.length === 0) {
+          <div class="empty-state"><p>এই কিস্তির কোনো রসিদ পাওয়া যায়নি (পুরাতন ডেটা)। পরিশোধের তারিখ: {{ inst.paidDate ? (inst.paidDate | date:'dd MMM yyyy, hh:mm a') : '—' }}</p></div>
+        }
+        @for (r of rcpts; track r.receipt.receiptId) {
+          <div class="receipt-detail-card" [class.reversed]="r.receipt.isReversed">
+            <div class="rd-head">
+              <a class="receipt-tag receipt-link" routerLink="/collections/receipts" [queryParams]="{ search: r.receipt.receiptId }"
+                 title="মানি রসিদ রেজিস্টারে এই রসিদ দেখুন">
+                রসিদ #{{ r.receipt.receiptId }}
+                <span class="material-symbols-outlined">open_in_new</span>
+              </a>
+              @if (r.receipt.receiptNumberManual) { <span class="sub-text">বই নং {{ r.receipt.receiptNumberManual }}</span> }
+              @if (r.receipt.isReversed) {
+                <span class="badge badge-xs badge-danger">বাতিল</span>
+              } @else if (r.receipt.isHandedOverToBranch) {
+                <span class="badge badge-xs badge-paid">ক্যাশিয়ার গ্রহণ করেছেন</span>
+              } @else {
+                <span class="badge badge-xs badge-warning">আদায়কারীর হাতে</span>
+              }
+              <strong class="amount-bdt rd-amount">{{ r.total | number }}</strong>
+            </div>
+            <div class="rd-grid">
+              <div><span class="material-symbols-outlined">person</span><span><span class="sub-text">আদায়কারী</span>{{ r.receipt.collectedByName }} (#{{ r.receipt.collectedByUserId }})</span></div>
+              <div><span class="material-symbols-outlined">schedule</span><span><span class="sub-text">তারিখ ও সময়</span>{{ r.receipt.collectionDate | date:'dd MMM yyyy, hh:mm a' }}</span></div>
+              <div><span class="material-symbols-outlined">payments</span><span><span class="sub-text">পদ্ধতি</span>{{ methodLabel(r.receipt.paymentMethod) }}@if (r.receipt.trxId) { • TrxID {{ r.receipt.trxId }} }</span></div>
+              <div><span class="material-symbols-outlined">receipt_long</span><span><span class="sub-text">এই কিস্তিতে</span>আসল ৳{{ r.principal | number }} + লাভ ৳{{ r.profit | number }} + সঞ্চয় ৳{{ r.savings | number }}</span></div>
+            </div>
+            @if (r.total !== r.receipt.totalAmountCollected) {
+              <div class="sub-text">পুরো রসিদ ৳{{ r.receipt.totalAmountCollected | number }} — বাকিটা অন্য কিস্তিতে বণ্টিত ({{ r.receipt.allocations?.length || 1 }}টি কিস্তি)</div>
+            }
+            @if (r.receipt.isHandedOverToBranch && r.receipt.reconciledAt) {
+              <div class="sub-text">ভল্টে জমা: {{ r.receipt.reconciledAt | date:'dd MMM yyyy, hh:mm a' }}@if (r.receipt.reconciliationId) { • ক্লোজিং #{{ r.receipt.reconciliationId }} }</div>
+            }
+            @if (r.receipt.isReversed) {
+              <div class="sub-text text-danger">বাতিল করেছেন {{ r.receipt.reversedByName || '—' }}@if (r.receipt.reversedAt) { • {{ r.receipt.reversedAt | date:'dd MMM yyyy, hh:mm a' }} }</div>
+            }
+          </div>
+        }
+      </div>
+      <div class="modal-footer">
+        <a class="btn btn-secondary" routerLink="/collections/receipts"
+           [queryParams]="{ search: rcpts.length === 1 ? rcpts[0].receipt.receiptId : inst.loanId }">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>মানি রসিদ রেজিস্টার</span>
+        </a>
+        <button class="btn btn-primary" (click)="receiptInst.set(null)">বন্ধ করুন</button>
       </div>
     </div>
   </div>

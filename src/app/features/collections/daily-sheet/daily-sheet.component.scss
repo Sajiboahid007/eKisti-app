@@ -83,6 +83,22 @@
   border-radius: 8px;
   border: 1px solid var(--border-color, #cbd5e1);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  min-height: 42px;
+  max-width: 100%;
+  min-width: 0;
+
+  .btn {
+    height: 30px;
+    padding: 0 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    .material-symbols-outlined { font-size: 16px; }
+  }
 
   label {
     font-size: 0.75rem;
@@ -101,7 +117,13 @@
     outline: none;
     cursor: pointer;
     padding: 0.2rem 0.35rem;
-    max-width: 320px;
+    height: 30px;
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: 420px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .no-routes-notice {
@@ -178,15 +200,15 @@
 
   // Exact column width distributions (Sum = 100%)
   /* ৯টি কলাম — মোট ১০০% */
-  .col-present { width: 11%; text-align: center; }
-  .col-name { width: 16%; }
-  .col-account { width: 10%; }
-  .col-inst-no { width: 12%; }
-  .col-inst-amount { width: 10%; }
+  .col-present { width: 10%; text-align: center; }
+  .col-name { width: 14%; }
+  .col-account { width: 9%; }
+  .col-inst-no { width: 14%; }
+  .col-inst-amount { width: 9%; }
   .col-savings { width: 8%; }
-  .col-total { width: 9%; }
-  .col-status { width: 12%; }
-  .col-action { width: 12%; }
+  .col-total { width: 8%; }
+  .col-status { width: 10%; }
+  .col-action { width: 18%; }
 
   th {
     background-color: #f8fafc;
@@ -624,10 +646,8 @@
   margin-top: 0.25rem;
   font-size: 0.72rem;
   color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  .material-symbols-outlined { font-size: 14px; }
+  line-height: 1.3;
+  .material-symbols-outlined { font-size: 14px; flex-shrink: 0; }
 }
 
 .next-after {
@@ -645,8 +665,23 @@
   &.done { background: var(--success-bg); color: #065f46; }
 }
 
+/* অ্যাকশন: টাকা গ্রহণ + সঞ্চয় বাটন এক লাইনে, ডানে */
+.action-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  flex-wrap: nowrap;
+}
+
 .btn-savings-only {
-  margin-left: 0.3rem;
-  padding: 0.3rem 0.45rem;
-  .material-symbols-outlined { font-size: 18px; }
+  height: 27px;
+  width: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 5px;
+  .material-symbols-outlined { font-size: 16px; }
 }

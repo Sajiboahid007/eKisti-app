@@ -139,3 +139,58 @@
     line-height: 1.4;
   }
 }
+
+/* ---------- উপ-মেনু (সক্রিয় মেনুর নিচে) ---------- */
+.sub-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.15rem 0 0.35rem 1.6rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--primary-border, #99f6e4);
+}
+
+.sub-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  .material-symbols-outlined { font-size: 18px; color: var(--text-muted); }
+
+  &:hover { background-color: #f1f5f9; color: var(--text-primary); }
+
+  &.active {
+    background-color: var(--primary-subtle, #f0fdfa);
+    color: var(--primary);
+    .material-symbols-outlined { color: var(--primary); }
+  }
+}
+
+/* খোলা/বন্ধ চেভরন — লিংকের ডান প্রান্তে */
+.nav-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  .material-symbols-outlined { font-size: 20px; }
+  &:hover { background-color: rgba(15, 23, 42, 0.06); color: var(--primary); }
+  &:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+}
+
+.nav-link.active .nav-toggle { color: var(--primary); }

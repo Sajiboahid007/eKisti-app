@@ -944,7 +944,8 @@ export class CustomerListComponent implements OnInit {
       }
 
       this.closeEditSavingsModal();
-      this.notice.set({ type: 'success', text: `সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর সঞ্চয় ব্যালেন্স এখন ৳ ${updatedBalance.toLocaleString()}` });
+      const cashierNote = txn.receiptNo?.startsWith('RCP-') ? ` — রসিদ ${txn.receiptNo}, টাকা অফিস ক্যাশিয়ারকে জমা দিন (ক্যাশ ক্লোজিং)` : '';
+      this.notice.set({ type: 'success', text: `সফল! সদস্য #${customer.customerId} (${customer.fullName}) এর সঞ্চয় ব্যালেন্স এখন ৳ ${updatedBalance.toLocaleString()}${cashierNote}` });
     } catch (err) {
       console.error('Error updating savings:', err);
       this.savingsError.set(this.errorText(err, 'সঞ্চয় আপডেটে সমস্যা হয়েছে'));

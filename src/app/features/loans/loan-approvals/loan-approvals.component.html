@@ -5,15 +5,15 @@
       <p class="sub-text">আবেদন → মাঠ যাচাই → শাখা ব্যবস্থাপকের অনুমোদন → ক্যাশিয়ারের বিতরণ। আবেদনকারী নিজের আবেদন অনুমোদন করতে পারেন না।</p>
     </div>
     <div class="header-right">
+      <button class="btn btn-secondary btn-icon-only" (click)="load()" [disabled]="loading()" title="রিফ্রেশ" aria-label="রিফ্রেশ">
+        <span class="material-symbols-outlined">refresh</span>
+      </button>
       @if (authService.canApplyLoan()) {
         <a routerLink="/loans/disburse" class="btn btn-primary">
           <span class="material-symbols-outlined">add_circle</span>
           <span>নতুন ঋণ আবেদন</span>
         </a>
       }
-      <button class="btn btn-secondary btn-icon-only" (click)="load()" [disabled]="loading()" title="রিফ্রেশ" aria-label="রিফ্রেশ">
-        <span class="material-symbols-outlined">refresh</span>
-      </button>
     </div>
   </div>
 

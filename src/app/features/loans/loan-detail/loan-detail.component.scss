@@ -497,3 +497,90 @@
     &.total { background: #f8fafc; font-weight: 800; }
   }
 }
+
+/* ---------- কিস্তির রসিদ বিবরণ ---------- */
+.schedule-compact-table tbody tr.clickable-row { cursor: pointer; }
+.row-more { font-size: 16px; vertical-align: middle; color: var(--text-muted); }
+.receipt-tag.reversed { text-decoration: line-through; color: var(--danger); border-color: var(--danger-border); }
+
+.receipt-detail-dialog { max-width: 620px; }
+
+.inst-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.65rem 0.8rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  > div { display: flex; flex-direction: column; gap: 0.1rem; align-items: flex-start; }
+}
+
+.receipt-detail-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  &.reversed { background: var(--danger-bg); border-color: var(--danger-border); }
+
+  .rd-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .rd-amount { margin-left: auto; font-size: 1rem; }
+
+  .rd-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem 0.75rem;
+    font-size: 0.82rem;
+    > div { display: flex; align-items: flex-start; gap: 0.4rem; }
+    > div > span:last-child { display: flex; flex-direction: column; }
+    .material-symbols-outlined { font-size: 18px; color: var(--primary); margin-top: 2px; }
+  }
+}
+
+@media (max-width: 560px) {
+  .inst-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .receipt-detail-card .rd-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- ফিরে যান + অবস্থান ---------- */
+.detail-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+
+  .btn-back {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0 0.8rem;
+    .material-symbols-outlined { font-size: 18px; }
+  }
+
+  .crumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    a { color: var(--primary); font-weight: 600; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .material-symbols-outlined { font-size: 16px; }
+    > span:last-child { color: var(--text-primary); font-weight: 600; }
+  }
+}
+
+/* রসিদ নম্বর — ক্লিক করলে রেজিস্টারে সেই রসিদ */
+.receipt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  text-decoration: none;
+  cursor: pointer;
+  .material-symbols-outlined { font-size: 13px; }
+  &:hover { background-color: var(--primary-subtle); text-decoration: underline; }
+}

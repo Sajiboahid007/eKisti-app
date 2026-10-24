@@ -413,6 +413,15 @@ export class KistiDatabaseService {
     }
   }
 
+  // একটি ঋণের সকল আদায় রসিদ (পুরাতন থেকে নতুন) — কিস্তি শিডিউলে কে, কখন টাকা নিয়েছেন দেখাতে
+  async getPaymentCollectionsByLoanId(loanId: number): Promise<PaymentCollection[]> {
+    const snap = await getDocs(query(collection(this.firestore, 'collections'), where('loanId', '==', Number(loanId))));
+    return snap.docs
+      .map(d => d.data() as PaymentCollection)
+      .filter(r => !r.isDeleted)
+      .sort((a, b) => a.collectionDate.localeCompare(b.collectionDate) || a.receiptId - b.receiptId);
+  }
+
   // সদস্যের সকল কিস্তি আদায় রসিদ (নতুন থেকে পুরাতন)
   async getPaymentCollectionsByCustomerId(customerId: number): Promise<PaymentCollection[]> {
     try {

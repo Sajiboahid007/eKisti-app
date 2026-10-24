@@ -28,13 +28,15 @@ export type VaultOperation = 'BANK_DEPOSIT' | 'BANK_WITHDRAW' | 'EXPENSE' | 'HO_
 
 /**
  * টাকা কোথায় নেওয়া হলো:
- *  FIELD   — মাঠে (মাঠকর্মী): রসিদ মাঠকর্মীর হাতে থাকে, ক্যাশ ক্লোজিংয়ে ক্যাশিয়ার গ্রহণ করলে ভল্টে যায়
- *  COUNTER — শাখার কাউন্টারে (ক্যাশিয়ার/BM): সরাসরি ভল্টে
+ *  FIELD   — ক্যাশিয়ার ছাড়া যেকোনো কর্মকর্তা (মাঠকর্মী, BM, এডমিন…) যেখানেই নিন: রসিদ তাঁর হাতে থাকে,
+ *            ক্যাশ ক্লোজিংয়ে ক্যাশিয়ার গ্রহণ করলে ভল্টে যায়
+ *  COUNTER — শাখার কাউন্টারে ক্যাশিয়ার নিজে: সরাসরি ভল্টে
  */
 export type CashChannel = 'FIELD' | 'COUNTER';
 
+/** টাকা নেওয়ার (IN) ডিফল্ট চ্যানেল — শুধু ক্যাশিয়ার সরাসরি ভল্টে নেন, বাকি সবাইকে ক্যাশিয়ারের কাছে জমা দিতে হবে */
 export function defaultChannel(actor: Actor): CashChannel {
-  return actor.role === 'FIELD_OFFICER' ? 'FIELD' : 'COUNTER';
+  return actor.role === 'CASHIER' ? 'COUNTER' : 'FIELD';
 }
 
 export const EXPENSE_HEADS = [
@@ -264,16 +266,16 @@ export class CashService {
     paymentMethod: SavingsTransaction['paymentMethod'];
     reason: string;
     receiptNo?: string;
-    /** না দিলে: মাঠকর্মী → FIELD, অন্যরা → COUNTER */
+    /** না দিলে: জমা → ক্যাশিয়ার হলে COUNTER, অন্য সবাই FIELD (ক্যাশিয়ারের অনুমোদন লাগবে); অন্য ধরন → COUNTER */
     channel?: CashChannel;
   }, actor: Actor): Promise<SavingsTransaction> {
     const amount = round2(params.amount);
     if (!(amount > 0)) throw new Error('সঠিক পরিমাণ দিন');
     const general = await this.settings.getGeneralSettings();
-    const channel = params.channel || defaultChannel(actor);
+    const channel = params.channel || (params.type === 'DEPOSIT' ? defaultChannel(actor) : 'COUNTER');
     const fieldDeposit = channel === 'FIELD' && params.type === 'DEPOSIT';
 
-    if (channel === 'FIELD' && params.type !== 'DEPOSIT') {
+    if (params.type !== 'DEPOSIT' && (channel === 'FIELD' || actor.role === 'FIELD_OFFICER')) {
       // মাঠকর্মী মাঠে শুধু জমা নিতে পারেন; উত্তোলন/ফেরত/সমন্বয় শাখায় ক্যাশিয়ার/BM করবেন
       throw new Error('মাঠকর্মী শুধু সঞ্চয় জমা নিতে পারেন। উত্তোলন, হিসাব সমাপ্তি বা সমন্বয় শাখায় ক্যাশিয়ার/শাখা ব্যবস্থাপক করবেন।');
     }
@@ -326,7 +328,7 @@ export class CashService {
           history: [s.historyEntry('PAYMENT_COLLECTED', params.reason, undefined, { amount, type: 'SAVINGS_DEPOSIT' })]
         };
         s.set(doc(this.firestore, 'collections', String(receiptId)), receipt);
-        s.audit('collections', receiptId, 'PAYMENT_COLLECTED', 'মাঠে সঞ্চয় জমা', { totalAmountCollected: { before: null, after: amount } }, branchId);
+        s.audit('collections', receiptId, 'PAYMENT_COLLECTED', 'সঞ্চয় জমা — ক্যাশিয়ারের গ্রহণ বাকি', { totalAmountCollected: { before: null, after: amount } }, branchId);
       }
       const custFields = { totalSavingsBalance: after };
       s.update(this.runner.customerRef(customer.customerId), { ...custFields, history: s.appendHistory(customer, s.historyEntry('UPDATE', params.reason, customer, custFields)) });
@@ -352,8 +354,8 @@ export class CashService {
 
   /**
    * ভর্তি ফি ও পাসবুক ফি।
-   * মাঠকর্মী নিলে (FIELD): মাঠ রসিদ — টাকা মাঠকর্মীর হাতে, ক্যাশ ক্লোজিংয়ে ভল্টে।
-   * শাখায় ক্যাশিয়ার/BM নিলে (COUNTER): সরাসরি ভল্টে।
+   * ক্যাশিয়ার ছাড়া অন্য কেউ নিলে (FIELD): রসিদ — টাকা তাঁর হাতে, ক্যাশ ক্লোজিংয়ে ক্যাশিয়ার গ্রহণ করলে ভল্টে।
+   * শাখায় ক্যাশিয়ার নিলে (COUNTER): সরাসরি ভল্টে।
    */
   async postMemberFees(customerId: number, fees: { admission: number; passbook: number }, actor: Actor, channel: CashChannel = defaultChannel(actor)): Promise<void> {
     const items = [

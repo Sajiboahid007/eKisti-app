@@ -1,5 +1,7 @@
 import { Component, computed, inject, OnInit, signal, WritableSignal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Branch, CenterOrSamity, PaymentCollection } from '../../../core/models/database.models';
 import { AuthStateService } from '../../../core/services/auth-state.service';
@@ -31,6 +33,7 @@ function toLocalDayKey(value: string | Date): string {
 export class ReceiptListComponent implements OnInit {
   private kistiService = inject(KistiDatabaseService);
   private finance = inject(FinanceService);
+  private route = inject(ActivatedRoute);
 
   // রসিদ বাতিল (রিভার্সাল) — মোছা নয়, উল্টো এন্ট্রি
   readonly reversing = signal<PaymentCollection | null>(null);
@@ -167,6 +170,17 @@ export class ReceiptListComponent implements OnInit {
     start = Math.max(1, end - 4);
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   });
+
+  constructor() {
+    // অন্য পেজ থেকে নির্দিষ্ট রসিদ/ঋণ খুঁজে আসা: /collections/receipts?search=40008 — বাকি ফিল্টার মুছে শুধু সেটি
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
+      const search = params.get('search');
+      if (search) {
+        this.clearFilters();
+        this.searchQuery.set(search);
+      }
+    });
+  }
 
   async ngOnInit() {
     await this.loadReceipts();

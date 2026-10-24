@@ -1,11 +1,12 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { CommonModule, Location } from '@angular/common';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { FollowUp, InstallmentFrequency, InstallmentSchedule, InsuranceClaim, Loan, LoanStatusChange, LoanTransaction } from '../../../core/models/database.models';
+import { FollowUp, InstallmentFrequency, InstallmentSchedule, InsuranceClaim, Loan, LoanStatusChange, LoanTransaction, PaymentCollection } from '../../../core/models/database.models';
 import { AuthStateService } from '../../../core/services/auth-state.service';
 import { FinanceService, PaymentMethod } from '../../../core/services/finance.service';
 import { TxRunner } from '../../../core/services/tx-runner.service';
+import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { HistoryModalComponent } from '../../../shared/components/history-modal/history-modal.component';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { amountForInstallments, collectionView, describeAllocation, isSettledStatus, remainingOf } from '../../../core/finance/allocation';
@@ -14,6 +15,16 @@ import { earlySettlementQuote } from '../../../core/finance/settlement';
 import { addDaysKey, formatBnDate, todayDhaka, toDhakaDayKey } from '../../../core/finance/dates';
 
 type Tab = 'SCHEDULE' | 'LEDGER' | 'STATUS' | 'FOLLOWUP';
+
+/** কিস্তির একটি রসিদ — এই কিস্তিতে কত গেছে সহ */
+export interface InstallmentReceipt {
+  receipt: PaymentCollection;
+  principal: number;
+  profit: number;
+  savings: number;
+  /** এই কিস্তিতে মোট (আসল + লাভ + সঞ্চয়) */
+  total: number;
+}
 type ModalKind = 'COLLECT' | 'SETTLE' | 'RESCHEDULE' | 'WRITE_OFF' | 'CLAIM' | 'RECOVERY';
 
 @Component({
@@ -26,7 +37,10 @@ type ModalKind = 'COLLECT' | 'SETTLE' | 'RESCHEDULE' | 'WRITE_OFF' | 'CLAIM' | '
 export class LoanDetailComponent implements OnInit {
   private finance = inject(FinanceService);
   private runner = inject(TxRunner);
+  private kisti = inject(KistiDatabaseService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private location = inject(Location);
   readonly authService = inject(AuthStateService);
 
   loanId = 0;
@@ -36,6 +50,9 @@ export class LoanDetailComponent implements OnInit {
   readonly statusHistory = signal<LoanStatusChange[]>([]);
   readonly followUps = signal<FollowUp[]>([]);
   readonly claims = signal<InsuranceClaim[]>([]);
+  readonly receipts = signal<PaymentCollection[]>([]);
+  /** শিডিউলের যে কিস্তির রসিদ বিবরণ খোলা */
+  readonly receiptInst = signal<InstallmentSchedule | null>(null);
   readonly loading = signal<boolean>(true);
   readonly tab = signal<Tab>('SCHEDULE');
   readonly message = signal<{ kind: 'success' | 'danger'; text: string } | null>(null);
@@ -84,12 +101,14 @@ export class LoanDetailComponent implements OnInit {
       const { loan, installments } = await this.runner.loadLoanBundle(this.loanId);
       this.loan.set(loan);
       this.installments.set(installments);
-      const [txns, statuses, fus, claims] = await Promise.all([
+      const [txns, statuses, fus, claims, receipts] = await Promise.all([
         this.finance.getLoanTransactions(this.loanId),
         this.finance.getLoanStatusHistory(this.loanId),
         this.finance.getFollowUps(this.loanId),
-        this.finance.getInsuranceClaims(this.loanId)
+        this.finance.getInsuranceClaims(this.loanId),
+        this.kisti.getPaymentCollectionsByLoanId(this.loanId).catch(() => [] as PaymentCollection[])
       ]);
+      this.receipts.set(receipts);
       this.transactions.set(txns);
       this.statusHistory.set(statuses);
       this.followUps.set(fus);
@@ -100,6 +119,12 @@ export class LoanDetailComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** আগের পেজে (যেখান থেকে এসেছেন) ফেরত; সরাসরি লিংকে খুললে ঋণ তালিকায় */
+  goBack() {
+    if (this.router.lastSuccessfulNavigation()?.previousNavigation) this.location.back();
+    else void this.router.navigate(['/loans']);
   }
 
   dayLabel(key: string | undefined | null, short = false): string {
@@ -124,6 +149,33 @@ export class LoanDetailComponent implements OnInit {
       case 'WAIVED': return { cls: 'badge-secondary', label: 'মওকুফ' };
       default: return overdue ? { cls: 'badge-danger', label: 'বকেয়া' } : inst.dueDate === this.today ? { cls: 'badge-warning', label: 'আজ দেয়' } : { cls: 'badge-pending', label: 'বাকি' };
     }
+  }
+
+  /**
+   * কিস্তির রসিদ: রসিদের বণ্টন (allocations) থেকে, পুরাতন রসিদে installmentId / কিস্তির receiptIds থেকে।
+   * বাতিল রসিদও দেখানো হয় (চিহ্নসহ), যাতে পুরো ইতিহাস থাকে।
+   */
+  installmentReceipts(inst: InstallmentSchedule): InstallmentReceipt[] {
+    const linked = new Set(inst.receiptIds || (inst.collectionReceiptId ? [inst.collectionReceiptId] : []));
+    const out: InstallmentReceipt[] = [];
+    for (const r of this.receipts()) {
+      const alloc = r.allocations?.find(a => a.installmentId === inst.installmentId);
+      if (alloc) {
+        out.push({ receipt: r, principal: alloc.principal, profit: alloc.profit, savings: alloc.savings, total: alloc.principal + alloc.profit + alloc.savings });
+      } else if (!r.allocations?.length && (linked.has(r.receiptId) || r.installmentId === inst.installmentId)) {
+        const principal = r.principalAmountCollected || 0, profit = r.profitAmountCollected || 0, savings = r.savingsAmountCollected || 0;
+        out.push({ receipt: r, principal, profit, savings, total: principal + profit + savings });
+      }
+    }
+    return out;
+  }
+
+  openReceipts(inst: InstallmentSchedule) {
+    if (inst.paidTotalAmount > 0 || this.installmentReceipts(inst).length) this.receiptInst.set(inst);
+  }
+
+  methodLabel(m: PaymentCollection['paymentMethod']): string {
+    return ({ CASH: 'নগদ', BKASH: 'বিকাশ', NAGAD: 'নগদ (মোবাইল)', BANK: 'ব্যাংক' } as Record<string, string>)[m] || m;
   }
 
   txnLabel(type: LoanTransaction['type']): string {

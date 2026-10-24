@@ -266,15 +266,9 @@
               <div class="label-with-badge">
                 <label>সার্ভিস চার্জ / লাভ (%)</label>
                 <div class="profit-type-toggle">
-                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'FLAT'" (click)="setProfitType('FLAT')">
-                    ফ্ল্যাট লাভ
-                  </button>
-                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'ANNUAL'" (click)="setProfitType('ANNUAL')">
-                    বাৎসরিক লাভ
-                  </button>
-                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'DECLINING'" (click)="setProfitType('DECLINING')">
-                    হ্রাসমান
-                  </button>
+                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'FLAT'" (click)="setProfitType('FLAT')" title="ফ্ল্যাট লাভ">ফ্ল্যাট</button>
+                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'ANNUAL'" (click)="setProfitType('ANNUAL')" title="বাৎসরিক লাভ">বাৎসরিক</button>
+                  <button type="button" class="profit-toggle-btn" [class.active]="profitCalculationType() === 'DECLINING'" (click)="setProfitType('DECLINING')" title="হ্রাসমান স্থিতির ওপর লাভ">হ্রাসমান</button>
                 </div>
               </div>
               <input type="number" class="form-control" [ngModel]="profitRate()" (ngModelChange)="setProfitRate($event)" name="profitRate" step="0.5" min="0" />
@@ -292,7 +286,9 @@
 
             <!-- Mandatory Savings -->
             <div class="form-group">
-              <label>প্রতি কিস্তির সঞ্চয় (টাকা)</label>
+              <div class="label-with-badge">
+                <label>প্রতি কিস্তির সঞ্চয় (টাকা)</label>
+              </div>
               <input type="number" class="form-control" [ngModel]="savingsPerInstallment()" (ngModelChange)="setSavings($event)" name="savingsPerInstallment" step="10" min="0" />
               <div class="form-hint">{{ frequencyLabel() }}র সাথে বাধ্যতামূলক জমা হবে</div>
             </div>
@@ -315,17 +311,20 @@
               <input type="number" class="form-control" [ngModel]="formFeePaid()" (ngModelChange)="formFeePaid.set(+$event)" name="formFee" min="0" />
             </div>
 
+          </div>
+
+          <div class="form-row">
             <!-- Insurance / risk fund -->
             <div class="form-group">
               <label>বীমা / ঋণ ঝুঁকি তহবিল (টাকা)</label>
               <input type="number" class="form-control" [ngModel]="insuranceFeePaid()" (ngModelChange)="insuranceFeePaid.set(+$event)" name="insuranceFee" min="0" />
             </div>
-          </div>
 
-          <!-- Purpose -->
-          <div class="form-group">
-            <label>ঋণের উদ্দেশ্য / খাত</label>
-            <input type="text" class="form-control" [ngModel]="purposeOfLoan()" (ngModelChange)="purposeOfLoan.set($event)" name="purpose" placeholder="যেমন: মুদি দোকানের মালামাল ক্রয়" />
+            <!-- Purpose -->
+            <div class="form-group">
+              <label>ঋণের উদ্দেশ্য / খাত</label>
+              <input type="text" class="form-control" [ngModel]="purposeOfLoan()" (ngModelChange)="purposeOfLoan.set($event)" name="purpose" placeholder="যেমন: মুদি দোকানের মালামাল ক্রয়" />
+            </div>
           </div>
 
           <div class="form-actions">

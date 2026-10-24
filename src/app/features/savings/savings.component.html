@@ -328,8 +328,8 @@
           <span>কারণ / বিবরণ</span>
           <input class="form-control" [ngModel]="entryReason()" (ngModelChange)="entryReason.set($event)" />
         </label>
-        @if (authService.isFieldOfficer()) {
-          <div class="flow-alert info"><span class="material-symbols-outlined">account_balance_wallet</span><span>মাঠ রসিদ তৈরি হবে — টাকা আপনার হাতে থাকবে, দিন শেষে ক্যাশ ক্লোজিংয়ে ক্যাশিয়ারকে জমা দিন।</span></div>
+        @if (e.kind === 'DEPOSIT' && authService.currentUser().role !== 'CASHIER') {
+          <div class="flow-alert info"><span class="material-symbols-outlined">account_balance_wallet</span><span>রসিদ তৈরি হবে — টাকা আপনার হাতে থাকবে, ক্যাশ ক্লোজিংয়ে অফিস ক্যাশিয়ারকে জমা দিন। ক্যাশিয়ার গ্রহণ করলে তবেই ভল্টে উঠবে।</span></div>
         } @else if (entryMethod() === 'CASH') {
           <div class="sub-text">শাখার কাউন্টারে নগদ — ভল্ট খতিয়ানে সরাসরি {{ e.kind === 'DEPOSIT' ? 'জমা' : 'খরচ' }} হিসেবে লেখা হবে।</div>
         }

@@ -2,82 +2,186 @@
   <nav class="sidebar-nav">
     <div class="nav-section-title">{{ lang.t('navMainMenu') }}</div>
 
-    <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+    <a routerLink="/dashboard" [class.active]="isActive('/dashboard')" class="nav-link">
       <span class="material-symbols-outlined nav-icon">dashboard</span>
       <span class="nav-label">{{ lang.t('navDashboard') }}</span>
+      @if (hasSub('/dashboard')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/dashboard')"
+              [attr.aria-label]="isExpanded('/dashboard') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/dashboard', $event)" (keydown.enter)="toggle('/dashboard', $event)" (keydown.space)="toggle('/dashboard', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/dashboard') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
     </a>
+    @if (isExpanded('/dashboard')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/dashboard' }" /> }
 
     <!-- Field Officer or BM: Daily Collection Sheet -->
     @if (authService.canCollectKisti()) {
-      <a routerLink="/collections/daily" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link highlight-link">
+      <a routerLink="/collections/daily" [class.active]="isActive('/collections/daily')" class="nav-link highlight-link">
         <span class="material-symbols-outlined nav-icon">payments</span>
         <span class="nav-label">{{ lang.t('navDailySheet') }}</span>
+  @if (hasSub('/collections/daily')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/collections/daily')"
+              [attr.aria-label]="isExpanded('/collections/daily') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/collections/daily', $event)" (keydown.enter)="toggle('/collections/daily', $event)" (keydown.space)="toggle('/collections/daily', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/collections/daily') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
 </a>
+    @if (isExpanded('/collections/daily')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/collections/daily' }" /> }
     }
 
-    <a routerLink="/customers" routerLinkActive="active" class="nav-link">
+    <a routerLink="/customers" [class.active]="isActive('/customers')" class="nav-link">
       <span class="material-symbols-outlined nav-icon">group</span>
       <span class="nav-label">{{ lang.t('navCustomers') }}</span>
+      @if (hasSub('/customers')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/customers')"
+              [attr.aria-label]="isExpanded('/customers') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/customers', $event)" (keydown.enter)="toggle('/customers', $event)" (keydown.space)="toggle('/customers', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/customers') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
     </a>
+    @if (isExpanded('/customers')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/customers' }" /> }
 
-    <a routerLink="/loans" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+    <a routerLink="/loans" [class.active]="isActive('/loans')" class="nav-link">
       <span class="material-symbols-outlined nav-icon">receipt_long</span>
       <span class="nav-label">{{ lang.t('navLoans') }}</span>
+      @if (hasSub('/loans')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/loans')"
+              [attr.aria-label]="isExpanded('/loans') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/loans', $event)" (keydown.enter)="toggle('/loans', $event)" (keydown.space)="toggle('/loans', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/loans') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
     </a>
+    @if (isExpanded('/loans')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/loans' }" /> }
 
     @if (authService.canSeeLoanPipeline()) {
-      <a routerLink="/loans/approvals" routerLinkActive="active" class="nav-link">
+      <a routerLink="/loans/approvals" [class.active]="isActive('/loans/approvals')" class="nav-link">
         <span class="material-symbols-outlined nav-icon">approval</span>
         <span class="nav-label">{{ lang.isBangla() ? 'ঋণ আবেদন ও অনুমোদন' : 'Loan Approvals' }}</span>
+        @if (hasSub('/loans/approvals')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/loans/approvals')"
+              [attr.aria-label]="isExpanded('/loans/approvals') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/loans/approvals', $event)" (keydown.enter)="toggle('/loans/approvals', $event)" (keydown.space)="toggle('/loans/approvals', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/loans/approvals') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
       </a>
+    @if (isExpanded('/loans/approvals')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/loans/approvals' }" /> }
     }
 
-    <a routerLink="/savings" routerLinkActive="active" class="nav-link">
+    <a routerLink="/savings" [class.active]="isActive('/savings')" class="nav-link">
       <span class="material-symbols-outlined nav-icon">savings</span>
       <span class="nav-label">{{ lang.isBangla() ? 'সঞ্চয় হিসাব' : 'Savings' }}</span>
+      @if (hasSub('/savings')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/savings')"
+              [attr.aria-label]="isExpanded('/savings') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/savings', $event)" (keydown.enter)="toggle('/savings', $event)" (keydown.space)="toggle('/savings', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/savings') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
     </a>
+    @if (isExpanded('/savings')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/savings' }" /> }
 
-    <a routerLink="/collections/receipts" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+    <a routerLink="/collections/receipts" [class.active]="isActive('/collections/receipts')" class="nav-link">
       <span class="material-symbols-outlined nav-icon">receipt</span>
       <span class="nav-label">{{ lang.t('navReceipts') }}</span>
+      @if (hasSub('/collections/receipts')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/collections/receipts')"
+              [attr.aria-label]="isExpanded('/collections/receipts') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/collections/receipts', $event)" (keydown.enter)="toggle('/collections/receipts', $event)" (keydown.space)="toggle('/collections/receipts', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/collections/receipts') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
     </a>
+    @if (isExpanded('/collections/receipts')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/collections/receipts' }" /> }
 
     <!-- Cashier or BM: Day-end Cash Closing, Vault & Accounts -->
     @if (authService.canVerifyCash() || authService.isFieldOfficer()) {
       <div class="nav-section-title">{{ lang.t('navAccounting') }}</div>
-      <a routerLink="/reconciliation" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+      <a routerLink="/reconciliation" [class.active]="isActive('/reconciliation')" class="nav-link">
         <span class="material-symbols-outlined nav-icon">point_of_sale</span>
         <span class="nav-label">{{ lang.t('navCashClosing') }}</span>
+        @if (hasSub('/reconciliation')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/reconciliation')"
+              [attr.aria-label]="isExpanded('/reconciliation') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/reconciliation', $event)" (keydown.enter)="toggle('/reconciliation', $event)" (keydown.space)="toggle('/reconciliation', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/reconciliation') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
       </a>
+    @if (isExpanded('/reconciliation')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/reconciliation' }" /> }
     }
     @if (authService.canManageAccounts()) {
-      <a routerLink="/accounts" routerLinkActive="active" class="nav-link">
+      <a routerLink="/accounts" [class.active]="isActive('/accounts')" class="nav-link">
         <span class="material-symbols-outlined nav-icon">account_balance</span>
         <span class="nav-label">{{ lang.isBangla() ? 'ভল্ট, ব্যাংক ও সমাপনী' : 'Vault & Day Closing' }}</span>
+        @if (hasSub('/accounts')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/accounts')"
+              [attr.aria-label]="isExpanded('/accounts') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/accounts', $event)" (keydown.enter)="toggle('/accounts', $event)" (keydown.space)="toggle('/accounts', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/accounts') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
       </a>
+    @if (isExpanded('/accounts')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/accounts' }" /> }
     }
 
-    <a routerLink="/reports" routerLinkActive="active" class="nav-link">
+    <a routerLink="/reports" [class.active]="isActive('/reports')" class="nav-link">
       <span class="material-symbols-outlined nav-icon">monitoring</span>
       <span class="nav-label">{{ lang.isBangla() ? 'রিপোর্ট' : 'Reports' }}</span>
+      @if (hasSub('/reports')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/reports')"
+              [attr.aria-label]="isExpanded('/reports') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/reports', $event)" (keydown.enter)="toggle('/reports', $event)" (keydown.space)="toggle('/reports', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/reports') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
     </a>
+    @if (isExpanded('/reports')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/reports' }" /> }
 
     <!-- Super Admin Administration: Organization Setup & User Management -->
     @if (authService.canManageUsers()) {
       <div class="nav-section-title">{{ lang.t('navAdministration') }}</div>
-      <a routerLink="/branches" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
+      <a routerLink="/branches" [class.active]="isActive('/branches')" class="nav-link">
         <span class="material-symbols-outlined nav-icon">alt_route</span>
         <span class="nav-label">{{ lang.isBangla() ? 'শাখা ও রুট/সমিতি' : 'Branches & Routes' }}</span>
+        @if (hasSub('/branches')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/branches')"
+              [attr.aria-label]="isExpanded('/branches') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/branches', $event)" (keydown.enter)="toggle('/branches', $event)" (keydown.space)="toggle('/branches', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/branches') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
       </a>
-      <a routerLink="/settings" routerLinkActive="active" class="nav-link">
+    @if (isExpanded('/branches')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/branches' }" /> }
+      <a routerLink="/settings" [class.active]="isActive('/settings')" class="nav-link">
         <span class="material-symbols-outlined nav-icon">settings</span>
         <span class="nav-label">{{ lang.isBangla() ? 'সেটিংস' : 'Settings' }}</span>
+        @if (hasSub('/settings')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/settings')"
+              [attr.aria-label]="isExpanded('/settings') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/settings', $event)" (keydown.enter)="toggle('/settings', $event)" (keydown.space)="toggle('/settings', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/settings') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
       </a>
-      <a routerLink="/users" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link admin-link">
+    @if (isExpanded('/settings')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/settings' }" /> }
+      <a routerLink="/users" [class.active]="isActive('/users')" class="nav-link admin-link">
         <span class="material-symbols-outlined nav-icon">manage_accounts</span>
         <span class="nav-label">{{ lang.t('navUsers') }}</span>
         <span class="admin-badge">Admin</span>
+        @if (hasSub('/users')) {
+        <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/users')"
+              [attr.aria-label]="isExpanded('/users') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
+              (click)="toggle('/users', $event)" (keydown.enter)="toggle('/users', $event)" (keydown.space)="toggle('/users', $event)">
+          <span class="material-symbols-outlined">{{ isExpanded('/users') ? 'expand_less' : 'expand_more' }}</span>
+        </span>
+      }
       </a>
+    @if (isExpanded('/users')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/users' }" /> }
     }
   </nav>
 
@@ -92,3 +196,17 @@
     </p>
   </div>
 </aside>
+
+<!-- সক্রিয় মেনুর উপ-মেনু (নতুন ঋণ আবেদন, কিস্তি শিডিউল…) -->
+<ng-template #subNav let-section>
+  @if (subMap()[section]?.length) {
+    <div class="sub-nav">
+      @for (item of subMap()[section]; track item.path + (item.queryParams?.['loanId'] || '')) {
+        <a class="sub-nav-link" [class.active]="item.active" [routerLink]="item.path" [queryParams]="item.queryParams">
+          <span class="material-symbols-outlined">{{ item.icon }}</span>
+          <span>{{ lang.isBangla() ? item.label : item.labelEn }}</span>
+        </a>
+      }
+    </div>
+  }
+</ng-template>

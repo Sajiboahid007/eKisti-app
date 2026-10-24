@@ -349,7 +349,7 @@ export class SavingsComponent implements OnInit {
         reason: this.entryReason().trim() || (e.kind === 'DEPOSIT' ? 'সঞ্চয় জমা' : 'সঞ্চয় উত্তোলন')
       }, { userId: u.userId, name: u.name, role: u.role });
       this.entry.set(null);
-      const fieldNote = this.authService.isFieldOfficer() ? ` — রসিদ ${txn.receiptNo}, টাকা আপনার হাতে; ক্যাশিয়ারকে জমা দিন` : '';
+      const fieldNote = txn.receiptNo?.startsWith('RCP-') ? ` — রসিদ ${txn.receiptNo}, টাকা আপনার হাতে; অফিস ক্যাশিয়ারকে জমা দিন` : '';
       this.notice.set({ kind: 'success', text: `${e.customer.fullName}: ${e.kind === 'DEPOSIT' ? 'জমা' : 'উত্তোলন'} ৳${amount.toLocaleString('en-IN')} — নতুন স্থিতি ৳${txn.newBalance.toLocaleString('en-IN')} (লেনদেন #${txn.transactionId})${fieldNote}` });
       await Promise.all([this.refreshCustomers(), this.loadTransactions()]);
       if (this.statementCustomer()?.customerId === e.customer.customerId) {

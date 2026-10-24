@@ -155,6 +155,7 @@
                   </td>
                   <td class="col-status"><span class="badge" [ngClass]="st.cls">{{ st.label }}</span></td>
                   <td class="col-action text-right">
+                    <div class="action-wrap">
                     @if (item.view.nextInstallment) {
                       <button class="btn btn-sm btn-collect-action" [class.btn-success]="item.view.hasDue" [class.btn-secondary]="!item.view.hasDue" (click)="openCollectModal(item)">
                         <span class="material-symbols-outlined">payments</span>
@@ -166,6 +167,7 @@
                     <button class="btn btn-sm btn-secondary btn-savings-only" (click)="openSavingsModal(item)" title="শুধু সঞ্চয় জমা (কিস্তি ছাড়া)">
                       <span class="material-symbols-outlined">savings</span>
                     </button>
+                    </div>
                   </td>
                 </tr>
               }
