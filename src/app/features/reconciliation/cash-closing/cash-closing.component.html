@@ -115,7 +115,9 @@
       } @else {
         <div class="officer-grid">
           @for (g of officerGroups(); track g.branchId + '_' + g.userId) {
-            <div class="card officer-card" [class.overdue]="g.isOverdue">
+            <div class="card officer-card clickable" [class.overdue]="g.isOverdue" role="button" tabindex="0"
+                 title="কে কত টাকা দিয়েছে — বিস্তারিত দেখতে ক্লিক করুন"
+                 (click)="openDetails(g)" (keydown.enter)="openDetails(g)" (keydown.space)="$event.preventDefault(); openDetails(g)">
               <div class="officer-head">
                 <div class="officer-avatar">{{ g.name.charAt(0) }}</div>
                 <div class="officer-meta">
@@ -157,12 +159,18 @@
                   <span class="material-symbols-outlined icon-mini">schedule</span>
                   প্রথম আদায়: {{ g.oldestDate | date:'dd MMM, hh:mm a' }}
                 </span>
-                @if (canVerify()) {
-                  <button class="btn btn-sm btn-success" (click)="openClosing(g)">
-                    <span class="material-symbols-outlined">point_of_sale</span>
-                    <span>গণনা ও গ্রহণ করুন</span>
-                  </button>
-                }
+                <span class="foot-actions">
+                  <span class="details-hint">
+                    <span class="material-symbols-outlined">list_alt</span>
+                    বিস্তারিত
+                  </span>
+                  @if (canVerify()) {
+                    <button class="btn btn-sm btn-success" (click)="$event.stopPropagation(); openClosing(g)" (keydown.enter)="$event.stopPropagation()">
+                      <span class="material-symbols-outlined">point_of_sale</span>
+                      <span>গণনা ও গ্রহণ করুন</span>
+                    </button>
+                  }
+                </span>
               </div>
             </div>
           }
@@ -268,6 +276,97 @@
 <!-- ============================================================ -->
 <!-- CLOSING MODAL: receipts + denomination count + verification  -->
 <!-- ============================================================ -->
+<!-- মাঠকর্মীর হাতে থাকা রসিদের বিস্তারিত — কোন সদস্য কত টাকা দিয়েছেন -->
+@if (detailsGroup(); as g) {
+  <div class="modal-backdrop" (click)="closeDetails()">
+    <div class="modal-dialog details-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">receipt_long</span>
+          <div>
+            <h3>আদায়ের বিস্তারিত — {{ g.name }}</h3>
+            <span class="sub-text">অফিসার আইডি #{{ g.userId }} • {{ g.branchName }} • {{ g.receipts.length }} টি রসিদ ({{ detailsMemberCount() }} জন সদস্য)</span>
+          </div>
+        </div>
+        <button class="close-btn" (click)="closeDetails()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="table-container">
+          <table class="data-table details-table">
+            <thead>
+              <tr>
+                <th>রসিদ</th>
+                <th>সদস্য</th>
+                <th>ঋণ / কিস্তি</th>
+                <th>ধরন</th>
+                <th>মাধ্যম</th>
+                <th class="text-right">বিভাজন</th>
+                <th class="text-right">মোট</th>
+                <th>সময়</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of g.receipts; track r.receiptId) {
+                <tr>
+                  <td><span class="rp-id">#{{ r.receiptId }}</span>@if (r.receiptNumberManual) { <div class="sub-text">বই: {{ r.receiptNumberManual }}</div> }</td>
+                  <td>
+                    <strong>{{ r.customerName }}</strong>
+                    <div class="sub-text">সদস্য #{{ r.customerId }}</div>
+                  </td>
+                  <td>
+                    @if (r.loanId) {
+                      <span>LN-{{ r.loanId }}</span>
+                      @if (r.allocations?.length) {
+                        <div class="sub-text">কিস্তি {{ installmentNos(r) }}</div>
+                      } @else if (r.installmentNo) {
+                        <div class="sub-text">কিস্তি #{{ r.installmentNo }}</div>
+                      }
+                    } @else { <span class="text-muted">—</span> }
+                  </td>
+                  <td><span class="rp-type" [class]="'t-' + typeOf(r)">{{ receiptTypeLabels[typeOf(r)] }}</span></td>
+                  <td>
+                    <span class="badge" [ngClass]="r.paymentMethod === 'CASH' ? 'badge-secondary' : 'badge-paid'">{{ r.paymentMethod }}</span>
+                    @if (r.trxId) { <div class="sub-text" translate="no">{{ r.trxId }}</div> }
+                  </td>
+                  <td class="text-right split-cell">
+                    @if (r.principalAmountCollected) { <div>আসল ৳{{ r.principalAmountCollected | number }}</div> }
+                    @if (r.profitAmountCollected) { <div>লাভ ৳{{ r.profitAmountCollected | number }}</div> }
+                    @if (r.savingsAmountCollected) { <div>সঞ্চয় ৳{{ r.savingsAmountCollected | number }}</div> }
+                    @if (r.feeAmountCollected) { <div>ফি ৳{{ r.feeAmountCollected | number }}</div> }
+                    @if (r.fineAmountCollected) { <div>জরিমানা ৳{{ r.fineAmountCollected | number }}</div> }
+                  </td>
+                  <td class="text-right"><strong class="amount-bdt">{{ r.totalAmountCollected | number }}</strong></td>
+                  <td class="sub-text nowrap">{{ r.collectionDate | date:'dd MMM, hh:mm a' }}</td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="6" class="text-right">নগদ ৳{{ g.cashAmount | number }} • ডিজিটাল ৳{{ g.digitalAmount | number }} • সর্বমোট</td>
+                <td class="text-right"><strong class="amount-bdt text-primary">{{ g.totalAmount | number }}</strong></td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeDetails()">বন্ধ করুন</button>
+        @if (canVerify()) {
+          <button class="btn btn-success" (click)="closeDetails(); openClosing(g)">
+            <span class="material-symbols-outlined">point_of_sale</span>
+            <span>গণনা ও গ্রহণ করুন</span>
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}
+
 @if (closingGroup(); as g) {
   <div class="modal-backdrop" (click)="closeClosing()">
     <div class="modal-dialog closing-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">

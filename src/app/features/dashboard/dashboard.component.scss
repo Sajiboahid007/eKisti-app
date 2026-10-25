@@ -989,3 +989,30 @@ $series-disbursed: #d97706;
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
+
+/* আজ কিস্তি দেয় গ্রাহক */
+.due-customers-card {
+  .card-header { flex-wrap: wrap; gap: 0.5rem; }
+}
+
+.due-table {
+  tr.due-row-overdue td { background: #fef2f2; }
+  tr.due-row-overdue td:first-child { box-shadow: inset 4px 0 0 #dc2626; }
+  tr.due-row-today td { background: #fffbeb; }
+  tr.due-row-today td:first-child { box-shadow: inset 4px 0 0 #f59e0b; }
+}
+
+.due-more-btn {
+  display: block;
+  width: 100%;
+  padding: 0.6rem;
+  border: 0;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  background: transparent;
+  color: var(--primary, #0f766e);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover { background: #f8fafc; }
+}

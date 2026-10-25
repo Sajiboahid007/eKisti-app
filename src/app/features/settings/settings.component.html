@@ -114,7 +114,6 @@
               </div>
 
               <div class="check-row">
-                <label class="check"><input type="checkbox" [ngModel]="d.allowConcurrentLoans" (ngModelChange)="patch('allowConcurrentLoans', $event)" /> চলমান ঋণ থাকা অবস্থায় নতুন ঋণ অনুমোদিত</label>
                 <label class="check"><input type="checkbox" [ngModel]="d.isActive" (ngModelChange)="patch('isActive', $event)" /> সক্রিয় (বিতরণে দেখাবে)</label>
               </div>
 
@@ -181,7 +180,6 @@
                         <strong>{{ p.productName }}</strong>
                         <div class="sub-text">
                           গ্রেস {{ p.graceDays ?? 0 }} দিন · রেয়াত {{ p.earlySettlementRebatePercent ?? 0 }}%
-                          @if (p.allowConcurrentLoans) { · একাধিক ঋণ }
                           @if (p.cycleCeilings?.length) { · {{ p.cycleCeilings!.length }} চক্র }
                         </div>
                       </td>

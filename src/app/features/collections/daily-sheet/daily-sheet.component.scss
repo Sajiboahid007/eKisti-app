@@ -253,6 +253,38 @@
   tbody tr.collected-row {
     background-color: #f0fdf4 !important;
   }
+
+  /* বকেয়া (আগের তারিখের কিস্তি বাকি) — লাল; আজ দেয় — হলুদ; বাম পাশে রঙিন দাগ */
+  tbody tr.overdue-row {
+    background-color: #fef2f2;
+    td:first-child { box-shadow: inset 4px 0 0 #dc2626; }
+    &:hover { background-color: #fee2e2; }
+    .col-inst-amount { color: #b91c1c; font-weight: 700; }
+  }
+
+  tbody tr.due-row {
+    background-color: #fffbeb;
+    td:first-child { box-shadow: inset 4px 0 0 #f59e0b; }
+    &:hover { background-color: #fef3c7; }
+    .col-inst-amount { color: #b45309; font-weight: 700; }
+  }
+}
+
+/* সারির রঙের ব্যাখ্যা */
+.row-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #475569);
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+
+  span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .lg-overdue { background: #fef2f2; border: 2px solid #dc2626; }
+  .lg-due { background: #fffbeb; border: 2px solid #f59e0b; }
+  .lg-done { background: #f0fdf4; border: 2px solid #16a34a; }
 }
 
 /* Cell-level Elements */
@@ -684,4 +716,11 @@
   flex-shrink: 0;
   border-radius: 5px;
   .material-symbols-outlined { font-size: 16px; }
+}
+
+/* "আগামীকাল দেয়" সারি ব্যাজ */
+.badge-info {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
 }

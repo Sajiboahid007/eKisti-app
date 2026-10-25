@@ -313,7 +313,7 @@ export class LoanDisburseComponent implements OnInit {
     this.checkingEligibility.set(true);
     try {
       const [elig, cal] = await Promise.all([
-        this.lifecycle.checkEligibility(customer, product),
+        this.lifecycle.checkEligibility(customer, product, this.authService.currentUser()),
         this.settings.getCalendar(customer.branchId)
       ]);
       this.eligibility.set(elig);
@@ -507,7 +507,7 @@ export class LoanDisburseComponent implements OnInit {
       return;
     }
     const user = this.authService.currentUser();
-    const actor = { userId: user.userId, name: user.name, role: user.role };
+    const actor = { userId: user.userId, name: user.name, role: user.role, category: user.category };
     this.submitting.set(true);
     try {
       if (this.mode() === 'DISBURSE') {

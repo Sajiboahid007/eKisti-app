@@ -1,6 +1,8 @@
 import { DestroyRef, Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Firestore, Unsubscribe, collection, onSnapshot, query, where } from '@angular/fire/firestore';
-import { Loan, PaymentCollection } from '../models/database.models';
+import { CenterOrSamity, InstallmentSchedule, Loan, PaymentCollection } from '../models/database.models';
+import { isSettledStatus } from '../finance/allocation';
+import { todayDhaka } from '../finance/dates';
 import { AuthStateService } from './auth-state.service';
 import { ToastService } from './toast.service';
 
@@ -15,11 +17,13 @@ export interface AppNotification {
 }
 
 const PIPELINE_STATUSES = ['APPLIED', 'FIELD_VERIFIED', 'APPROVED'];
+const OPEN_INSTALLMENT_STATUSES = ['PENDING', 'PARTIAL', 'OVERDUE'];
 
 /**
  * সাইডবার ব্যাজ ও নোটিফিকেশন বেল — Firestore লাইভ লিসেনার থেকে:
  *  • ঋণ আবেদন: যে ধাপে বর্তমান ব্যবহারকারীর কাজ বাকি (যাচাই / অনুমোদন / বিতরণ)
  *  • ক্যাশিয়ার ক্লোজিং: মাঠকর্মীর হাতে থাকা, এখনো ভল্টে জমা না হওয়া রসিদ
+ *  • দৈনিক শিট: আজ পর্যন্ত কিস্তি দেয় কিন্তু আদায় বাকি — এমন সদস্য (মাঠকর্মীর নিজের সমিতি)
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
@@ -30,6 +34,35 @@ export class NotificationService {
   private readonly pipelineLoans = signal<Loan[]>([]);
   private readonly pendingReceipts = signal<PaymentCollection[]>([]);
   private unsubscribers: Unsubscribe[] = [];
+
+  // দৈনিক শিট ব্যাজ — শুধু যাঁরা কিস্তি আদায় করেন তাঁদের জন্য লিসেনার
+  private readonly activeLoans = signal<Loan[]>([]);
+  private readonly openInstallments = signal<InstallmentSchedule[]>([]);
+  private readonly centers = signal<CenterOrSamity[]>([]);
+  private dueUnsubscribers: Unsubscribe[] = [];
+  /** ব্যবসায়িক তারিখ — মধ্যরাত পার হলে ব্যাজ নতুন দিনের হিসাব করে */
+  private readonly today = signal(todayDhaka());
+
+  /** আজ পর্যন্ত দেয় কিস্তি আদায় বাকি এমন সদস্য সংখ্যা (দৈনিক শিটের রুট নিয়ম অনুযায়ী) */
+  readonly dailyDueCount = computed(() => {
+    if (!this.auth.canCollectKisti()) return 0;
+    const user = this.auth.currentUser();
+    const today = this.today();
+    const permitted = new Set(this.centers().filter(c => {
+      if (c.isDeleted) return false;
+      if (user.role === 'FIELD_OFFICER') return Number(c.fieldOfficerUserId) === Number(user.userId);
+      if (user.role === 'BRANCH_MANAGER') return c.branchId === user.branchId;
+      return this.auth.canAccessBranch(c.branchId);
+    }).map(c => c.centerId));
+
+    const loans = new Map(this.activeLoans().filter(l => permitted.has(l.centerId)).map(l => [l.loanId, l]));
+    const members = new Set<number>();
+    for (const inst of this.openInstallments()) {
+      const loan = loans.get(inst.loanId);
+      if (loan && inst.dueDate <= today && !isSettledStatus(inst.status)) members.add(loan.customerId);
+    }
+    return members.size;
+  });
 
   /** ব্যবহারকারীর শাখার ঋণ আবেদন — প্রতিটি ধাপে কতটি তার কাজের অপেক্ষায় */
   readonly loanStages = computed(() => {
@@ -93,7 +126,16 @@ export class NotificationService {
       const active = this.auth.isAuthenticated();
       untracked(() => (active ? this.start() : this.stop()));
     });
-    inject(DestroyRef).onDestroy(() => this.stop());
+    effect(() => {
+      const active = this.auth.isAuthenticated() && this.auth.canCollectKisti();
+      untracked(() => (active ? this.startDue() : this.stopDue()));
+    });
+    const timer = setInterval(() => this.today.set(todayDhaka()), 60_000);
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(timer);
+      this.stop();
+      this.stopDue();
+    });
 
     // নতুন কাজ এলে টোস্ট (প্রথম লোড ও ব্যবহারকারী বদলের সময় নয়)
     let previous: { userId: number; counts: Record<string, number> } | null = null;
@@ -132,6 +174,27 @@ export class NotificationService {
       this.pendingReceipts.set(snap.docs.map(d => d.data() as PaymentCollection).filter(r => !r.isDeleted && !r.isReversed));
       if (receiptsFirst) { receiptsFirst = false; markLoaded(); }
     }, err => console.error('Notification (receipts) listener error:', err)));
+  }
+
+  private startDue() {
+    if (this.dueUnsubscribers.length) return;
+    const onError = (what: string) => (err: unknown) => console.error(`Notification (${what}) listener error:`, err);
+    this.dueUnsubscribers.push(
+      onSnapshot(query(collection(this.firestore, 'loans'), where('status', 'in', ['DISBURSED', 'OVERDUE'])),
+        snap => this.activeLoans.set(snap.docs.map(d => d.data() as Loan).filter(l => !l.isDeleted)), onError('active loans')),
+      onSnapshot(query(collection(this.firestore, 'installments'), where('status', 'in', OPEN_INSTALLMENT_STATUSES)),
+        snap => this.openInstallments.set(snap.docs.map(d => d.data() as InstallmentSchedule).filter(i => !i.isDeleted)), onError('installments')),
+      onSnapshot(collection(this.firestore, 'centers'),
+        snap => this.centers.set(snap.docs.map(d => d.data() as CenterOrSamity)), onError('centers'))
+    );
+  }
+
+  private stopDue() {
+    this.dueUnsubscribers.forEach(u => u());
+    this.dueUnsubscribers = [];
+    this.activeLoans.set([]);
+    this.openInstallments.set([]);
+    this.centers.set([]);
   }
 
   private stop() {

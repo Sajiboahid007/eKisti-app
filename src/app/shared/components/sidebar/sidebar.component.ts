@@ -35,7 +35,14 @@ export class SidebarComponent {
     return `${bn}টি কাজ বাকি`;
   }
 
-  /** যে মেনু সক্রিয় — ভেতরের পেজে যেখান থেকে এসেছেন সেটি থাকে (রিফ্রেশেও মনে থাকে) */
+  /** দৈনিক শিট ব্যাজের টুলটিপ — "আজ ৫ জনের কিস্তি আদায় বাকি" */
+  dueTitle(count: number): string {
+    if (!this.lang.isBangla()) return `${count} members' installments to collect today`;
+    const bn = String(count).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[+d]);
+    return `আজ ${bn} জনের কিস্তি আদায় বাকি`;
+  }
+
+  /** যে মেনু সক্রিয় —ভেতরের পেজে যেখান থেকে এসেছেন সেটি থাকে (রিফ্রেশেও মনে থাকে) */
   readonly section = signal<string | null>(null);
   private readonly url = signal<string>(this.router.url);
 

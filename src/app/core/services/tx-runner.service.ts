@@ -5,7 +5,7 @@ import { todayDhaka } from '../finance/dates';
 import { AuditHistoryService } from './audit-history.service';
 import { TxSession } from './tx-session';
 
-export type Actor = { userId: number; name: string; role: string };
+export type Actor = { userId: number; name: string; role: string; category?: string };
 
 /** ট্রানজ্যাকশনের মাঝে ডেটা বদলে গেলে পুনরায় চেষ্টা করার সংকেত */
 export class ConcurrentChangeError extends Error {

@@ -6,7 +6,7 @@ import { AuthStateService } from '../../../core/services/auth-state.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { ToastService } from '../../../core/services/toast.service';
-import { FieldCashBreakdown, RECEIPT_TYPE_LABELS, fieldCashBreakdown, receiptTypeOf } from '../../../core/finance/field-cash';
+import { FieldCashBreakdown, RECEIPT_TYPE_LABELS, fieldCashBreakdown, receiptTypeOf } from '../../../core/finance/field-cash';
 import { SettingsService } from '../../../core/services/settings.service';
 
 /** একজন মাঠকর্মীর কাছে জমা বাকি থাকা রসিদের গুচ্ছ */
@@ -83,6 +83,10 @@ export class CashClosingComponent implements OnInit {
   readonly confirmStep = signal<boolean>(false);
   readonly submitting = signal<boolean>(false);
   readonly closingError = signal<string>('');
+
+  // ---------- রসিদের বিস্তারিত (কে কত দিয়েছে) ----------
+  readonly detailsGroup = signal<OfficerHandoverGroup | null>(null);
+  readonly detailsMemberCount = computed(() => new Set((this.detailsGroup()?.receipts || []).map(r => r.customerId)).size);
 
   // ---------- স্লিপ (প্রিন্ট) ----------
   readonly slipRecord = signal<DailyReconciliation | null>(null);
@@ -285,6 +289,20 @@ export class CashClosingComponent implements OnInit {
 
   onBranchChange(branchId: number | string) {
     this.selectedBranchId.set(Number(branchId));
+  }
+
+  // ---------- রসিদের বিস্তারিত ----------
+  openDetails(group: OfficerHandoverGroup) {
+    this.detailsGroup.set(group);
+  }
+
+  closeDetails() {
+    this.detailsGroup.set(null);
+  }
+
+  /** একাধিক কিস্তিতে বণ্টিত রসিদের কিস্তি নম্বর — "#৩, #৪" */
+  installmentNos(r: PaymentCollection): string {
+    return (r.allocations || []).map(a => `#${a.installmentNo}`).join(', ');
   }
 
   // ---------- ক্লোজিং মডাল ----------

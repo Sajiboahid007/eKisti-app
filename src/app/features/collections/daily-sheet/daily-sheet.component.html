@@ -101,6 +101,11 @@
           <p class="text-muted">নির্বাচিত সমিতিতে বর্তমানে কোনো বকেয়া বা আদায়যোগ্য সক্রিয় ঋণ অ্যাকাউন্ট নেই।</p>
         </div>
       } @else {
+        <div class="row-legend no-print">
+          <span><i class="lg-overdue"></i> বকেয়া (আগের কিস্তি বাকি)</span>
+          <span><i class="lg-due"></i> আজ দেয়</span>
+          <span><i class="lg-done"></i> আজ আদায় সম্পন্ন</span>
+        </div>
         <!-- 100% Fit Table Container with No Horizontal Scroll -->
         <div class="table-container daily-sheet-container border-0">
           <table class="data-table daily-sheet-table">
@@ -120,7 +125,9 @@
             <tbody>
               @for (item of sheetItems(); track item.loan.loanId) {
                 @let st = rowState(item);
-                <tr [class.collected-row]="item.collectedTodayAmount > 0 && !item.view.hasDue">
+                <tr [class.collected-row]="item.collectedTodayAmount > 0 && !item.view.hasDue"
+                    [class.overdue-row]="item.view.overdueCount > 0"
+                    [class.due-row]="item.view.hasDue && item.view.overdueCount === 0">
                   <td class="col-present">
                     @let isPresent = present().has(item.loan.customerId);
                     <button type="button" class="attend-toggle" [class.present]="isPresent" [class.absent]="!isPresent"

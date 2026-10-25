@@ -431,6 +431,70 @@
         </div>
       }
 
+      <!-- আজ কিস্তি দেয় / বকেয়া গ্রাহক -->
+      <div class="card due-customers-card">
+        <div class="card-header">
+          <div class="header-title">
+            <span class="material-symbols-outlined text-warning">event_busy</span>
+            <h3>আজ কিস্তি দেয় গ্রাহক</h3>
+          </div>
+          @if (dueCustomers().length > 0) {
+            <span class="sub-text">
+              {{ dueCustomers().length }} জন • ৳{{ dueCustomersTotal() | number:'1.0-0' }}@if (dueCustomersOverdueCount()) { • <span class="text-danger">{{ dueCustomersOverdueCount() }} জন বকেয়া</span> }
+            </span>
+          }
+        </div>
+        <div class="card-body p-0">
+          @if (dueCustomers().length === 0) {
+            <div class="empty-state compact">
+              <span class="material-symbols-outlined">task_alt</span>
+              <p>আজ কোনো গ্রাহকের কিস্তি দেয় বা বকেয়া নেই</p>
+            </div>
+          } @else {
+            <div class="table-container border-0">
+              <table class="data-table due-table">
+                <thead>
+                  <tr>
+                    <th>গ্রাহক</th>
+                    <th>সমিতি</th>
+                    <th class="text-right">আজ দেয়</th>
+                    <th class="text-right">বকেয়া</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of visibleDueCustomers(); track d.loan.loanId) {
+                    <tr [class.due-row-overdue]="d.isOverdue" [class.due-row-today]="!d.isOverdue">
+                      <td>
+                        <a [routerLink]="['/loans/detail', d.loan.loanId]"><strong>{{ d.loan.customerName }}</strong></a>
+                        <div class="sub-text">{{ d.loan.loanAccountNo }}</div>
+                      </td>
+                      <td>
+                        <a [routerLink]="['/collections/daily']" [queryParams]="{ centerId: d.centerId }" class="sub-text">{{ d.centerName }}</a>
+                      </td>
+                      <td class="text-right amount-bdt">{{ d.dueToday ? (d.dueToday | number:'1.0-0') : '—' }}</td>
+                      <td class="text-right amount-bdt" [class.text-danger]="d.overdue > 0">{{ d.overdue ? (d.overdue | number:'1.0-0') : '—' }}</td>
+                      <td class="contact-actions">
+                        @if (d.phone) {
+                          <a class="icon-btn" [href]="'tel:' + d.phone" [attr.aria-label]="'কল করুন ' + d.loan.customerName">
+                            <span class="material-symbols-outlined">call</span>
+                          </a>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (dueCustomers().length > 8) {
+              <button type="button" class="due-more-btn" (click)="showAllDue.set(!showAllDue())">
+                {{ showAllDue() ? 'কম দেখুন' : 'সব দেখুন (' + dueCustomers().length + ' জন)' }}
+              </button>
+            }
+          }
+        </div>
+      </div>
+
       <!-- Overdue follow-up (all roles) -->
       <div class="card">
         <div class="card-header">

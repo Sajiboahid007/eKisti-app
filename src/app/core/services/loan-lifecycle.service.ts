@@ -4,6 +4,7 @@ import { CenterOrSamity, Customer, InstallmentFrequency, InstallmentSchedule, Lo
 import { InterestMethod, LoanSchedule, buildSchedule } from '../finance/schedule';
 import { MEETING_DAY_INDEX, addDaysKey, onOrAfterWeekday, todayDhaka } from '../finance/dates';
 import { normalizeNid } from '../finance/validation';
+import { maxOpenLoansFor } from '../finance/loan-limits';
 import { ACCOUNTS } from '../finance/accounts';
 import { CounterService } from './counter.service';
 import { SettingsService } from './settings.service';
@@ -86,8 +87,11 @@ export class LoanLifecycleService {
     });
   }
 
-  /** ঋণ চক্র, সীমা, চলমান ঋণ ও একাধিক শাখায় ঋণ (NID ওভারল্যাপ) যাচাই */
-  async checkEligibility(customer: Customer, product: LoanProduct | undefined): Promise<LoanEligibility> {
+  /**
+   * ঋণ চক্র, সীমা, চলমান ঋণ ও একাধিক শাখায় ঋণ (NID ওভারল্যাপ) যাচাই।
+   * একজন গ্রাহকের চলমান/প্রক্রিয়াধীন ঋণের সংখ্যা আবেদনকারী কর্মীর পদ অনুযায়ী সীমিত (maxOpenLoansFor)।
+   */
+  async checkEligibility(customer: Customer, product: LoanProduct | undefined, actor: Pick<Actor, 'role' | 'category'>): Promise<LoanEligibility> {
     const blockers: string[] = [];
     const warnings: string[] = [];
     const ownLoans = await this.loansOf(customer.customerId);
@@ -97,8 +101,13 @@ export class LoanLifecycleService {
     if (customer.creditScore === 'RISKY') warnings.push('গ্রাহকের পূর্ববর্তী ঋণে উল্লেখযোগ্য বকেয়া ছিল (ঝুঁকিপূর্ণ)');
 
     const open = ownLoans.filter(l => OPEN_LOAN_STATUSES.includes(l.status));
-    if (open.length > 0 && !product?.allowConcurrentLoans) {
-      blockers.push(`গ্রাহকের ইতোমধ্যে চলমান/প্রক্রিয়াধীন ঋণ আছে (${open.map(l => l.loanAccountNo).join(', ')})`);
+    const maxOpen = maxOpenLoansFor(actor.role, actor.category);
+    if (open.length >= maxOpen) {
+      blockers.push(maxOpen === 1
+        ? `গ্রাহকের ইতোমধ্যে চলমান/প্রক্রিয়াধীন ঋণ আছে (${open.map(l => l.loanAccountNo).join(', ')}) — আপনার পদে একজন গ্রাহককে একটির বেশি ঋণ দেওয়া যায় না`
+        : `গ্রাহকের ইতোমধ্যে ${open.length}টি চলমান/প্রক্রিয়াধীন ঋণ আছে (${open.map(l => l.loanAccountNo).join(', ')}) — একজন গ্রাহককে সর্বোচ্চ ${maxOpen}টি ঋণ দেওয়া যায়`);
+    } else if (open.length > 0) {
+      warnings.push(`গ্রাহকের ${open.length}টি চলমান/প্রক্রিয়াধীন ঋণ আছে (${open.map(l => l.loanAccountNo).join(', ')}) — এটি হবে ${open.length + 1}ম ঋণ (সর্বোচ্চ ${maxOpen}টি)`);
     }
 
     // একই NID দিয়ে অন্য সদস্য হিসেবে ঋণ (একাধিক শাখা / সমিতি)
@@ -130,7 +139,7 @@ export class LoanLifecycleService {
     const productSnap = await getDoc(doc(this.firestore, 'loanProducts', String(input.productId)));
     const product = productSnap.exists() ? (productSnap.data() as LoanProduct) : undefined;
 
-    const elig = await this.checkEligibility(customer, product);
+    const elig = await this.checkEligibility(customer, product, actor);
     if (elig.blockers.length) throw new Error(elig.blockers.join('\n'));
     if (input.principalAmount < elig.minAmount) throw new Error(`সর্বনিম্ন ঋণ ৳${elig.minAmount.toLocaleString('en-IN')}`);
     if (input.principalAmount > elig.ceiling) {

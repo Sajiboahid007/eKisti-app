@@ -292,7 +292,7 @@ export interface LoanProduct extends SoftDeletable {
   interestMethod?: 'FLAT' | 'DECLINING'; // FLAT: মেয়াদের মোট %; DECLINING: বার্ষিক হ্রাসমান %
   graceDays?: number;                    // বিতরণ থেকে প্রথম কিস্তির আগে বিরতি (দিন)
   cycleCeilings?: number[];              // ঋণ চক্র অনুযায়ী সর্বোচ্চ সীমা [১ম, ২য়, ৩য় …]
-  allowConcurrentLoans?: boolean;        // চলমান ঋণ থাকা অবস্থায় নতুন ঋণ
+  allowConcurrentLoans?: boolean;        // অব্যবহৃত — একাধিক ঋণের সীমা এখন পদ অনুযায়ী (finance/loan-limits.ts)
   earlySettlementRebatePercent?: number; // আগাম পরিশোধে ভবিষ্যৎ লাভের কত % মওকুফ
   history: EditHistoryEntry[];
 }

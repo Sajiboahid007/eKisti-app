@@ -8,10 +8,10 @@ import { FinanceService, PaymentMethod } from '../../../core/services/finance.se
 import { CashService } from '../../../core/services/cash.service';
 import { MemberService } from '../../../core/services/member.service';
 import { CollectionView, amountForInstallments, collectionView, describeAllocation, nextOpenAfterPayment, upcomingInstallment } from '../../../core/finance/allocation';
-import { formatBnDate, todayDhaka, toDhakaDayKey } from '../../../core/finance/dates';
+import { addDaysKey, formatBnDate, todayDhaka, toDhakaDayKey } from '../../../core/finance/dates';
 import { AuthStateService, ActiveUserSession } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
-import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
+import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { SettingsService } from '../../../core/services/settings.service';
 
 /**
@@ -61,6 +61,7 @@ export class DailySheetComponent implements OnInit {
   readonly loading = signal<boolean>(true);
 
   readonly today = todayDhaka();
+  readonly tomorrow = addDaysKey(this.today, 1);
   readonly notice = signal<{ kind: 'success' | 'danger'; text: string } | null>(null);
 
   // Quick Collect Modal state
@@ -281,6 +282,7 @@ export class DailySheetComponent implements OnInit {
     if (item.collectedTodayAmount > 0 && !v.hasDue) return { cls: 'badge-paid', label: 'আজ আদায় সম্পন্ন' };
     if (v.overdueCount > 0) return { cls: 'badge-danger', label: `${v.overdueCount}টি বকেয়া` };
     if (v.hasDue) return { cls: 'badge-warning', label: 'আজ দেয়' };
+    if (item.upcoming?.dueDate === this.tomorrow) return { cls: 'badge-info', label: 'আগামীকাল দেয়' };
     return { cls: 'badge-secondary', label: 'আজ দেয় নেই' };
   }
 

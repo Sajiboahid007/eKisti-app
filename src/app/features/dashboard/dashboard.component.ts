@@ -76,6 +76,20 @@ export interface OverdueFollowup {
   guarantorPhone: string;
 }
 
+/** আজ কিস্তি দেয় বা বকেয়া আছে এমন গ্রাহক (ড্যাশবোর্ড তালিকা) */
+export interface DueCustomer {
+  loan: Loan;
+  phone: string;
+  centerId: number;
+  centerName: string;
+  /** আজকের কিস্তির বাকি (আসল + লাভ + সঞ্চয়) */
+  dueToday: number;
+  /** আগের তারিখের জমে থাকা বকেয়া */
+  overdue: number;
+  total: number;
+  isOverdue: boolean;
+}
+
 export interface ProductShare {
   productId: number;
   name: string;
@@ -429,6 +443,43 @@ export class DashboardComponent implements OnInit {
         };
       });
   });
+
+  /**
+   * আজ কিস্তি দেয় (নির্ধারিত তারিখ আজ, এখনো পরিশোধ হয়নি) অথবা বকেয়া আছে এমন গ্রাহক।
+   * বকেয়া আগে, তারপর বেশি টাকা আগে।
+   */
+  readonly dueCustomers = computed<DueCustomer[]>(() => {
+    const customerMap = new Map(this.customers().map(c => [c.customerId, c]));
+    const centerMap = new Map(this.centers().map(c => [c.centerId, c.name]));
+    const loanMap = new Map(this.activeLoans().map(l => [l.loanId, l]));
+    const dueTodayByLoan = new Map<number, number>();
+    for (const i of this.todayInstallments()) {
+      if (isSettledStatus(i.status) || !loanMap.has(i.loanId)) continue;
+      const amount = remainingOf(i).total + Math.max(0, (i.expectedSavings || 0) - (i.paidSavings || 0));
+      dueTodayByLoan.set(i.loanId, (dueTodayByLoan.get(i.loanId) || 0) + amount);
+    }
+    const loanIds = new Set([...dueTodayByLoan.keys(), ...this.atRiskLoans().map(l => l.loanId)]);
+    return [...loanIds].map(id => {
+      const loan = loanMap.get(id)!;
+      const dueToday = dueTodayByLoan.get(id) || 0;
+      const overdue = loan.overdueAmount || 0;
+      return {
+        loan,
+        phone: customerMap.get(loan.customerId)?.phonePrimary || '',
+        centerId: loan.centerId,
+        centerName: centerMap.get(loan.centerId) || `সমিতি #${loan.centerId}`,
+        dueToday, overdue, total: dueToday + overdue,
+        isOverdue: overdue > 0 || (loan.daysPastDue || 0) > 0 || loan.status === 'OVERDUE'
+      };
+    }).sort((a, b) => Number(b.isOverdue) - Number(a.isOverdue) || b.total - a.total);
+  });
+
+  readonly dueCustomersTotal = computed(() => this.sum(this.dueCustomers(), d => d.total));
+  readonly dueCustomersOverdueCount = computed(() => this.dueCustomers().filter(d => d.isOverdue).length);
+  /** তালিকা ছোট রাখতে প্রথমে ৮ জন, "সব দেখুন" চাপলে সবাই */
+  readonly showAllDue = signal<boolean>(false);
+  readonly visibleDueCustomers = computed(() =>
+    this.showAllDue() ? this.dueCustomers() : this.dueCustomers().slice(0, 8));
 
   readonly recentLoans = computed(() => this.loans().slice().sort((a, b) => b.loanId - a.loanId).slice(0, 5));
   readonly recentCollections = computed(() =>

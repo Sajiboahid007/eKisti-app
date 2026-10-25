@@ -20,6 +20,9 @@
       <a routerLink="/collections/daily" [class.active]="isActive('/collections/daily')" class="nav-link highlight-link">
         <span class="material-symbols-outlined nav-icon">payments</span>
         <span class="nav-label">{{ lang.t('navDailySheet') }}</span>
+        @if (notifications.dailyDueCount() > 0) {
+          <span class="nav-count" translate="no" [title]="dueTitle(notifications.dailyDueCount())" [attr.aria-label]="dueTitle(notifications.dailyDueCount())">{{ badgeText(notifications.dailyDueCount()) }}</span>
+        }
   @if (hasSub('/collections/daily')) {
         <span class="nav-toggle" role="button" tabindex="0" [attr.aria-expanded]="isExpanded('/collections/daily')"
               [attr.aria-label]="isExpanded('/collections/daily') ? 'উপ-মেনু বন্ধ করুন' : 'উপ-মেনু খুলুন'"
