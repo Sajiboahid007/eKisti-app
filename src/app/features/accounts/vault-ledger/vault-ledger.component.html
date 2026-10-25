@@ -50,12 +50,21 @@
       <div class="flow-alert info">
         <span class="material-symbols-outlined">info</span>
         <span>এই শাখার ভল্ট খতিয়ান এখনো চালু হয়নি। ভল্টের প্রকৃত নগদ গুনে "প্রারম্ভিক স্থিতি" দিয়ে শুরু করুন।
-          <button class="btn btn-sm btn-primary ms-2" (click)="open('OPENING')">প্রারম্ভিক স্থিতি</button>
+          @if (authService.canOperateVault()) {
+            <button class="btn btn-sm btn-primary ms-2" (click)="open('OPENING')">প্রারম্ভিক স্থিতি</button>
+          }
         </span>
       </div>
     }
 
-    @if (!isAllBranches()) {
+    @if (!isAllBranches() && !authService.canOperateVault()) {
+      <div class="flow-alert info">
+        <span class="material-symbols-outlined">visibility</span>
+        <span>আপনার শুধু দেখার অনুমতি আছে (নিরীক্ষক) — ভল্ট লেনদেন বা দিবস/মাস সমাপনী করা যাবে না।</span>
+      </div>
+    }
+
+    @if (!isAllBranches() && authService.canOperateVault()) {
     <div class="action-row">
       @for (o of operations; track o) {
         <button class="btn btn-secondary" (click)="open(o)" [disabled]="dayClosed()">

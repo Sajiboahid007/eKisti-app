@@ -123,7 +123,7 @@
       </a>
     @if (isExpanded('/reconciliation')) { <ng-container [ngTemplateOutlet]="subNav" [ngTemplateOutletContext]="{ $implicit: '/reconciliation' }" /> }
     }
-    @if (authService.canManageAccounts()) {
+    @if (authService.canAccessVault()) {
       <a routerLink="/accounts" [class.active]="isActive('/accounts')" class="nav-link">
         <span class="material-symbols-outlined nav-icon">account_balance</span>
         <span class="nav-label">{{ lang.isBangla() ? 'ভল্ট, ব্যাংক ও সমাপনী' : 'Vault & Day Closing' }}</span>

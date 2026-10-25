@@ -71,5 +71,6 @@ export function balancedLines(lines: JournalLine[]): JournalLine[] {
 
 /** নগদ নাকি ডিজিটাল আদায়ের খাত */
 export function collectionCashAccount(method: string): string {
+  if (method === 'SAVINGS') return ACCOUNTS.MEMBER_SAVINGS; // সঞ্চয় হতে কিস্তি সমন্বয় — নগদ নয়
   return method === 'CASH' ? ACCOUNTS.CASH_IN_FIELD : ACCOUNTS.MOBILE_CLEARING;
 }

@@ -171,6 +171,12 @@
                     } @else {
                       <span class="text-success sub-text">সব কিস্তি পরিশোধিত</span>
                     }
+                    @if (canPayFromSavings(item)) {
+                      <button class="btn btn-sm btn-savings-only btn-from-savings" (click)="openSavPayModal(item)"
+                              [title]="'গ্রাহক টাকা দিতে না পারলে সঞ্চয় থেকে কিস্তি পরিশোধ (সঞ্চয় ৳' + (savingsOf(item) | number) + ')'">
+                        <span class="material-symbols-outlined">account_balance_wallet</span>
+                      </button>
+                    }
                     <button class="btn btn-sm btn-secondary btn-savings-only" (click)="openSavingsModal(item)" title="শুধু সঞ্চয় জমা (কিস্তি ছাড়া)">
                       <span class="material-symbols-outlined">savings</span>
                     </button>
@@ -328,6 +334,88 @@
         <button class="btn btn-success" (click)="confirmSavingsDeposit()" [disabled]="savingsBusy() || savingsAmount() <= 0">
           <span class="material-symbols-outlined">receipt_long</span>
           <span>{{ savingsBusy() ? 'সংরক্ষণ হচ্ছে...' : 'জমা ও রসিদ' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- সঞ্চয় থেকে কিস্তি পরিশোধ (গ্রাহক টাকা দিতে না পারলে) -->
+@if (savPayItem(); as sp) {
+  <div class="modal-backdrop" (click)="closeSavPayModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="header-title">
+          <span class="material-symbols-outlined text-primary">account_balance_wallet</span>
+          <h3>সঞ্চয় থেকে কিস্তি পরিশোধ</h3>
+        </div>
+        <button class="close-btn" (click)="closeSavPayModal()" [disabled]="savPayBusy()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="member-header-box mb-3">
+          <div>সদস্য: <strong>{{ sp.loan.customerName }}</strong> (#{{ sp.loan.customerId }}) • {{ sp.loan.loanAccountNo }}</div>
+          <div class="savpay-balances">
+            <span>সঞ্চয় স্থিতি <strong>৳{{ savingsOf(sp) | number }}</strong></span>
+            <span>আজ পর্যন্ত দেয় <strong>৳{{ sp.view.dueAmount | number }}</strong> ({{ sp.view.dueInstallments.length }} কিস্তি)</span>
+            <span>সর্বোচ্চ কাটা যাবে <strong>৳{{ savPayMax(sp) | number }}</strong></span>
+          </div>
+          <div class="sub-text">গ্রাহকের হাতে টাকা না থাকলে তার সঞ্চয় থেকে কিস্তি পরিশোধ হবে। কোনো নগদ লেনদেন নেই — ক্যাশিয়ারকে কিছু জমা দিতে হবে না। শুধু আজ পর্যন্ত দেয় কিস্তি (অগ্রিম নয়)।</div>
+        </div>
+
+        @if (savPayPicks().length) {
+          <div class="quick-picks">
+            @for (p of savPayPicks(); track p.n) {
+              <button type="button" class="pick-chip" [class.active]="savPayCount() === p.n" (click)="pickSavPay(p.n, p.amount)">
+                <span class="pick-label">{{ p.label }}</span>
+                <span class="pick-amt">৳{{ p.amount | number }}</span>
+              </button>
+            }
+          </div>
+        } @else {
+          <div class="flow-alert"><span class="material-symbols-outlined">info</span><span>সঞ্চয়ে একটি পূর্ণ কিস্তিও হয় না — যতটুকু আছে ততটুকু আংশিক পরিশোধ করা যাবে।</span></div>
+        }
+
+        <div class="form-grid-modal">
+          <div class="form-group span-2">
+            <label>সঞ্চয় থেকে কাটা হবে (কিস্তির আসল + লাভ) *</label>
+            <input type="number" class="form-control" min="1" [max]="savPayMax(sp)" [ngModel]="savPayAmount()" (ngModelChange)="setSavPayAmount(+$event)" name="savPayAmount" />
+          </div>
+          <div class="form-group span-2">
+            <label>কারণ *</label>
+            <input class="form-control" [ngModel]="savPayReason()" (ngModelChange)="savPayReason.set($event)" name="savPayReason" placeholder="যেমন: গ্রাহকের হাতে এ সপ্তাহে টাকা নেই" />
+          </div>
+        </div>
+
+        @if (savPayPreview().length) {
+          <div class="alloc-preview">
+            <span class="alloc-title">এই টাকায় পরিশোধ হবে:</span>
+            @for (a of savPayPreview(); track a.installmentNo) {
+              <span class="alloc-chip" [class.partial]="!a.full">#{{ a.installmentNo }} {{ a.full ? 'পূর্ণ' : 'আংশিক' }} ৳{{ a.amount | number }}</span>
+            }
+          </div>
+        }
+
+        <label class="advance-check">
+          <input type="checkbox" [checked]="savPayConsent()" (change)="savPayConsent.set(!savPayConsent())" />
+          গ্রাহক নিজে সম্মতি দিয়েছেন যে তার সঞ্চয় থেকে কিস্তির টাকা কাটা হবে
+        </label>
+
+        <div class="total-collection-preview">
+          <span>সমন্বয়ের পর সঞ্চয় বাকি:</span>
+          <span class="total-val">৳ {{ (savingsOf(sp) - (savPayAmount() || 0)) | number }}</span>
+        </div>
+
+        @if (savPayError() || (savPayValidation() && savPayAmount() > 0 && savPayConsent())) {
+          <div class="flow-alert danger"><span class="material-symbols-outlined">error</span><span>{{ savPayError() || savPayValidation() }}</span></div>
+        }
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeSavPayModal()" [disabled]="savPayBusy()">বাতিল</button>
+        <button class="btn btn-primary" (click)="confirmSavPay()" [disabled]="savPayBusy() || !!savPayValidation()" [title]="savPayValidation()">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>{{ savPayBusy() ? 'প্রসেসিং হচ্ছে...' : 'সঞ্চয় থেকে পরিশোধ ও রসিদ' }}</span>
         </button>
       </div>
     </div>

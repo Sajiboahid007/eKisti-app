@@ -86,7 +86,7 @@ export const routes: Routes = [
   },
   {
     path: 'accounts',
-    canActivate: [permissionGuard('canManageAccounts')],
+    canActivate: [permissionGuard('canAccessVault')],
     loadComponent: () => import('./features/accounts/vault-ledger/vault-ledger.component').then(m => m.VaultLedgerComponent)
   },
   {

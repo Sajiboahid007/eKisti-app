@@ -175,7 +175,7 @@ export class LoanDetailComponent implements OnInit {
   }
 
   methodLabel(m: PaymentCollection['paymentMethod']): string {
-    return ({ CASH: 'নগদ', BKASH: 'বিকাশ', NAGAD: 'নগদ (মোবাইল)', BANK: 'ব্যাংক' } as Record<string, string>)[m] || m;
+    return ({ CASH: 'নগদ', BKASH: 'বিকাশ', NAGAD: 'নগদ (মোবাইল)', BANK: 'ব্যাংক', SAVINGS: 'সঞ্চয় হতে' } as Record<string, string>)[m] || m;
   }
 
   txnLabel(type: LoanTransaction['type']): string {

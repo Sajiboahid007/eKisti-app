@@ -201,7 +201,7 @@ export class VaultLedgerComponent implements OnInit {
 
   private actor() {
     const u = this.authService.currentUser();
-    return { userId: u.userId, name: u.name, role: u.role };
+    return { userId: u.userId, name: u.name, role: u.role, category: u.category };
   }
 
   async submit() {

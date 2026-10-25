@@ -724,3 +724,19 @@
   color: #1e40af;
   border: 1px solid #bfdbfe;
 }
+
+/* সঞ্চয় থেকে কিস্তি */
+.btn-from-savings {
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+  &:hover { background: #e0e7ff; }
+}
+
+.savpay-balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+}

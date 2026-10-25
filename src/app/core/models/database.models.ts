@@ -463,7 +463,8 @@ export interface PaymentCollection extends SoftDeletable {
   fineAmountCollected: number;    // বকেয়া জরিমানা (যদি থাকে)
   totalAmountCollected: number;   // মোট আদায়
   
-  paymentMethod: 'CASH' | 'BKASH' | 'NAGAD' | 'BANK';
+  /** SAVINGS = গ্রাহকের সঞ্চয় হতে কিস্তি সমন্বয় (নগদ লেনদেন নেই, ক্যাশ ক্লোজিংয়ে আসে না) */
+  paymentMethod: 'CASH' | 'BKASH' | 'NAGAD' | 'BANK' | 'SAVINGS';
   trxId?: string;                 // মোবাইল ব্যাংকিং TrxID (বিকাশ/নগদ হলে)
   collectionDate: string;         // তারিখ ও সময়
   
@@ -569,7 +570,7 @@ export interface SavingsTransaction extends SoftDeletable {
   isCredit: boolean;              // true if deposit (+), false if withdraw (-)
   previousBalance: number;        // পূর্বে কত ছিল
   newBalance: number;             // লেনদেনের পর বর্তমান স্থিতি
-  paymentMethod: 'CASH' | 'BKASH' | 'NAGAD' | 'BANK';
+  paymentMethod: 'CASH' | 'BKASH' | 'NAGAD' | 'BANK' | 'SAVINGS';
   transactionDate: string;        // ISO timestamp
   performedByUserId: number;
   performedByName: string;

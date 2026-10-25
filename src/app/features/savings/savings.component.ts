@@ -188,12 +188,16 @@ export class SavingsComponent implements OnInit {
 
   async ngOnInit() {
     try {
-      const [customers, branches, centers, general] = await Promise.all([
+      // সব একসাথে (একটি রাউন্ড-ট্রিপ) — আগে লেনদেন আলাদা করে পরে আনা হতো
+      this.loadingTxns.set(true);
+      const [customers, branches, centers, general, txns] = await Promise.all([
         this.kisti.getCustomers(),
         this.kisti.getBranches(),
         this.kisti.getCenters(),
-        this.settings.getGeneralSettings()
+        this.settings.getGeneralSettings(),
+        this.cash.savingsTransactionsBetween(this.from(), this.to())
       ]);
+      this.transactions.set(txns);
       this.customers.set(customers);
       this.branches.set(branches.filter(b => this.authService.canAccessBranch(b.branchId)));
       this.centers.set(centers.filter(c => this.authService.canAccessBranch(c.branchId)));
@@ -201,11 +205,11 @@ export class SavingsComponent implements OnInit {
       this.withdrawLock.set(!!general.lockSavingsWithdrawalWithActiveLoan);
       const own = this.authService.currentUser().branchId;
       if (this.branches().some(b => b.branchId === own)) this.branchId.set(own);
-      await this.loadTransactions();
     } catch (err: any) {
       this.notice.set({ kind: 'danger', text: err?.message || 'সঞ্চয়ের তথ্য লোড করা যায়নি' });
     } finally {
       this.loading.set(false);
+      this.loadingTxns.set(false);
     }
   }
 

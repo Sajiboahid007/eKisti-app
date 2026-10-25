@@ -9,11 +9,12 @@ import { KistiDatabaseService } from '../../../core/services/kisti-database.serv
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { SettingsService } from '../../../core/services/settings.service';
+import { QrCodeComponent } from '../../../shared/components/qr-code/qr-code.component';
 
 @Component({
   selector: 'app-user-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, SkeletonComponent],
+  imports: [CommonModule, RouterModule, FormsModule, SkeletonComponent, QrCodeComponent],
   templateUrl: './user-list.component.html',
   styleUrl: './user-list.component.scss'
 })
@@ -79,6 +80,27 @@ export class UserListComponent implements OnInit {
 
   showIdCardModal = signal<boolean>(false);
   selectedStaffForCard = signal<UserStaff | null>(null);
+
+  /**
+   * আইডি কার্ডের QR — স্ক্যান করলে কর্মীর পরিচয় টেক্সট হিসেবে দেখায় (ইন্টারনেট/লগইন লাগে না)।
+   * NID ইচ্ছাকৃতভাবে রাখা হয়নি — QR থেকে সহজে কপি হয়ে ছড়াতে পারে।
+   */
+  readonly staffQrData = computed(() => {
+    const s = this.selectedStaffForCard();
+    if (!s) return '';
+    const org = this.org();
+    return [
+      org.nameBn,
+      'কর্মী পরিচয়পত্র (Staff ID)',
+      `আইডি: #${s.userId}`,
+      `নাম: ${s.name}`,
+      `পদবী: ${this.getRoleTitle(s.role)}`,
+      `কর্মস্থল: ${s.branchId ? this.getBranchName(s.branchId) : (s.branchName || 'প্রধান কার্যালয়')}`,
+      s.phone ? `মোবাইল: ${s.phone}` : '',
+      s.joinedDate ? `যোগদান: ${s.joinedDate}` : '',
+      org.hotline ? `যাচাই: হটলাইন ${org.hotline}` : ''
+    ].filter(Boolean).join('\n');
+  });
 
   showEditModal = signal<boolean>(false);
   selectedStaffForEdit = signal<UserStaff | null>(null);

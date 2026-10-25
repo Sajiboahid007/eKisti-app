@@ -664,24 +664,30 @@ export class KistiDatabaseService {
   // 6. ROUTE / VILLAGE / SAMITY OPERATIONS (রুট, গ্রাম ও সমিতি তৈরি ও পরিচালনা)
   // ==========================================
 
+  /**
+   * সমিতির তালিকা প্রায় সব পেজে লাগে কিন্তু কদাচিৎ বদলায় — মেমরিতে ২ মিনিট রাখা হয়,
+   * প্রতিটি পেজ বদলে আবার সার্ভারে যেতে হয় না (ধীর নেটওয়ার্কে প্রতি রাউন্ড-ট্রিপ ~০.৫–১ সেকেন্ড)।
+   * এই সার্ভিস দিয়ে সমিতি তৈরি/সম্পাদনা/মুছলে ক্যাশ সাথে সাথে বাতিল হয়।
+   */
+  private centersCache: { at: number; promise: Promise<CenterOrSamity[]> } | null = null;
+  private static readonly CENTERS_TTL_MS = 2 * 60 * 1000;
+
+  private invalidateCenters() {
+    this.centersCache = null;
+  }
+
   async getCenters(branchId?: number): Promise<CenterOrSamity[]> {
+    const fresh = this.centersCache && Date.now() - this.centersCache.at < KistiDatabaseService.CENTERS_TTL_MS;
+    if (!fresh) {
+      const promise = getDocs(collection(this.firestore, 'centers')).then(snap =>
+        snap.docs.map(d => d.data() as CenterOrSamity).filter(c => !c.isDeleted).sort((a, b) => a.centerId - b.centerId));
+      this.centersCache = { at: Date.now(), promise };
+      // ব্যর্থ হলে ক্যাশে রাখা হবে না — পরের বার আবার চেষ্টা
+      promise.catch(() => { if (this.centersCache?.promise === promise) this.centersCache = null; });
+    }
     try {
-      const snap = await getDocs(collection(this.firestore, 'centers'));
-      let list: CenterOrSamity[] = [];
-      snap.forEach(d => {
-        const c = d.data() as CenterOrSamity;
-        if (!c.isDeleted) {
-          list.push(c);
-        }
-      });
-
-      
-
-      if (branchId) {
-        list = list.filter(c => c.branchId === branchId);
-      }
-
-      return list.sort((a, b) => a.centerId - b.centerId);
+      const list = await this.centersCache!.promise;
+      return branchId ? list.filter(c => c.branchId === branchId) : [...list];
     } catch (err) {
       console.error('Error fetching centers:', err);
       return [];
@@ -722,6 +728,7 @@ export class KistiDatabaseService {
 
     const docRef = doc(this.firestore, 'centers', centerId.toString());
     await setDoc(docRef, newCenter);
+    this.invalidateCenters();
     return newCenter;
   }
 
@@ -750,6 +757,7 @@ export class KistiDatabaseService {
   ): Promise<void> {
     const before = (await getDoc(doc(this.firestore, 'centers', centerId.toString()))).data() as CenterOrSamity | undefined;
     await this.editRecord('centers', centerId, updatedFields, changedByUser, reason);
+    this.invalidateCenters();
     // কোন মাঠকর্মী কোন সমিতির দায়িত্বে কবে থেকে — পুরাতন আদায়/ঘাটতি সঠিক ব্যক্তির নামে রাখতে
     if (before && updatedFields.fieldOfficerUserId !== undefined && Number(updatedFields.fieldOfficerUserId) !== Number(before.fieldOfficerUserId)) {
       await this.recordStaffAssignment({
@@ -775,6 +783,7 @@ export class KistiDatabaseService {
     reason: string = 'রুট/সমিতি মুছে ফেলা'
   ): Promise<void> {
     await this.softDeleteRecord('centers', centerId, deletedByUser, reason);
+    this.invalidateCenters();
   }
 
   // ==========================================

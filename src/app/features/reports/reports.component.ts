@@ -39,6 +39,8 @@ export interface CollectionAgg {
   total: number;
   cash: number;
   digital: number;
+  /** গ্রাহকের সঞ্চয় হতে কিস্তি সমন্বয় — নগদ নয়, জমা দেওয়া/বাকিতে ধরা হয় না */
+  fromSavings: number;
   handedOver: number;
   pending: number;
 }
@@ -437,7 +439,7 @@ export class ReportsComponent implements OnInit {
       const key = Number(keyOf(r)) || 0;
       let a = map.get(key);
       if (!a) {
-        a = { key, name: nameOf(key, r), count: 0, kisti: 0, savings: 0, total: 0, cash: 0, digital: 0, handedOver: 0, pending: 0 };
+        a = { key, name: nameOf(key, r), count: 0, kisti: 0, savings: 0, total: 0, cash: 0, digital: 0, fromSavings: 0, handedOver: 0, pending: 0 };
         map.set(key, a);
       }
       const total = r.totalAmountCollected || 0;
@@ -445,6 +447,7 @@ export class ReportsComponent implements OnInit {
       a.kisti += (r.principalAmountCollected || 0) + (r.profitAmountCollected || 0);
       a.savings += r.savingsAmountCollected || 0;
       a.total += total;
+      if (r.paymentMethod === 'SAVINGS') { a.fromSavings += total; continue; }
       if (r.paymentMethod === 'CASH') a.cash += total; else a.digital += total;
       if (r.isHandedOverToBranch) a.handedOver += total; else a.pending += total;
     }
@@ -452,10 +455,10 @@ export class ReportsComponent implements OnInit {
   }
 
   private sumAgg(rows: CollectionAgg[]): CollectionAgg {
-    const t: CollectionAgg = { key: 0, name: 'মোট', count: 0, kisti: 0, savings: 0, total: 0, cash: 0, digital: 0, handedOver: 0, pending: 0 };
+    const t: CollectionAgg = { key: 0, name: 'মোট', count: 0, kisti: 0, savings: 0, total: 0, cash: 0, digital: 0, fromSavings: 0, handedOver: 0, pending: 0 };
     for (const r of rows) {
       t.count += r.count; t.kisti += r.kisti; t.savings += r.savings; t.total += r.total;
-      t.cash += r.cash; t.digital += r.digital; t.handedOver += r.handedOver; t.pending += r.pending;
+      t.cash += r.cash; t.digital += r.digital; t.fromSavings += r.fromSavings; t.handedOver += r.handedOver; t.pending += r.pending;
     }
     return t;
   }
@@ -486,8 +489,8 @@ export class ReportsComponent implements OnInit {
     const t = this.tab();
     const branch = this.selectedBranch()?.branchCode || 'ALL';
     const file = (name: string) => `${name}_${branch}_${this.periodLabel().replace(/[^0-9A-Za-z-]+/g, '_')}.csv`;
-    const aggRows = (rows: CollectionAgg[]) => rows.map(r => [r.name, r.count, r.kisti, r.savings, r.total, r.cash, r.digital, r.handedOver, r.pending]);
-    const aggHead = ['নাম', 'রসিদ', 'কিস্তি (আসল+লাভ)', 'সঞ্চয়', 'মোট', 'নগদ', 'ডিজিটাল', 'জমা দেওয়া', 'জমা বাকি'];
+    const aggRows = (rows: CollectionAgg[]) => rows.map(r => [r.name, r.count, r.kisti, r.savings, r.total, r.cash, r.digital, r.fromSavings, r.handedOver, r.pending]);
+    const aggHead = ['নাম', 'রসিদ', 'কিস্তি (আসল+লাভ)', 'সঞ্চয়', 'মোট', 'নগদ', 'ডিজিটাল', 'সঞ্চয় হতে', 'জমা দেওয়া', 'জমা বাকি'];
 
     switch (t) {
       case 'DAILY': {

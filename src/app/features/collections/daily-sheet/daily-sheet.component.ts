@@ -83,6 +83,15 @@ export class DailySheetComponent implements OnInit {
   readonly savingsBusy = signal<boolean>(false);
   readonly savingsError = signal<string>('');
 
+  // সঞ্চয় থেকে কিস্তি পরিশোধ — গ্রাহক টাকা দিতে না পারলে (নগদ নেই, সঞ্চয় স্থিতি কমে)
+  readonly savPayItem = signal<DailySheetItem | null>(null);
+  readonly savPayAmount = signal<number>(0);
+  readonly savPayCount = signal<number>(1);
+  readonly savPayReason = signal<string>('');
+  readonly savPayConsent = signal<boolean>(false);
+  readonly savPayBusy = signal<boolean>(false);
+  readonly savPayError = signal<string>('');
+
   readonly present = signal<Set<number>>(new Set());
   readonly attendanceSaved = signal<boolean>(false);
   readonly printing = signal<boolean>(false);
@@ -428,6 +437,103 @@ export class DailySheetComponent implements OnInit {
       this.savingsError.set(err?.message || 'সঞ্চয় জমা করা যায়নি');
     } finally {
       this.savingsBusy.set(false);
+    }
+  }
+
+  // ---------- সঞ্চয় থেকে কিস্তি ----------
+
+  /** গ্রাহকের সঞ্চয় স্থিতি */
+  savingsOf(item: DailySheetItem): number {
+    return item.customer?.totalSavingsBalance || 0;
+  }
+
+  /** সঞ্চয় থেকে সর্বোচ্চ যত কিস্তির টাকা কাটা যায় — আজ পর্যন্ত দেয় ও সঞ্চয় স্থিতির কম যেটি */
+  savPayMax(item: DailySheetItem): number {
+    return Math.max(0, Math.min(item.view.dueAmount, this.savingsOf(item)));
+  }
+
+  canPayFromSavings(item: DailySheetItem): boolean {
+    return item.view.hasDue && this.savPayMax(item) > 0;
+  }
+
+  openSavPayModal(item: DailySheetItem) {
+    this.savPayItem.set(item);
+    this.savPayReason.set('');
+    this.savPayConsent.set(false);
+    this.savPayError.set('');
+    // প্রথম দেয় কিস্তি সঞ্চয়ে কুলালে সেটি, না হলে সঞ্চয়ে যতটুকু হয়
+    const first = this.savPayPicks()[0];
+    if (first) this.pickSavPay(first.n, first.amount); else this.setSavPayAmount(this.savPayMax(item));
+  }
+
+  closeSavPayModal() {
+    if (!this.savPayBusy()) this.savPayItem.set(null);
+  }
+
+  /** সঞ্চয়ে কুলায় এমন দ্রুত নির্বাচন: ১টি, ২টি … আজ পর্যন্ত সব দেয় কিস্তি */
+  readonly savPayPicks = computed(() => {
+    const item = this.savPayItem();
+    if (!item) return [];
+    const max = this.savPayMax(item);
+    const due = item.view.dueInstallments.length;
+    const picks: { n: number; label: string; amount: number }[] = [];
+    for (let n = 1; n <= due; n++) {
+      const p = amountForInstallments(item.installments, n);
+      if (p.count < n || p.amount > max) break;
+      if (n <= 3 || n === due) picks.push({ n, label: n === due && due > 1 ? `সব দেয় (${this.bn(n)}টি)` : `${this.bn(n)}টি কিস্তি`, amount: p.amount });
+    }
+    return picks;
+  });
+
+  pickSavPay(n: number, amount: number) {
+    this.savPayCount.set(n);
+    this.savPayAmount.set(amount);
+  }
+
+  setSavPayAmount(value: number) {
+    this.savPayAmount.set(Math.max(0, Number(value) || 0));
+    this.savPayCount.set(-1);
+  }
+
+  /** এই টাকায় কোন কিস্তি পূর্ণ / আংশিক হবে */
+  readonly savPayPreview = computed(() => {
+    const item = this.savPayItem();
+    return item ? describeAllocation(item.installments, Number(this.savPayAmount()) || 0, this.today) : [];
+  });
+
+  readonly savPayValidation = computed(() => {
+    const item = this.savPayItem();
+    if (!item) return '';
+    const amount = Number(this.savPayAmount()) || 0;
+    if (amount <= 0) return 'সমন্বয়ের পরিমাণ দিন';
+    if (amount > this.savingsOf(item)) return `সঞ্চয় স্থিতি ৳${this.savingsOf(item).toLocaleString('en-IN')} — এর বেশি কাটা যাবে না`;
+    if (amount > item.view.dueAmount) return `আজ পর্যন্ত দেয় ৳${item.view.dueAmount.toLocaleString('en-IN')} — অগ্রিম কিস্তি সঞ্চয় থেকে কাটা যায় না`;
+    if (!this.savPayReason().trim()) return 'কারণ লেখা বাধ্যতামূলক (যেমন: গ্রাহকের হাতে টাকা নেই)';
+    if (!this.savPayConsent()) return 'গ্রাহকের সম্মতি নিশ্চিত করুন';
+    return '';
+  });
+
+  async confirmSavPay() {
+    const item = this.savPayItem();
+    if (!item || this.savPayValidation() || this.savPayBusy()) return;
+    const u = this.authService.currentUser();
+    const amount = Number(this.savPayAmount()) || 0;
+    this.savPayBusy.set(true);
+    this.savPayError.set('');
+    try {
+      const receipt = await this.finance.collectFromSavings({
+        loanId: item.loan.loanId,
+        loanAmount: amount,
+        reason: `${this.savPayReason().trim()} (সমিতি ${this.centerName()})`
+      }, { userId: u.userId, name: u.name, role: u.role });
+      this.savPayItem.set(null);
+      const left = Math.round((this.savingsOf(item) - receipt.totalAmountCollected) * 100) / 100;
+      this.notice.set({ kind: 'success', text: `রসিদ #${receipt.receiptId}: ${item.loan.customerName}-এর সঞ্চয় থেকে ৳${receipt.totalAmountCollected.toLocaleString('en-IN')} কেটে কিস্তি পরিশোধ হয়েছে (সঞ্চয় বাকি ৳${left.toLocaleString('en-IN')}) — হাতে নগদ নেই, ক্যাশিয়ারকে কিছু জমা দিতে হবে না` });
+      await this.loadSheetData();
+    } catch (err: any) {
+      this.savPayError.set(err?.message || 'সঞ্চয় থেকে কিস্তি পরিশোধ করা যায়নি');
+    } finally {
+      this.savPayBusy.set(false);
     }
   }
 

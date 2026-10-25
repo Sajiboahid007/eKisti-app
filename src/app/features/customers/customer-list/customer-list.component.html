@@ -1065,7 +1065,7 @@
 
           <div class="id-security-section">
             <div class="qr-mock-box">
-              <span class="material-symbols-outlined qr-icon">qr_code_2</span>
+              <app-qr-code [data]="customerQrData()" [size]="64" [alt]="'QR: ' + selectedCustomerForCard()!.fullName" />
               <span class="qr-caption">Passbook Verification</span>
             </div>
             <div class="signature-box">

@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Firestore, collection, getDocs } from '@angular/fire/firestore';
 import { StaffRole, UserStaff, Role, UserCategory } from '../models/database.models';
 import { LOAN_APPROVE_ROLES, LOAN_DISBURSE_ROLES, LOAN_VERIFY_ROLES } from './loan-lifecycle.service';
+import { canAccessVaultFor, canOperateVaultFor } from '../guards/vault-access';
 
 export interface ActiveUserSession {
   userId: number;
@@ -259,6 +260,10 @@ export class AuthStateService {
 
   // হিসাব, ভল্ট ও সমাপনী
   readonly canManageAccounts = computed(() => ['CASHIER', 'BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN'].includes(this.currentUser().role));
+  /** ভল্ট, ব্যাংক, খরচ ও দিবস/মাস সমাপনী — সুপার অ্যাডমিন, অ্যাডমিন, হেড অফিস, BM, ক্যাশিয়ার */
+  readonly canAccessVault = computed(() => canAccessVaultFor(this.currentUser().role, this.currentUser().category));
+  /** ভল্টে লেনদেন ও সমাপনী — উপরের সবাই, তবে নিরীক্ষক (শুধু দেখা) বাদে */
+  readonly canOperateVault = computed(() => canOperateVaultFor(this.currentUser().role, this.currentUser().category));
   readonly canReopenDay = computed(() => ['SUPER_ADMIN', 'ADMIN', 'MANAGING_DIRECTOR'].includes(this.currentUser().role));
   readonly canReverseReceipt = computed(() => ['BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER'].includes(this.currentUser().role));
 

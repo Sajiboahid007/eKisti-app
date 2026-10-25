@@ -71,7 +71,8 @@ export class ReceiptListComponent implements OnInit {
     { value: 'CASH', label: 'নগদ (Cash)' },
     { value: 'BKASH', label: 'বিকাশ' },
     { value: 'NAGAD', label: 'নগদ (Nagad)' },
-    { value: 'BANK', label: 'ব্যাংক' }
+    { value: 'BANK', label: 'ব্যাংক' },
+    { value: 'SAVINGS', label: 'সঞ্চয় হতে' }
   ];
 
   /** ভূমিকা অনুযায়ী যে রসিদগুলো দেখার অনুমতি আছে */

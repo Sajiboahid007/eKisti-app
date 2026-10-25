@@ -1049,9 +1049,7 @@
             <!-- Security & Verification Barcode -->
             <div class="id-security-section">
               <div class="qr-mock-box">
-                <div class="qr-pixel-grid">
-                  <span class="material-symbols-outlined qr-icon">qr_code_2</span>
-                </div>
+                <app-qr-code [data]="staffQrData()" [size]="64" [alt]="'QR: ' + selectedStaffForCard()!.name" />
                 <span class="qr-caption">Verification Pass</span>
               </div>
               <div class="signature-box">

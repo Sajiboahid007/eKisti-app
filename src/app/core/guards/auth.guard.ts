@@ -28,7 +28,7 @@ export const superAdminGuard: CanActivateFn = (route, state) => {
 /** যেসব অনুমতি রুটে যাচাই করা যায় (AuthStateService-এর computed সিগন্যাল) */
 export type RoutePermission =
   | 'canCollectKisti' | 'canVerifyCash' | 'canApplyLoan' | 'canSeeLoanPipeline' | 'canDisburseLoan'
-  | 'canManageAccounts' | 'canManageSettings' | 'canManageBranches' | 'isFieldOfficer' | 'canViewReports';
+  | 'canManageAccounts' | 'canAccessVault' | 'canManageSettings' | 'canManageBranches' | 'isFieldOfficer' | 'canViewReports';
 
 /**
  * ভূমিকা-ভিত্তিক রুট গার্ড — যেকোনো একটি অনুমতি থাকলেই প্রবেশ।

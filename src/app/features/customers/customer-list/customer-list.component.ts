@@ -13,6 +13,7 @@ import { CustomerApplicationFormComponent } from '../customer-application-form/c
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { SettingsService } from '../../../core/services/settings.service';
+import { QrCodeComponent } from '../../../shared/components/qr-code/qr-code.component';
 
 /** বিতরণ হয়ে চলমান ঋণ (বাকি হিসাবে ধরা হয়) */
 const RUNNING_LOAN_STATUSES: LoanStatus[] = ['DISBURSED', 'OVERDUE'];
@@ -30,7 +31,7 @@ export interface CustomerPrintOptions {
 @Component({
   selector: 'app-customer-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, CustomerApplicationFormComponent, SkeletonComponent],
+  imports: [CommonModule, RouterModule, FormsModule, HistoryModalComponent, CustomerApplicationFormComponent, SkeletonComponent, QrCodeComponent],
   templateUrl: './customer-list.component.html',
   styleUrl: './customer-list.component.scss'
 })
@@ -84,6 +85,29 @@ export class CustomerListComponent implements OnInit {
   // ID Card modal state
   showIdCardModal = signal<boolean>(false);
   selectedCustomerForCard = signal<Customer | null>(null);
+
+  /**
+   * সদস্য কার্ডের QR — স্ক্যান করলে সদস্যের পরিচয় টেক্সট হিসেবে দেখায় (ইন্টারনেট/লগইন লাগে না)।
+   * NID ইচ্ছাকৃতভাবে রাখা হয়নি — QR থেকে সহজে কপি হয়ে ছড়াতে পারে।
+   */
+  readonly customerQrData = computed(() => {
+    const c = this.selectedCustomerForCard();
+    if (!c) return '';
+    const org = this.org();
+    const guardian = c.spouseName ? `স্বামী/স্ত্রী: ${c.spouseName}` : (c.fatherName ? `পিতা: ${c.fatherName}` : '');
+    return [
+      org.nameBn,
+      'সদস্য কার্ড (Member ID)',
+      `সদস্য আইডি: #${c.customerId} (${c.customerCode})`,
+      `নাম: ${c.fullName}`,
+      guardian,
+      `সমিতি: ${this.getCenterName(c.centerId)}`,
+      `শাখা: ${this.getBranchName(c.branchId)}`,
+      c.phonePrimary ? `মোবাইল: ${c.phonePrimary}` : '',
+      c.createdAt ? `ভর্তি: ${c.createdAt.slice(0, 10)}` : '',
+      org.hotline ? `যাচাই: হটলাইন ${org.hotline}` : ''
+    ].filter(Boolean).join('\n');
+  });
 
   // Disclose / Close Account modal state
   showDiscloseModal = signal<boolean>(false);

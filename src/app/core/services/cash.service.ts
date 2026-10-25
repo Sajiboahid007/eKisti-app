@@ -17,6 +17,7 @@ import {
   VaultTransaction
 } from '../models/database.models';
 import { ACCOUNTS, collectionCashAccount } from '../finance/accounts';
+import { VAULT_ACCESS_DENIED, canOperateVaultFor } from '../guards/vault-access';
 import { receiptTypeOf } from '../finance/field-cash';
 import { addDaysKey, monthKeyDhaka, todayDhaka, toDhakaDayKey } from '../finance/dates';
 import { portfolioQuality, recoveryRates } from '../finance/classification';
@@ -185,6 +186,7 @@ export class CashService {
     expenseHead?: string;
     paidTo?: string;
   }, actor: Actor): Promise<VaultTransaction> {
+    this.assertVaultAccess(actor);
     const amount = round2(params.amount);
     if (!(amount > 0)) throw new Error('সঠিক পরিমাণ দিন');
     if (params.operation === 'EXPENSE' && !params.expenseHead) throw new Error('খরচের খাত নির্বাচন করুন');
@@ -271,6 +273,7 @@ export class CashService {
   }, actor: Actor): Promise<SavingsTransaction> {
     const amount = round2(params.amount);
     if (!(amount > 0)) throw new Error('সঠিক পরিমাণ দিন');
+    if (params.paymentMethod === 'SAVINGS') throw new Error('সঞ্চয় হতে কিস্তি সমন্বয় "সঞ্চয় থেকে কিস্তি" অপশন দিয়ে করুন');
     const general = await this.settings.getGeneralSettings();
     const channel = params.channel || (params.type === 'DEPOSIT' ? defaultChannel(actor) : 'COUNTER');
     const fieldDeposit = channel === 'FIELD' && params.type === 'DEPOSIT';
@@ -413,6 +416,7 @@ export class CashService {
    * মাঝপথে বন্ধ হলে পুনরায় চালালে দ্বিগুণ জমা না হয়।
    */
   async postSavingsInterest(branchId: number, month: string, actor: Actor, onProgress?: (done: number, total: number) => void): Promise<{ posted: number; totalInterest: number }> {
+    this.assertVaultAccess(actor);
     const general = await this.settings.getGeneralSettings(true);
     const rate = Number(general.savingsInterestAnnualPercent) || 0;
     if (rate <= 0) throw new Error('সাধারণ সেটিংসে সঞ্চয়ের বার্ষিক মুনাফার হার নির্ধারণ করুন');
@@ -444,6 +448,11 @@ export class CashService {
   // ৪. দিবস সমাপনী ও মাস সমাপনী
   // =====================================================================
 
+  /** ভল্ট/সমাপনী লেনদেনের অনুমতি — সুপার অ্যাডমিন, অ্যাডমিন, হেড অফিস, BM, ক্যাশিয়ার */
+  private assertVaultAccess(actor: Actor) {
+    if (!canOperateVaultFor(actor.role, actor.category)) throw new Error(VAULT_ACCESS_DENIED);
+  }
+
   async getDayStatus(branchId: number, date = todayDhaka()): Promise<PeriodClosing | null> {
     const snap = await getDoc(doc(this.firestore, 'periodClosings', `${branchId}_${date}`));
     return snap.exists() ? (snap.data() as PeriodClosing) : null;
@@ -453,6 +462,7 @@ export class CashService {
    * দিবস সমাপনী — সব মাঠকর্মীর নগদ জমা নেওয়ার পর। দিনের সারাংশ সংরক্ষণ ও তারিখ লক।
    */
   async closeDay(branchId: number, actor: Actor): Promise<DailyBranchSummary> {
+    this.assertVaultAccess(actor);
     const date = todayDhaka();
     const pendingCash = (await this.receiptsBetween(date, date))
       .filter(r => Number(r.branchId) === Number(branchId) && !r.isReversed && !r.isHandedOverToBranch && r.paymentMethod === 'CASH');
@@ -476,6 +486,7 @@ export class CashService {
 
   /** বন্ধ দিন পুনরায় খোলা — শুধু অ্যাডমিন / প্রধান কার্যালয়, কারণসহ */
   async reopenDay(branchId: number, date: string, reason: string, actor: Actor): Promise<void> {
+    this.assertVaultAccess(actor);
     if (!reason.trim()) throw new Error('দিন পুনরায় খোলার কারণ লিখুন');
     await this.runner.run(actor, `DAY-REOPEN-${branchId}-${date}`, async s => {
       const lockRef = doc(this.firestore, 'periodClosings', `${branchId}_${date}`);
@@ -489,6 +500,7 @@ export class CashService {
 
   /** মাস সমাপনী — পোর্টফোলিও স্ন্যাপশট (শ্রেণীকরণ, সঞ্চিতি, PAR, OTR, CRR) */
   async closeMonth(branchId: number, month: string, actor: Actor): Promise<MonthlyPortfolioSnapshot> {
+    this.assertVaultAccess(actor);
     const loansSnap = await getDocs(query(collection(this.firestore, 'loans'), where('branchId', '==', Number(branchId))));
     const loans = loansSnap.docs.map(d => d.data() as Loan).filter(l => !l.isDeleted);
     const quality = portfolioQuality(loans);

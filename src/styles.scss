@@ -1189,33 +1189,81 @@ select.form-control {
     }
   }
 
-  /* 3. When Printing ID Card */
-  body.print-id-card {
+  /* 3. When Printing ID Card — সদস্য (#printableCustomerIdCard) ও কর্মী (#printableEmployeeIdCard)
+     কার্ড মডাল খোলা থাকলেই প্রযোজ্য; শুধু কার্ডটি প্রিন্ট হবে, পেছনের পেজ/সাইডবার/ব্যাকড্রপ নয় */
+  body.print-id-card,
+  body:has(#printableCustomerIdCard),
+  body:has(#printableEmployeeIdCard) {
 
     app-navbar,
     app-sidebar,
-    .page-container {
+    .app-navbar,
+    .app-sidebar,
+    .page-container,
+    .app-layout>*:not(.app-main-body),
+    .app-main-body>*:not(.app-content-area),
+    .modal-dialog .modal-header,
+    .modal-dialog .modal-footer,
+    .lanyard-hole-container,
+    .no-print {
       display: none !important;
+    }
+
+    .app-layout,
+    .app-main-body,
+    .app-content-area {
+      display: block !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
     }
 
     .modal-backdrop {
       position: static !important;
+      inset: auto !important;
       background: none !important;
+      backdrop-filter: none !important;
       display: flex !important;
       justify-content: center !important;
+      width: 100% !important;
+      height: auto !important;
       padding: 0 !important;
+      overflow: visible !important;
+      z-index: auto !important;
     }
 
-    #printableCustomerIdCard {
+    .modal-dialog,
+    .modal-body {
       position: static !important;
       transform: none !important;
       box-shadow: none !important;
-      margin: 20px auto !important;
-      border: 1px solid #94a3b8 !important;
+      border: none !important;
+      background: none !important;
+      max-height: none !important;
+      overflow: visible !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: auto !important;
+      max-width: none !important;
     }
 
-    .no-print {
-      display: none !important;
+    #printableCustomerIdCard,
+    #printableEmployeeIdCard {
+      position: static !important;
+      transform: none !important;
+      box-shadow: none !important;
+      margin: 10mm auto !important;
+      border: 1px solid #94a3b8 !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
     }
   }
 

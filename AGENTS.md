@@ -326,7 +326,7 @@ Routes are defined in [src/app/app.routes.ts](file:///c:/unversity/eKisti-app/sr
 | `/collections/daily` | `DailySheetComponent` | `permissionGuard('canCollectKisti')` | Field officer daily collection sheet, attendance, printable sheet |
 | `/collections/receipts`| `ReceiptListComponent` | `[authGuard]` | Payment receipts register, print, reversal (`canReverseReceipt`) |
 | `/reconciliation` | `CashClosingComponent` | `permissionGuard('canVerifyCash','isFieldOfficer')` | Cashier vault closing & field officer reconciliation |
-| `/accounts` | `VaultLedgerComponent` | `permissionGuard('canManageAccounts')` | Vault ledger, bank, expenses, day/month closing |
+| `/accounts` | `VaultLedgerComponent` | `permissionGuard('canAccessVault')` | Vault ledger, bank, expenses, day/month closing — Super Admin, Admin, Head Office, BM, Cashier (`core/guards/vault-access.ts`; auditors view-only via `canOperateVault`) |
 | `/savings` | `SavingsComponent` | `[authGuard]` | Savings balances, ledger, passbook statement; deposit/withdraw needs `canManageAccounts` |
 | `/reports` | `ReportsComponent` | `[authGuard]` | Reports with CSV export & print |
 | `/settings` | `SettingsComponent` | `permissionGuard('canManageSettings')` | Loan products, holidays, general policy |
@@ -393,7 +393,8 @@ eKisti features a dedicated print engine implemented in [src/styles.scss](file:/
 #printableCustomerAdmissionForm   --> 2-Page A4 Official Admission Form (Filled)
 #printableBlankCustomerForm       --> 2-Page A4 Official Admission Form (Blank with dotted lines)
 #printableCustomerDetails         --> Single/Multi-page Member KYC & Loan Statement
-#printableCustomerIdCard          --> Staff/Member Identity Card Badge
+#printableCustomerIdCard          --> Member Identity Card Badge (/customers)
+#printableEmployeeIdCard          --> Staff Identity Card Badge (/users)
 #printableLoanDisburseReceipt     --> Loan Sanction & Disbursement Advice Slip
 #printableMoneyReceipt            --> Collection money receipt (receipt register)
 #printableCashClosingSlip         --> Field officer cash closing slip

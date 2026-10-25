@@ -99,6 +99,42 @@ export class FinanceService {
     });
   }
 
+  /**
+   * গ্রাহক কিস্তির টাকা দিতে না পারলে তার সঞ্চয় হতে কিস্তি পরিশোধ (মাঠকর্মী/শাখা)।
+   * নগদ লেনদেন নেই: সঞ্চয় স্থিতি কমে, কিস্তি পরিশোধ হয়, রসিদ হয় (মাধ্যম SAVINGS) —
+   * রসিদটি শুরু থেকেই "জমা সম্পন্ন", তাই মাঠকর্মীর হাতের নগদ বা ক্যাশ ক্লোজিংয়ে আসে না।
+   * শুধু আজ পর্যন্ত দেয় কিস্তি (অগ্রিম নয়) এবং সঞ্চয় স্থিতির বেশি নয়। ভুল হলে রসিদ বাতিলে সঞ্চয় ফেরত যায়।
+   */
+  async collectFromSavings(params: { loanId: number; loanAmount: number; reason: string }, actor: Actor): Promise<PaymentCollection> {
+    if (!(params.loanAmount > 0)) throw new Error('সমন্বয়ের সঠিক পরিমাণ দিন');
+    if (!params.reason?.trim()) throw new Error('সঞ্চয় হতে কিস্তি পরিশোধের কারণ লেখা বাধ্যতামূলক');
+
+    let pre!: { loan: Loan; installments: InstallmentSchedule[] };
+    let plan!: ApplyPaymentPlan;
+    return this.runner.run(actor, 'SAVKISTI', s => this.applyPayment(s, pre, plan, {
+      mode: 'SAVINGS_ADJUSTMENT', paymentMethod: 'SAVINGS',
+      reason: `সঞ্চয় হতে কিস্তি পরিশোধ — ${params.reason.trim()}`
+    }), async () => {
+      pre = await this.runner.loadLoanBundle(params.loanId);
+      this.assertCollectable(pre.loan);
+      const today = todayDhaka();
+      const alloc = allocatePayment(pre.installments, round2(params.loanAmount), 0, today);
+      const touchesFuture = alloc.unallocated > 0 || alloc.allocations.some(a => {
+        const inst = pre.installments.find(i => i.installmentId === a.installmentId)!;
+        return inst.dueDate > today && (a.principal + a.profit) > 0;
+      });
+      if (touchesFuture) throw new Error('সঞ্চয় হতে শুধু আজ পর্যন্ত দেয় (বকেয়া + আজকের) কিস্তি পরিশোধ করা যায় — অগ্রিম কিস্তি নয়');
+      plan = {
+        allocations: alloc.allocations,
+        principal: alloc.principalTotal,
+        profit: alloc.profitTotal,
+        savings: 0,
+        rebate: 0,
+        isAdvance: false
+      };
+    });
+  }
+
   /** আগাম পরিশোধ (Early Settlement) — বাকি আসল + বকেয়া লাভ + ভবিষ্যৎ লাভ − রিবেট */
   async earlySettle(params: { loanId: number; paymentMethod: PaymentMethod; trxId?: string; rebatePercent?: number; reason?: string }, actor: Actor): Promise<PaymentCollection> {
     let pre!: { loan: Loan; installments: InstallmentSchedule[] };
@@ -148,7 +184,7 @@ export class FinanceService {
     s: TxSession,
     pre: { loan: Loan; installments: InstallmentSchedule[] },
     plan: ApplyPaymentPlan,
-    opts: { mode: 'COLLECTION' | 'EARLY_SETTLEMENT'; paymentMethod: PaymentMethod; trxId?: string; receiptNumberManual?: string; reason: string }
+    opts: { mode: 'COLLECTION' | 'EARLY_SETTLEMENT' | 'SAVINGS_ADJUSTMENT'; paymentMethod: PaymentMethod; trxId?: string; receiptNumberManual?: string; reason: string }
   ): Promise<PaymentCollection> {
     const { loan } = pre;
 
@@ -168,16 +204,20 @@ export class FinanceService {
     });
     const custSnap = await s.tx.get(this.runner.customerRef(loan.customerId));
     const customer = custSnap.exists() ? (custSnap.data() as Customer) : null;
+    const fromSavings = opts.mode === 'SAVINGS_ADJUSTMENT';
+    const loanPaid = round2(plan.principal + plan.profit);
+    if (fromSavings && (!customer || loanPaid > round2(customer.totalSavingsBalance || 0))) {
+      throw new Error(`গ্রাহকের সঞ্চয় স্থিতি (৳${(customer?.totalSavingsBalance || 0).toLocaleString('en-IN')}) সমন্বয়ের টাকার (৳${loanPaid.toLocaleString('en-IN')}) চেয়ে কম`);
+    }
     await s.assertDayOpen(loan.branchId);
     const receiptId = await s.reserve('receipts', 1);
     const loanTxnId = await s.reserve('loanTransactions', plan.rebate > 0 ? 2 : 1);
     const journalId = await s.reserve('journalEntries', 1);
-    const savingsTxnId = plan.savings > 0 ? await s.reserve('savings', 1) : 0;
+    const savingsTxnId = plan.savings > 0 || fromSavings ? await s.reserve('savings', 1) : 0;
 
     // ---------- COMPUTE ----------
-    s.correlationId = `${opts.mode === 'COLLECTION' ? 'COL' : 'SET'}-${receiptId}`;
+    s.correlationId = `${opts.mode === 'COLLECTION' ? 'COL' : opts.mode === 'EARLY_SETTLEMENT' ? 'SET' : 'SAVK'}-${receiptId}`;
     const today = s.businessDate;
-    const loanPaid = round2(plan.principal + plan.profit);
     const total = round2(loanPaid + plan.savings);
 
     const updatedInsts = new Map<number, InstallmentSchedule>();
@@ -229,7 +269,10 @@ export class FinanceService {
       paymentMethod: opts.paymentMethod,
       trxId: opts.trxId?.trim() || undefined,
       collectionDate: s.now,
-      isHandedOverToBranch: false,
+      // সঞ্চয় হতে সমন্বয়ে হাতে কোনো নগদ নেই — ক্যাশিয়ারকে বুঝিয়ে দেওয়ার কিছু নেই
+      isHandedOverToBranch: fromSavings,
+      reconciledAt: fromSavings ? s.now : undefined,
+      receiptType: 'KISTI',
       allocations: plan.allocations.map(a => ({ installmentId: a.installmentId, installmentNo: a.installmentNo, principal: a.principal, profit: a.profit, savings: a.savings })),
       isAdvance: plan.isAdvance,
       correlationId: s.correlationId,
@@ -261,9 +304,10 @@ export class FinanceService {
     });
     s.statusChange(loan.loanId, loan.branchId, freshLoan.status, loanUpdate.status!, opts.mode === 'EARLY_SETTLEMENT' ? 'আগাম পরিশোধ' : 'কিস্তি আদায়');
 
-    if (customer && (plan.savings > 0 || closedNow)) {
+    if (customer && (plan.savings > 0 || closedNow || fromSavings)) {
       const custFields: Record<string, any> = {};
       if (plan.savings > 0) custFields['totalSavingsBalance'] = round2((customer.totalSavingsBalance || 0) + plan.savings);
+      if (fromSavings) custFields['totalSavingsBalance'] = round2((customer.totalSavingsBalance || 0) - loanPaid);
       if (closedNow) custFields['activeLoansCount'] = Math.max(0, (customer.activeLoansCount || 0) - 1);
       s.update(this.runner.customerRef(customer.customerId), {
         ...custFields,
@@ -297,12 +341,40 @@ export class FinanceService {
         };
         s.set(doc(this.firestore, 'savingsTransactions', String(savingsTxnId)), savingsTxn);
       }
+      if (fromSavings) {
+        const prevBal = customer.totalSavingsBalance || 0;
+        const savingsTxn: SavingsTransaction = {
+          transactionId: savingsTxnId,
+          customerId: customer.customerId,
+          customerName: customer.fullName,
+          branchId: Number(loan.branchId),
+          centerId: Number(loan.centerId),
+          loanId: loan.loanId,
+          installmentNo: receipt.installmentNo,
+          type: 'ADJUSTMENT',
+          amount: loanPaid,
+          isCredit: false,
+          previousBalance: prevBal,
+          newBalance: round2(prevBal - loanPaid),
+          paymentMethod: 'SAVINGS',
+          transactionDate: s.now,
+          performedByUserId: s.actor.userId,
+          performedByName: s.actor.name,
+          performedByRole: s.actor.role,
+          reason: `${opts.reason} (−৳ ${loanPaid}, ${loan.loanAccountNo})`,
+          receiptNo: `RCP-${receiptId}`,
+          correlationId: s.correlationId,
+          isDeleted: false, deletedAt: null, deletedByUserId: null, deleteReason: null,
+          history: []
+        };
+        s.set(doc(this.firestore, 'savingsTransactions', String(savingsTxnId)), savingsTxn);
+      }
     }
 
     const outstandingBefore = freshLoan.outstandingBalance || 0;
     s.loanTxn({
       id: loanTxnId, loanId: loan.loanId, customerId: loan.customerId, branchId: loan.branchId,
-      type: opts.mode === 'EARLY_SETTLEMENT' ? 'EARLY_SETTLEMENT' : 'REPAYMENT',
+      type: opts.mode === 'EARLY_SETTLEMENT' ? 'EARLY_SETTLEMENT' : fromSavings ? 'ADJUSTMENT_FROM_SAVINGS' : 'REPAYMENT',
       principal: plan.principal, profit: plan.profit,
       outstandingBefore, outstandingAfter: round2(outstandingBefore - loanPaid),
       receiptId
@@ -316,7 +388,8 @@ export class FinanceService {
       });
     }
 
-    s.journal(journalId, loan.branchId, `কিস্তি আদায় — রসিদ #${receiptId} (${loan.loanAccountNo})`, [
+    // সঞ্চয় হতে সমন্বয়: ডেবিট সদস্য সঞ্চয় (collectionCashAccount('SAVINGS')), নগদ নয়
+    s.journal(journalId, loan.branchId, `${fromSavings ? 'সঞ্চয় হতে কিস্তি সমন্বয়' : 'কিস্তি আদায়'} — রসিদ #${receiptId} (${loan.loanAccountNo})`, [
       { account: collectionCashAccount(opts.paymentMethod), debit: total, credit: 0 },
       { account: ACCOUNTS.LOANS_RECEIVABLE, debit: 0, credit: plan.principal },
       { account: ACCOUNTS.SERVICE_CHARGE_INCOME, debit: 0, credit: plan.profit },
@@ -331,7 +404,9 @@ export class FinanceService {
         type: 'COLLECTION_RECEIPT',
         relatedId: receiptId,
         branchId: Number(loan.branchId),
-        message: `eKisti: রসিদ #${receiptId}, ${loan.loanAccountNo}-এ ৳${total} জমা হয়েছে। ঋণের বাকি ৳${loanUpdate.outstandingBalance}।`
+        message: fromSavings
+          ? `eKisti: রসিদ #${receiptId}, আপনার সঞ্চয় হতে ৳${total} কেটে ${loan.loanAccountNo}-এর কিস্তি পরিশোধ হয়েছে। সঞ্চয় স্থিতি ৳${round2((customer.totalSavingsBalance || 0) - loanPaid)}, ঋণের বাকি ৳${loanUpdate.outstandingBalance}।`
+          : `eKisti: রসিদ #${receiptId}, ${loan.loanAccountNo}-এ ৳${total} জমা হয়েছে। ঋণের বাকি ৳${loanUpdate.outstandingBalance}।`
       });
     }
 
@@ -365,11 +440,15 @@ export class FinanceService {
       const custSnap = await s.tx.get(this.runner.customerRef(receipt.customerId));
       const customer = custSnap.exists() ? (custSnap.data() as Customer) : null;
       await s.assertDayOpen(receipt.branchId);
-      if (receipt.isHandedOverToBranch) await s.readBranch(receipt.branchId);
+      // ভল্ট থেকে ফেরত শুধু নগদ রসিদে যা ইতোমধ্যে ভল্টে জমা হয়েছে
+      const vaultOut = receipt.isHandedOverToBranch && receipt.paymentMethod === 'CASH';
+      // সঞ্চয় হতে কিস্তি সমন্বয়ের রসিদ বাতিল → টাকা গ্রাহকের সঞ্চয়ে ফেরত
+      const fromSavings = receipt.paymentMethod === 'SAVINGS';
+      if (vaultOut) await s.readBranch(receipt.branchId);
       const loanTxnId = await s.reserve('loanTransactions', 1);
       const journalId = await s.reserve('journalEntries', 1);
-      const savingsTxnId = receipt.savingsAmountCollected > 0 ? await s.reserve('savings', 1) : 0;
-      const vaultTxnId = receipt.isHandedOverToBranch ? await s.reserve('vaultTransactions', 1) : 0;
+      const savingsTxnId = receipt.savingsAmountCollected > 0 || fromSavings ? await s.reserve('savings', 1) : 0;
+      const vaultTxnId = vaultOut ? await s.reserve('vaultTransactions', 1) : 0;
 
       if (customer && receipt.savingsAmountCollected > (customer.totalSavingsBalance || 0)) {
         throw new Error('গ্রাহকের সঞ্চয় স্থিতি এই রসিদের সঞ্চয় অংশের চেয়ে কম — আগে সঞ্চয় সমন্বয় করুন');
@@ -416,9 +495,10 @@ export class FinanceService {
       s.update(this.runner.loanRef(receipt.loanId), { ...loanUpdate, history: s.appendHistory(freshLoan, s.historyEntry('PAYMENT_REVERSED', `রসিদ #${receiptId} বাতিল: ${reason}`, freshLoan, loanUpdate)) });
       s.statusChange(receipt.loanId, receipt.branchId, freshLoan.status, loanUpdate.status!, `রসিদ #${receiptId} বাতিল`);
 
-      if (customer && (savings > 0 || reopened)) {
+      const restored = fromSavings ? round2(principal + profit) : 0;
+      if (customer && (savings > 0 || reopened || restored > 0)) {
         const custFields: Record<string, any> = {};
-        if (savings > 0) custFields['totalSavingsBalance'] = round2((customer.totalSavingsBalance || 0) - savings);
+        if (savings > 0 || restored > 0) custFields['totalSavingsBalance'] = round2((customer.totalSavingsBalance || 0) - savings + restored);
         if (reopened) custFields['activeLoansCount'] = (customer.activeLoansCount || 0) + 1;
         s.update(this.runner.customerRef(customer.customerId), { ...custFields, history: s.appendHistory(customer, s.historyEntry('PAYMENT_REVERSED', `রসিদ #${receiptId} বাতিল`, customer, custFields)) });
         if (savings > 0) {
@@ -433,6 +513,19 @@ export class FinanceService {
             isDeleted: false, deletedAt: null, deletedByUserId: null, deleteReason: null, history: []
           } as SavingsTransaction);
         }
+        if (restored > 0) {
+          s.set(doc(this.firestore, 'savingsTransactions', String(savingsTxnId)), {
+            transactionId: savingsTxnId, customerId: customer.customerId, customerName: customer.fullName,
+            branchId: Number(receipt.branchId), centerId: Number(receipt.centerId), loanId: receipt.loanId,
+            type: 'REVERSAL', amount: restored, isCredit: true,
+            previousBalance: customer.totalSavingsBalance || 0, newBalance: round2((customer.totalSavingsBalance || 0) + restored),
+            paymentMethod: 'SAVINGS', transactionDate: s.now,
+            performedByUserId: actor.userId, performedByName: actor.name, performedByRole: actor.role,
+            reason: `সঞ্চয় হতে কিস্তি সমন্বয় রসিদ #${receiptId} বাতিল — সঞ্চয়ে ফেরত (+৳ ${restored}): ${reason}`,
+            receiptNo: `RCP-${receiptId}`, correlationId: s.correlationId,
+            isDeleted: false, deletedAt: null, deletedByUserId: null, deleteReason: null, history: []
+          } as SavingsTransaction);
+        }
       }
 
       s.loanTxn({
@@ -444,8 +537,8 @@ export class FinanceService {
 
       // ইতোমধ্যে ভল্টে জমা হলে ভল্ট থেকে ফেরত, নইলে মাঠকর্মীর হাতের নগদ থেকে
       const total = round2(receipt.totalAmountCollected);
-      const cashAccount = receipt.isHandedOverToBranch && receipt.paymentMethod === 'CASH' ? ACCOUNTS.VAULT_CASH : collectionCashAccount(receipt.paymentMethod);
-      if (receipt.isHandedOverToBranch && receipt.paymentMethod === 'CASH') {
+      const cashAccount = vaultOut ? ACCOUNTS.VAULT_CASH : collectionCashAccount(receipt.paymentMethod);
+      if (vaultOut) {
         s.vaultMove({ id: vaultTxnId, branchId: receipt.branchId, type: 'ADJUSTMENT', direction: 'OUT', amount: total, refType: 'RECEIPT_REVERSAL', refId: receiptId, note: `রসিদ #${receiptId} বাতিলে ফেরত` });
       }
       s.journal(journalId, receipt.branchId, `রসিদ #${receiptId} বাতিল (রিভার্সাল)`, [
