@@ -21,7 +21,7 @@ import { ACCOUNTS, collectionCashAccount } from '../finance/accounts';
 import { buildScheduleFromTotals } from '../finance/schedule';
 import { todayDhaka } from '../finance/dates';
 import { SettingsService } from './settings.service';
-import { Actor, ConcurrentChangeError, TxRunner } from './tx-runner.service';
+import { Actor, AlreadyPostedError, ConcurrentChangeError, TxRunner } from './tx-runner.service';
 import { TxSession, round2 } from './tx-session';
 
 export type PaymentMethod = PaymentCollection['paymentMethod'];
@@ -60,6 +60,11 @@ export class FinanceService {
     receiptNumberManual?: string;
     allowAdvance?: boolean;      // ভবিষ্যতের কিস্তি আগাম নেওয়ার অনুমতি (স্পষ্টভাবে নিশ্চিত)
     reason?: string;
+    /**
+     * একই আদায় দুবার পোস্ট না হওয়ার চাবি (মাঠ শিট / অফলাইন সারি)। একই ট্রানজ্যাকশনে
+     * idempotencyKeys/{key} পড়া ও লেখা হয় — আগে থাকলে AlreadyPostedError।
+     */
+    idempotencyKey?: string;
   }, actor: Actor): Promise<PaymentCollection> {
     if (!(params.loanAmount >= 0) || !(params.savingsAmount >= 0) || params.loanAmount + params.savingsAmount <= 0) {
       throw new Error('আদায়ের সঠিক পরিমাণ দিন');
@@ -72,7 +77,8 @@ export class FinanceService {
     let plan!: ApplyPaymentPlan;
     return this.runner.run(actor, 'COL', s => this.applyPayment(s, pre, plan, {
       mode: 'COLLECTION', paymentMethod: params.paymentMethod, trxId: params.trxId,
-      receiptNumberManual: params.receiptNumberManual, reason: params.reason || 'কিস্তি আদায়'
+      receiptNumberManual: params.receiptNumberManual, reason: params.reason || 'কিস্তি আদায়',
+      idempotencyKey: params.idempotencyKey
     }), async () => {
       pre = await this.runner.loadLoanBundle(params.loanId);
       this.assertCollectable(pre.loan);
@@ -184,11 +190,17 @@ export class FinanceService {
     s: TxSession,
     pre: { loan: Loan; installments: InstallmentSchedule[] },
     plan: ApplyPaymentPlan,
-    opts: { mode: 'COLLECTION' | 'EARLY_SETTLEMENT' | 'SAVINGS_ADJUSTMENT'; paymentMethod: PaymentMethod; trxId?: string; receiptNumberManual?: string; reason: string }
+    opts: { mode: 'COLLECTION' | 'EARLY_SETTLEMENT' | 'SAVINGS_ADJUSTMENT'; paymentMethod: PaymentMethod; trxId?: string; receiptNumberManual?: string; reason: string; idempotencyKey?: string }
   ): Promise<PaymentCollection> {
     const { loan } = pre;
 
     // ---------- READ ----------
+    // idempotency key সবার আগে — কমিট হয়ে যাওয়া লেনদেনের পুনঃচেষ্টায় ConcurrentChangeError-এর আগেই ধরা পড়ে
+    const keyRef = opts.idempotencyKey ? doc(this.firestore, 'idempotencyKeys', opts.idempotencyKey) : null;
+    if (keyRef) {
+      const keySnap = await s.tx.get(keyRef);
+      if (keySnap.exists()) throw new AlreadyPostedError(opts.idempotencyKey!, Number(keySnap.data()['receiptId']) || null);
+    }
     const loanSnap = await s.tx.get(this.runner.loanRef(loan.loanId));
     const freshLoan = loanSnap.data() as Loan;
     if ((freshLoan.ledgerVersion || 0) !== (loan.ledgerVersion || 0) || freshLoan.totalPaidAmount !== loan.totalPaidAmount) {
@@ -283,6 +295,12 @@ export class FinanceService {
 
     // ---------- WRITE ----------
     s.set(doc(this.firestore, 'collections', String(receiptId)), receipt);
+    if (keyRef) {
+      s.set(keyRef, {
+        key: opts.idempotencyKey, receiptId, loanId: loan.loanId, branchId: Number(loan.branchId),
+        createdAt: s.now, actor: s.actor
+      });
+    }
 
     for (const a of plan.allocations) {
       const next = updatedInsts.get(a.installmentId)!;

@@ -64,7 +64,7 @@
 - **Frontend Framework:** Angular 21 (v21.2.24) using 100% **Standalone Components** (no `NgModule` anywhere in the app).
 - **Reactive State Management:** Angular **Signals** (`signal()`, `computed()`, `model()`) and RxJS Observables (`toObservable()`).
 - **Database & Backend:** Firebase Firestore (v12.19.0) with `@angular/fire` (v21.0.0-rc.2).
-- **Offline / Local Fallback:** Firestore `persistentLocalCache` (reads work offline) + localStorage session cache. Money operations use `runTransaction` and therefore need a connection.
+- **Offline / Local Fallback:** Firestore `persistentLocalCache` (reads work offline) + localStorage session cache + PWA service worker (app shell & fonts). Money operations use `runTransaction` and therefore need a connection — except daily-sheet kisti collections, which go to the `OfflineCollectionQueueService` outbox while offline (ref `OFF-…` in `receiptNumberManual`, receipt dated on the sync day) and are replayed through `FinanceService.collectPayment` on reconnect.
 - **Styling Architecture:** Vanilla SCSS (`src/styles.scss`) with HSL design system tokens, CSS Grid/Flexbox, and comprehensive `@media print` rules.
 - **Typography:** Google Fonts (`Hind Siliguri` for Bengali readability and `Inter` for numbers/English).
 - **Test Runner:** Vitest (v4.0.8) configured in `package.json`.
@@ -80,6 +80,8 @@ c:/unversity/eKisti-app/
 ├── tsconfig.json                  # TypeScript compiler configuration (strict mode)
 ├── angular.json                   # Angular CLI workspace config (assets, styles, build target)
 ├── .env                           # Local environment secrets (Firebase config)
+├── ngsw-config.json               # PWA service worker config (production builds only)
+├── functions/                     # Cloud Functions (Node 22): dailyOverdueEngine at 00:05 Asia/Dhaka — compiles core/finance from src/
 ├── scripts/
 │   ├── set-env.js                 # Injects .env into src/environments/environment.ts (prestart/prebuild)
 │   └── seed-database.js           # Seeds initial demo data (branches, staff, customers, loans)
@@ -108,13 +110,15 @@ c:/unversity/eKisti-app/
         │   │   ├── allocation.ts      # Payment allocation (partial/advance), collectionView (due-date eligibility)
         │   │   ├── classification.ts  # MRA-style classification, provision, PAR, OTR/CRR
         │   │   ├── settlement.ts      # Early settlement quote + rebate
+        │   │   ├── overdue.ts         # Overdue-engine plan (shared by OverdueEngineService and the Cloud Function)
         │   │   ├── accounts.ts        # Chart of accounts (double entry)
         │   │   └── validation.ts      # BD NID / mobile validation
         │   └── services/
         │       ├── finance.service.ts        # Collection, reversal, early settlement, reschedule, write-off, insurance claim, follow-ups
         │       ├── loan-lifecycle.service.ts # Application → field verification → approval (maker-checker) → disbursement
         │       ├── cash.service.ts           # Cash closing, vault/bank/expense/HO fund, savings txns, fees, interest, day/month closing
-        │       ├── overdue-engine.service.ts # Daily overdue/classification/credit-score engine
+        │       ├── overdue-engine.service.ts # Overdue engine — browser fallback; skips if systemJobs/overdue_ALL ran today
+        │       ├── offline-collection-queue.service.ts # IndexedDB outbox: offline kisti collections replayed via FinanceService.collectPayment
         │       ├── member.service.ts         # NID duplicate check, member transfer, blacklist, attendance, KYC uploads
         │       ├── settings.service.ts       # General policy, holiday calendar, loan products
         │       ├── tx-runner.service.ts / tx-session.ts # Transaction runner: in-transaction IDs, day lock, ledgers, audit
@@ -328,7 +332,7 @@ Routes are defined in [src/app/app.routes.ts](file:///c:/unversity/eKisti-app/sr
 | `/reconciliation` | `CashClosingComponent` | `permissionGuard('canVerifyCash','isFieldOfficer')` | Cashier vault closing & field officer reconciliation |
 | `/accounts` | `VaultLedgerComponent` | `permissionGuard('canAccessVault')` | Vault ledger, bank, expenses, day/month closing — Super Admin, Admin, Head Office, BM, Cashier (`core/guards/vault-access.ts`; auditors view-only via `canOperateVault`) |
 | `/savings` | `SavingsComponent` | `[authGuard]` | Savings balances, ledger, passbook statement; deposit/withdraw needs `canManageAccounts` |
-| `/reports` | `ReportsComponent` | `[authGuard]` | Reports with CSV export & print |
+| `/reports` | `ReportsComponent` | `[authGuard]` | Reports with CSV export & print; MRA return tab (Form-1/2/3) with .xlsx export (`shared/utils/xlsx.ts`) |
 | `/settings` | `SettingsComponent` | `permissionGuard('canManageSettings')` | Loan products, holidays, general policy |
 | `/branches` | `BranchRouteListComponent` | `permissionGuard('canManageBranches')` | Branch & samity/route management |
 | `/users` | `UserListComponent` | `[authGuard, superAdminGuard]` | Staff management, role permissions & ID cards |
@@ -449,6 +453,10 @@ npm run db:migrate-history -- --apply
 
 # 5. Run unit tests via Vitest
 npm test
+
+# 6. Cloud Functions (Blaze plan): build & deploy the scheduled overdue engine
+npm --prefix functions install && npm --prefix functions run build
+firebase deploy --only functions
 ```
 
 ### Environment Configuration Flow

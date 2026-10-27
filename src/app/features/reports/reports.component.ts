@@ -12,8 +12,10 @@ import { remainingOf } from '../../core/finance/allocation';
 import { CLASSIFICATION_RULES, loanOverdueState, outstandingPrincipal, portfolioQuality, recoveryRates } from '../../core/finance/classification';
 import { CHART_OF_ACCOUNTS, accountName } from '../../core/finance/accounts';
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component';
+import { SettingsService } from '../../core/services/settings.service';
+import { XlsxCell, XlsxSheet, downloadXlsx } from '../../shared/utils/xlsx';
 
-type ReportTab = 'DAILY' | 'DUE' | 'PORTFOLIO' | 'DAYBOOK' | 'TRIAL' | 'MIS';
+type ReportTab = 'DAILY' | 'DUE' | 'PORTFOLIO' | 'DAYBOOK' | 'TRIAL' | 'MIS' | 'MRA';
 
 const TAB_LABELS: Record<ReportTab, { label: string; icon: string }> = {
   DAILY: { label: 'দৈনিক আদায়', icon: 'payments' },
@@ -21,7 +23,8 @@ const TAB_LABELS: Record<ReportTab, { label: string; icon: string }> = {
   PORTFOLIO: { label: 'পোর্টফোলিও ও শ্রেণীকরণ', icon: 'donut_large' },
   DAYBOOK: { label: 'দিনের হিসাব / ক্যাশ বই', icon: 'menu_book' },
   TRIAL: { label: 'ট্রায়াল ব্যালেন্স', icon: 'balance' },
-  MIS: { label: 'শাখা MIS', icon: 'domain' }
+  MIS: { label: 'শাখা MIS', icon: 'domain' },
+  MRA: { label: 'MRA রিটার্ন', icon: 'assured_workload' }
 };
 
 const VAULT_TYPE_LABELS: Record<string, string> = {
@@ -86,6 +89,8 @@ const ACTIVE = (l: Loan) => !l.isDeleted && (l.status === 'DISBURSED' || l.statu
   styleUrl: './reports.component.scss'
 })
 export class ReportsComponent implements OnInit {
+  /** প্রতিষ্ঠানের নাম (MRA রিটার্নের শিরোনামে) */
+  readonly org = inject(SettingsService).org;
   private cash = inject(CashService);
   private kisti = inject(KistiDatabaseService);
   readonly auth = inject(AuthStateService);
@@ -125,7 +130,7 @@ export class ReportsComponent implements OnInit {
   readonly userId = computed(() => this.auth.currentUser().userId);
 
   readonly tabs = computed<ReportTab[]>(() =>
-    this.isFO() ? ['DAILY', 'DUE', 'PORTFOLIO', 'MIS'] : ['DAILY', 'DUE', 'PORTFOLIO', 'DAYBOOK', 'TRIAL', 'MIS']
+    this.isFO() ? ['DAILY', 'DUE', 'PORTFOLIO', 'MIS'] : ['DAILY', 'DUE', 'PORTFOLIO', 'DAYBOOK', 'TRIAL', 'MIS', 'MRA']
   );
 
   readonly branchMap = computed(() => new Map(this.branches().map(b => [b.branchId, b])));
@@ -353,7 +358,7 @@ export class ReportsComponent implements OnInit {
     this.branchId.set(Number(id) || 0);
     this.centerId.set(0);
     const t = this.tab();
-    if (t === 'DAYBOOK' || t === 'TRIAL') void this.loadTab();
+    if (t === 'DAYBOOK' || t === 'TRIAL' || t === 'MRA') void this.loadTab();
   }
 
   setRange(days: number) {
@@ -387,6 +392,18 @@ export class ReportsComponent implements OnInit {
           if (!this.validRange()) break;
           const [receipts] = await Promise.all([this.cash.receiptsBetween(this.from(), this.to()), this.ensureInstallments()]);
           this.rangeReceipts.set(receipts);
+          break;
+        }
+        case 'MRA': {
+          // ফর্ম-১ (MIS) + ফর্ম-২ (শ্রেণীকরণ) + ফর্ম-৩ (জার্নাল থেকে আর্থিক বিবরণী)
+          if (!this.validRange()) break;
+          const [receipts, journals] = await Promise.all([
+            this.cash.receiptsBetween(this.from(), this.to()),
+            this.cash.getJournalEntries(this.branchId() || null, this.from(), this.to()),
+            this.ensureInstallments()
+          ]);
+          this.rangeReceipts.set(receipts);
+          this.journals.set(journals);
           break;
         }
       }
@@ -570,6 +587,80 @@ export class ReportsComponent implements OnInit {
         break;
       }
     }
+  }
+
+  /**
+   * MRA রিটার্ন — একটি .xlsx ফাইলে তিনটি শিট: ফর্ম-১ শাখা MIS, ফর্ম-২ ঋণ শ্রেণীকরণ ও সঞ্চিতি, ফর্ম-৩ আর্থিক বিবরণী।
+   * অভ্যন্তরীণ ফরম্যাট — জমার আগে MRA-র সর্বশেষ নির্ধারিত ছকের সাথে মিলিয়ে নিতে হবে।
+   */
+  exportMraXlsx() {
+    const branch = this.selectedBranch()?.branchCode || 'ALL';
+    const filename = `MRA-return_${branch}_${this.from()}_${this.to()}.xlsx`;
+    const head = (title: string, period: string): XlsxCell[][] => [
+      [this.org().name],
+      [title],
+      ['শাখা', this.branchLabel()],
+      ['সময়কাল', period],
+      ['প্রস্তুতকারী', this.auth.currentUser().name, 'তারিখ', this.today],
+      ['অভ্যন্তরীণ ফরম্যাট — জমার আগে MRA-র সর্বশেষ নির্ধারিত ছকের সাথে মিলিয়ে নিন'],
+      []
+    ];
+    const HEAD_ROWS = 7;
+
+    // ফর্ম-১: শাখা MIS
+    const mis = this.misTotals();
+    const form1: XlsxCell[][] = [
+      ...head('ফর্ম-১: শাখা MIS (Branch MIS)', `${this.from()} — ${this.to()}`),
+      ['শাখা', 'শাখা কোড', 'সদস্য', 'সক্রিয় ঋণগ্রহীতা', 'বাকি আসল', 'বিতরণ (সংখ্যা)', 'বিতরণ (টাকা)', 'আদায়', 'PAR>30 %', 'ভল্ট নগদ'],
+      ...this.misRows().map(r => [r.branch.name, r.branch.branchCode, r.members, r.activeBorrowers, r.outstandingPrincipal, r.disbursedCount, r.disbursed, r.collected, r.par30Percent, r.vaultCash]),
+      ['মোট', '', mis.members, mis.activeBorrowers, mis.outstandingPrincipal, mis.disbursedCount, mis.disbursed, mis.collected, mis.par30Percent, mis.vaultCash],
+      [],
+      ['বিতরণ ও আদায় নির্বাচিত সময়কালের; বাকি আসল, PAR ও ভল্ট নগদ বর্তমান অবস্থা।']
+    ];
+
+    // ফর্ম-২: শ্রেণীকরণ ও সঞ্চিতি
+    const q = this.pq(), rt = this.rates();
+    const form2: XlsxCell[][] = [
+      ...head('ফর্ম-২: ঋণ শ্রেণীকরণ ও সঞ্চিতি (Classification & Provisioning)', `${this.today} পর্যন্ত`),
+      ['শ্রেণী', 'Classification', 'বকেয়া দিন', 'ঋণ সংখ্যা', 'বাকি আসল', 'সঞ্চিতি হার %', 'প্রয়োজনীয় সঞ্চিতি'],
+      ...q.byClass.map(b => [b.rule.labelBn, b.rule.labelEn, this.dayRange(b.rule.minDays, b.rule.maxDays), b.loans, b.outstanding, this.pct(b.rule.provisionRate), b.provision]),
+      ['মোট', '', '', q.loansCount, q.outstandingPrincipal, '', q.requiredProvision],
+      [],
+      ['সূচক', 'টাকা', '%'],
+      ['PAR > ১ দিন', q.par1Amount, q.par1Percent],
+      ['PAR > ৩০ দিন', q.par30Amount, q.par30Percent],
+      ['OTR (সময়মতো আদায়)', '', rt.otrPercent],
+      ['CRR (ক্রমপুঞ্জিত আদায়)', '', rt.crrPercent]
+    ];
+
+    // ফর্ম-৩: আর্থিক বিবরণী
+    const tt = this.trialTotals(), is = this.incomeStatement();
+    const form3: XlsxCell[][] = [
+      ...head('ফর্ম-৩: আর্থিক বিবরণী (Financial Statement)', `${this.from()} — ${this.to()}`),
+      ['ট্রায়াল ব্যালেন্স'],
+      ['খাত কোড', 'খাতের নাম', 'ধরন', 'ডেবিট', 'ক্রেডিট'],
+      ...this.trialRows().map(r => [r.code, r.name, r.type, r.debit, r.credit]),
+      ['', 'মোট', '', tt.debit, tt.credit],
+      [],
+      ['আয়-ব্যয় বিবরণী'],
+      ...is.income.map(r => [r.code, r.name, 'আয়', r.net]),
+      ['', 'মোট আয়', '', is.totalIncome],
+      ...is.expense.map(r => [r.code, r.name, 'ব্যয়', r.net]),
+      ['', 'মোট ব্যয়', '', is.totalExpense],
+      ['', 'নিট উদ্বৃত্ত / (ঘাটতি)', '', is.surplus],
+      [],
+      [tt.balanced ? 'ডেবিট = ক্রেডিট — হিসাব মিলেছে' : `ডেবিট ও ক্রেডিটে পার্থক্য ${tt.diff} টাকা — জার্নাল যাচাই করুন`]
+    ];
+
+    const boldFor = (rows: XlsxCell[][], labels: string[]) => [0, 1, HEAD_ROWS,
+      ...rows.map((r, i) => (labels.includes(String(r[0] ?? '')) || labels.includes(String(r[1] ?? ''))) ? i : -1).filter(i => i >= 0)];
+    const sheets: XlsxSheet[] = [
+      { name: 'ফর্ম-১ শাখা MIS', rows: form1, colWidths: [22, 10, 10, 14, 14, 12, 14, 14, 10, 14], boldRows: boldFor(form1, ['মোট']) },
+      { name: 'ফর্ম-২ শ্রেণীকরণ', rows: form2, colWidths: [26, 16, 12, 10, 14, 12, 16], boldRows: boldFor(form2, ['মোট', 'সূচক']) },
+      { name: 'ফর্ম-৩ আর্থিক বিবরণী', rows: form3, colWidths: [12, 34, 10, 16, 16], boldRows: [0, 1, HEAD_ROWS, HEAD_ROWS + 1, ...boldFor(form3, ['মোট', 'আয়-ব্যয় বিবরণী', 'মোট আয়', 'মোট ব্যয়', 'নিট উদ্বৃত্ত / (ঘাটতি)'])] }
+    ];
+    downloadXlsx(filename, sheets);
+    this.notice.set({ kind: 'success', text: `${filename} ডাউনলোড হয়েছে।` });
   }
 
   dayRange(min: number, max: number): string {

@@ -1,0 +1,19 @@
+{
+  // অ্যাপের বিশুদ্ধ আর্থিক লজিক (src/app/core/finance) সরাসরি কম্পাইল হয় — একই কোড ব্রাউজার ও সার্ভারে।
+  // rootDir ".." তাই আউটপুট: lib/functions/src/index.js ও lib/src/app/core/finance/*.js
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2022",
+    "lib": ["es2022"],
+    "rootDir": "..",
+    "outDir": "lib",
+    "strict": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

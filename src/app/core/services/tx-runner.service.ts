@@ -15,6 +15,16 @@ export class ConcurrentChangeError extends Error {
 }
 
 /**
+ * একই idempotency key দিয়ে লেনদেন আগেই সম্পন্ন হয়েছে — পুনরায় পোস্ট করা হয়নি।
+ * (অফলাইন সারি পুনরায় পাঠানো, বা কমিট সফল হলেও উত্তর হারিয়ে গেলে SDK-র পুনঃচেষ্টা)
+ */
+export class AlreadyPostedError extends Error {
+  constructor(readonly key: string, readonly receiptId: number | null) {
+    super(`এই লেনদেন (${key}) আগেই সম্পন্ন হয়েছে${receiptId ? ` — রসিদ #${receiptId}` : ''}`);
+  }
+}
+
+/**
  * আর্থিক ট্রানজ্যাকশন চালানোর সাধারণ ব্যবস্থা।
  */
 @Injectable({ providedIn: 'root' })

@@ -103,7 +103,7 @@ export class DomTranslatorService {
     if (this.dict) return;
     this.loading ??= (async () => {
       try {
-        const res = await fetch('i18n/en.json', { cache: 'no-cache' });
+        const res = await fetch('/i18n/en.json', { cache: 'no-cache' });
         const json = (await res.json()) as Record<string, string>;
         const map = new Map(Object.entries(json));
         this.addDateNames(map);

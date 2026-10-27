@@ -8,6 +8,7 @@ import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.
 import { ToastService } from '../../../core/services/toast.service';
 import { FieldCashBreakdown, RECEIPT_TYPE_LABELS, fieldCashBreakdown, receiptTypeOf } from '../../../core/finance/field-cash';
 import { SettingsService } from '../../../core/services/settings.service';
+import { OfflineCollectionQueueService } from '../../../core/services/offline-collection-queue.service';
 
 /** একজন মাঠকর্মীর কাছে জমা বাকি থাকা রসিদের গুচ্ছ */
 interface OfficerHandoverGroup {
@@ -52,6 +53,8 @@ export class CashClosingComponent implements OnInit {
   private kistiService = inject(KistiDatabaseService);
   readonly authService = inject(AuthStateService);
   private toast = inject(ToastService);
+  /** এই ডিভাইসে সিঙ্ক না হওয়া অফলাইন আদায় — ক্যাশ জমার আগে সতর্কতা */
+  readonly offlineQueue = inject(OfflineCollectionQueueService);
 
   readonly denominationList = DENOMINATIONS;
   readonly ALL_BRANCHES = ALL_BRANCHES;

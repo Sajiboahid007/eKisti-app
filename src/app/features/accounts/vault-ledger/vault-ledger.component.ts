@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { Branch, DailyBranchSummary, Expense, MonthlyPortfolioSnapshot, PeriodClosing, VaultTransaction } from '../../../core/models/database.models';
 import { AuthStateService } from '../../../core/services/auth-state.service';
-import { CashService, EXPENSE_HEADS, VaultOperation } from '../../../core/services/cash.service';
+import { CashService, EXPENSE_HEADS, VOUCHER_PREFIX, VaultOperation } from '../../../core/services/cash.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { addDaysKey, monthKeyDhaka, todayDhaka } from '../../../core/finance/dates';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
@@ -66,6 +66,8 @@ export class VaultLedgerComponent implements OnInit {
   readonly op = signal<VaultOperation | 'CLOSE_DAY' | 'CLOSE_MONTH' | 'REOPEN' | 'INTEREST' | null>(null);
   readonly amount = signal<number>(0);
   readonly slipNo = signal<string>('');
+  /** মোডাল খোলার সময় দেখানো স্বয়ংক্রিয় নং — অপরিবর্তিত থাকলে জমার সময় পরবর্তী ক্রমিক নং বরাদ্দ হয় */
+  private autoSlipPreview = '';
   readonly note = signal<string>('');
   readonly head = signal<string>(EXPENSE_HEADS[0]);
   readonly paidTo = signal<string>('');
@@ -189,6 +191,8 @@ export class VaultLedgerComponent implements OnInit {
     this.op.set(op);
     this.amount.set(op === 'OPENING' ? (Number(this.branch()?.currentVaultCash) || 0) : 0);
     this.slipNo.set('');
+    this.autoSlipPreview = '';
+    if (op in VOUCHER_PREFIX) void this.loadAutoSlipNo(op as VaultOperation);
     this.note.set('');
     this.paidTo.set('');
     this.modalError.set('');
@@ -197,6 +201,14 @@ export class VaultLedgerComponent implements OnInit {
 
   close() {
     if (!this.busy()) this.op.set(null);
+  }
+
+  /** পরবর্তী ক্রমিক স্লিপ / ভাউচার নং (যেমন BD-001) — প্রকৃত ব্যাংক স্লিপ নং দিয়ে বদলানো যায় */
+  private async loadAutoSlipNo(op: VaultOperation) {
+    const next = await this.cash.peekVoucherNo(this.branchId(), op);
+    if (this.op() !== op || this.slipNo()) return;
+    this.autoSlipPreview = next;
+    this.slipNo.set(next);
   }
 
   private actor() {
@@ -226,9 +238,9 @@ export class VaultLedgerComponent implements OnInit {
       } else {
         const row = await this.cash.vaultOperation({
           branchId: this.branchId(), operation: op, amount: Number(this.amount()) || 0,
-          slipNo: this.slipNo(), note: this.note(), expenseHead: op === 'EXPENSE' ? this.head() : undefined, paidTo: this.paidTo()
+          slipNo: this.slipNo(), autoSlipNo: !!this.autoSlipPreview && this.slipNo().trim() === this.autoSlipPreview, note: this.note(), expenseHead: op === 'EXPENSE' ? this.head() : undefined, paidTo: this.paidTo()
         }, this.actor());
-        text = `${OPERATION_LABELS[op].label}: ৳${row.amount.toLocaleString('en-IN')} — ভল্ট এখন ৳${row.balanceAfter.toLocaleString('en-IN')}`;
+        text = `${OPERATION_LABELS[op].label}${row.slipNo ? ` (${row.slipNo})` : ''}: ৳${row.amount.toLocaleString('en-IN')} — ভল্ট এখন ৳${row.balanceAfter.toLocaleString('en-IN')}`;
       }
       this.op.set(null);
       this.notice.set({ kind: 'success', text });

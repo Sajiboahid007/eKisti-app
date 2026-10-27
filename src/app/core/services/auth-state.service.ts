@@ -2,7 +2,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Firestore, collection, getDocs } from '@angular/fire/firestore';
 import { StaffRole, UserStaff, Role, UserCategory } from '../models/database.models';
-import { LOAN_APPROVE_ROLES, LOAN_DISBURSE_ROLES, LOAN_VERIFY_ROLES } from './loan-lifecycle.service';
+import { LOAN_APPROVE_ROLES, LOAN_DISBURSE_ROLES, LOAN_VERIFY_ROLES } from '../guards/loan-roles';
 import { canAccessVaultFor, canOperateVaultFor } from '../guards/vault-access';
 
 export interface ActiveUserSession {

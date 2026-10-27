@@ -259,7 +259,7 @@
               <div class="form-group"><label>প্রাপক</label><input class="form-control" [ngModel]="paidTo()" (ngModelChange)="paidTo.set($event)" /></div>
             }
             @if (o !== 'OPENING') {
-              <div class="form-group"><label>{{ o === 'EXPENSE' ? 'ভাউচার নং' : 'স্লিপ / চেক / রেফারেন্স নং' }}@if (o === 'BANK_DEPOSIT' || o === 'BANK_WITHDRAW') { * }</label><input class="form-control" [ngModel]="slipNo()" (ngModelChange)="slipNo.set($event)" /></div>
+              <div class="form-group"><label>{{ o === 'EXPENSE' ? 'ভাউচার নং' : 'স্লিপ / চেক / রেফারেন্স নং' }}@if (o === 'BANK_DEPOSIT' || o === 'BANK_WITHDRAW') { * }</label><input class="form-control" [ngModel]="slipNo()" (ngModelChange)="slipNo.set($event)" /><small class="sub-text">{{ o === 'EXPENSE' ? 'স্বয়ংক্রিয়ভাবে তৈরি — প্রয়োজনে প্রকৃত ভাউচার নং দিন' : 'স্বয়ংক্রিয়ভাবে তৈরি — প্রয়োজনে প্রকৃত স্লিপ / চেক নং দিন' }}</small></div>
             }
             <div class="form-group"><label>বিবরণ</label><input class="form-control" [ngModel]="note()" (ngModelChange)="note.set($event)" /></div>
           }

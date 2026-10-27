@@ -55,11 +55,11 @@ export function allocatePayment(
     if (rem.total <= 0) continue;
 
     const profit = Math.min(left, rem.profit);
-    left -= profit;
+    left = Math.round((left - profit) * 100) / 100;
     const principal = Math.min(left, rem.principal);
-    left -= principal;
+    left = Math.round((left - principal) * 100) / 100;
 
-    const fullyPaid = profit === rem.profit && principal === rem.principal;
+    const fullyPaid = Math.abs(profit - rem.profit) < 0.005 && Math.abs(principal - rem.principal) < 0.005;
     allocations.push({
       installmentId: inst.installmentId,
       installmentNo: inst.installmentNo,

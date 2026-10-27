@@ -118,3 +118,23 @@
   .kpi { padding: 4px 6px; }
   .flow-alert { padding: 4px 6px; }
 }
+
+/* MRA রিটার্ন — প্রতিটি ফর্ম আলাদা অংশ; প্রিন্টে নতুন পাতায় */
+.mra-form {
+  margin-top: 1.25rem;
+
+  & + .mra-form {
+    padding-top: 1rem;
+    border-top: 2px solid var(--border-color, #e2e8f0);
+  }
+
+  > .section-title .sub-text { font-weight: 400; }
+}
+
+@media print {
+  .mra-form + .mra-form {
+    break-before: page;
+    page-break-before: always;
+    border-top: none;
+  }
+}

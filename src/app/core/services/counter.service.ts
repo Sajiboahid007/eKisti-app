@@ -47,9 +47,16 @@ const STARTING_SEQUENCES: Record<EntitySequence, number> = {
   loanProducts: 1
 };
 
+/** শাখাভিত্তিক ভাউচার / স্লিপ ক্রমিক নং (যেমন voucher_BD_1) — ১ থেকে শুরু */
+export type VoucherSequence = `voucher_${string}`;
+
+export function voucherSequence(prefix: string, branchId: number): VoucherSequence {
+  return `voucher_${prefix}_${branchId}`;
+}
+
 /** কাউন্টার না থাকলে শেষ ইস্যুকৃত আইডি = শুরুর আগের সংখ্যা */
-export function startingSequence(entity: EntitySequence): number {
-  return STARTING_SEQUENCES[entity];
+export function startingSequence(entity: EntitySequence | VoucherSequence): number {
+  return STARTING_SEQUENCES[entity as EntitySequence] ?? 1;
 }
 
 @Injectable({
@@ -119,18 +126,18 @@ export class CounterService {
   /**
    * Peeks the next expected Integer ID without incrementing the sequence counter.
    */
-  async peekNextIntegerId(entity: EntitySequence): Promise<number> {
+  async peekNextIntegerId(entity: EntitySequence | VoucherSequence): Promise<number> {
     try {
       const counterDocRef = doc(this.firestore, 'counters', entity);
       const snap = await getDoc(counterDocRef);
       if (snap.exists()) {
         const data = snap.data();
-        const current = data['currentSequenceId'] || STARTING_SEQUENCES[entity];
+        const current = data['currentSequenceId'] || startingSequence(entity);
         return current + 1;
       }
-      return STARTING_SEQUENCES[entity];
+      return startingSequence(entity);
     } catch {
-      return STARTING_SEQUENCES[entity];
+      return startingSequence(entity);
     }
   }
 }

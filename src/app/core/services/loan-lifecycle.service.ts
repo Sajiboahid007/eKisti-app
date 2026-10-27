@@ -10,17 +10,12 @@ import { CounterService } from './counter.service';
 import { SettingsService } from './settings.service';
 import { Actor, TxRunner } from './tx-runner.service';
 import { round2 } from './tx-session';
+import { LOAN_VERIFY_ROLES, LOAN_APPROVE_ROLES, LOAN_DISBURSE_ROLES } from '../guards/loan-roles';
 
 /** যেসব অবস্থায় ঋণ "চলমান" ধরা হয় (নতুন ঋণ আটকাতে) */
 export const OPEN_LOAN_STATUSES: LoanStatus[] = ['APPLIED', 'FIELD_VERIFIED', 'APPROVED', 'DISBURSED', 'OVERDUE'];
-/**
- * ঋণ প্রবাহের ধাপভিত্তিক দায়িত্ব:
- * মাঠকর্মী সরেজমিনে যাচাই → শাখা ব্যবস্থাপক অনুমোদন → ক্যাশিয়ার ভল্ট থেকে টাকা দিয়ে বিতরণ।
- * অ্যাডমিন / সুপার অ্যাডমিন সব ধাপে প্রয়োজনে কাজ করতে পারেন।
- */
-export const LOAN_VERIFY_ROLES = ['FIELD_OFFICER', 'SUPER_ADMIN', 'ADMIN'];
-export const LOAN_APPROVE_ROLES = ['BRANCH_MANAGER', 'SUPER_ADMIN', 'ADMIN', 'AREA_MANAGER', 'MANAGING_DIRECTOR'];
-export const LOAN_DISBURSE_ROLES = ['CASHIER', 'SUPER_ADMIN', 'ADMIN'];
+/** ঋণ প্রবাহের ধাপভিত্তিক দায়িত্ব — core/guards/loan-roles.ts */
+export { LOAN_VERIFY_ROLES, LOAN_APPROVE_ROLES, LOAN_DISBURSE_ROLES } from '../guards/loan-roles';
 
 /** ঋণ চক্র গণনায় যেসব ঋণ ধরা হয় */
 const CYCLE_COUNTED_STATUSES: LoanStatus[] = ['DISBURSED', 'OVERDUE', 'CLOSED', 'WRITTEN_OFF'];

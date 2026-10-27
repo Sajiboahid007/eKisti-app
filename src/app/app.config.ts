@@ -1,5 +1,6 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, isDevMode, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { provideServiceWorker } from '@angular/service-worker';
 import { provideFirebaseApp, initializeApp, getApp } from '@angular/fire/app';
 import { provideFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from '@angular/fire/firestore';
 import { provideAuth, getAuth } from '@angular/fire/auth';
@@ -23,6 +24,14 @@ export const appConfig: ApplicationConfig = {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
     })),
     provideAuth(() => getAuth()),
-    provideStorage(() => getStorage())
+    provideStorage(() => getStorage()),
+    /**
+     * PWA সার্ভিস ওয়ার্কার (শুধু প্রোডাকশন বিল্ডে): অ্যাপের ফাইল ও ফন্ট ক্যাশে থাকে, তাই গ্রামে ইন্টারনেট
+     * ছাড়াও অ্যাপ খোলে। ডেটা Firestore অফলাইন ক্যাশ থেকে, আর কিস্তি আদায় অফলাইন সারিতে জমা থাকে।
+     */
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000'
+    })
   ]
 };

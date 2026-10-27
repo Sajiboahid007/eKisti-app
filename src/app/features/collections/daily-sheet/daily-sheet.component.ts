@@ -13,6 +13,8 @@ import { AuthStateService, ActiveUserSession } from '../../../core/services/auth
 import { LanguageService } from '../../../core/services/language.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { SettingsService } from '../../../core/services/settings.service';
+import { OfflineCollectionQueueService, isTransientError } from '../../../core/services/offline-collection-queue.service';
+import { ConcurrentChangeError } from '../../../core/services/tx-runner.service';
 
 /**
  * মাঠ শিটের একটি সারি — কিস্তির নির্ধারিত তারিখ অনুযায়ী (দৈনিক/সাপ্তাহিক/মাসিক সব ঋণে সঠিক),
@@ -45,6 +47,9 @@ export class DailySheetComponent implements OnInit {
   private route = inject(ActivatedRoute);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  /** অফলাইন আদায়ের অপেক্ষমাণ সারি (ইন্টারনেট না থাকলে) */
+  readonly offlineQueue = inject(OfflineCollectionQueueService);
+  readonly showOfflineList = signal<boolean>(false);
 
   readonly allBranches = signal<Branch[]>([]);
 
@@ -138,6 +143,19 @@ export class DailySheetComponent implements OnInit {
   });
 
   constructor() {
+    // অফলাইন সিঙ্কে (স্বয়ংক্রিয় বা "এখন সিঙ্ক") রসিদ হলে শিট রিফ্রেশ ও বার্তা
+    let seenSync = this.offlineQueue.lastSync()?.at ?? 0;
+    effect(() => {
+      const last = this.offlineQueue.lastSync();
+      if (!last || last.at === seenSync) return;
+      seenSync = last.at;
+      if (last.synced) void this.loadSheetData();
+      this.notice.set({
+        kind: last.failed ? 'danger' : 'success',
+        text: `অফলাইন আদায়: ${last.synced}টি রসিদ তৈরি হয়েছে${last.failed ? `, ${last.failed}টি ব্যর্থ — নিচের তালিকায় কারণ দেখুন` : ''}`
+      });
+    });
+
     // Whenever user role changes in top bar, reactively refresh routes and sheet
     effect(() => {
       const user = this.authService.currentUser();
@@ -372,6 +390,15 @@ export class DailySheetComponent implements OnInit {
     this.collectError.set('');
     const currentUser = this.authService.currentUser();
 
+    // একই রেফ: অনলাইন চেষ্টার idempotency key, ব্যর্থ হলে অফলাইন সারির রেফ — দুবার পোস্ট অসম্ভব
+    const ref = this.offlineQueue.newRef(currentUser.userId);
+
+    // ইন্টারনেট নেই — আদায়টি ডিভাইসে সারিতে রাখা, সংযোগ ফিরলে আসল রসিদ হবে
+    if (!this.offlineQueue.online()) {
+      await this.queueOffline(item, ref);
+      return;
+    }
+
     try {
       // রসিদ + কিস্তি + ঋণ + সঞ্চয় + খতিয়ান একটি ট্রানজ্যাকশনে
       const receipt = await this.finance.collectPayment({
@@ -381,7 +408,8 @@ export class DailySheetComponent implements OnInit {
         paymentMethod: this.collectMethod(),
         trxId: this.collectTrxId(),
         allowAdvance: this.allowAdvance(),
-        reason: `মাঠপর্যায়ে কিস্তি আদায় (সমিতি ${this.selectedCenterId()})`
+        reason: `মাঠপর্যায়ে কিস্তি আদায় (সমিতি ${this.selectedCenterId()})`,
+        idempotencyKey: ref
       }, { userId: currentUser.userId, name: currentUser.name, role: currentUser.role });
 
       const next = this.nextAfterPayment();
@@ -392,11 +420,59 @@ export class DailySheetComponent implements OnInit {
       this.notice.set({ kind: 'success', text: `রসিদ #${receipt.receiptId}: ${item.loan.customerName}-এর ৳${receipt.totalAmountCollected} আদায় হয়েছে${nextText}` });
       await this.loadSheetData();
     } catch (err: any) {
+      // সংযোগ মাঝপথে বিচ্ছিন্ন — একই রেফে সারিতে রাখা (আসলে কমিট হয়ে থাকলে সিঙ্কে AlreadyPosted হিসেবে বাদ যাবে)
+      if (isTransientError(err) && !(err instanceof ConcurrentChangeError)) {
+        await this.queueOffline(item, ref);
+        return;
+      }
       console.error('Error collecting in daily sheet:', err);
       this.collectError.set(err?.message || 'কালেকশন সম্পন্ন করতে সমস্যা হয়েছে');
     } finally {
       this.isProcessing.set(false);
     }
+  }
+
+  private async queueOffline(item: DailySheetItem, ref: string) {
+    const currentUser = this.authService.currentUser();
+    try {
+      const entry = await this.offlineQueue.enqueue({
+        ref,
+        loanId: item.loan.loanId,
+        loanAccountNo: item.loan.loanAccountNo,
+        customerName: item.loan.customerName,
+        branchId: item.loan.branchId,
+        centerId: item.loan.centerId,
+        loanAmount: Number(this.collectAmount()) || 0,
+        savingsAmount: Number(this.collectSavings()) || 0,
+        paymentMethod: this.collectMethod(),
+        trxId: this.collectTrxId(),
+        reason: `মাঠপর্যায়ে কিস্তি আদায় (সমিতি ${this.selectedCenterId()})`,
+        actor: { userId: currentUser.userId, name: currentUser.name, role: currentUser.role }
+      });
+      this.activeItemForCollect.set(null);
+      this.notice.set({
+        kind: 'success',
+        text: `ইন্টারনেট সংযোগ নেই — ${item.loan.customerName}-এর ৳${entry.loanAmount + entry.savingsAmount} আদায় অফলাইন সারিতে রাখা হয়েছে (রেফ: ${entry.ref})। হাতে লেখা রসিদে এই রেফ দিন; সংযোগ ফিরলে স্বয়ংক্রিয়ভাবে আসল রসিদ হবে।`
+      });
+    } catch (err: any) {
+      this.collectError.set(err?.message || 'অফলাইন সারিতে রাখা যায়নি');
+    } finally {
+      this.isProcessing.set(false);
+    }
+  }
+
+  /** অপেক্ষমাণ অফলাইন আদায় এখনই পাঠানো (ব্যর্থগুলোসহ পুনরায় চেষ্টা) */
+  async syncOffline(includeFailed = false) {
+    // ফলাফলের বার্তা ও রিফ্রেশ constructor-এর lastSync effect-এ
+    const r = await this.offlineQueue.sync(includeFailed);
+    if (r.stoppedOffline && !r.synced) {
+      this.notice.set({ kind: 'danger', text: 'ইন্টারনেট সংযোগ নেই — অফলাইন আদায় পরে পাঠানো হবে' });
+    }
+  }
+
+  async discardOffline(ref: string) {
+    if (!confirm(`অফলাইন আদায় ${ref} মুছে ফেলবেন? টাকাটি শাখায় হাতে মীমাংসা না হলে মাঠকর্মীর হাতের নগদ হিসাবে মিলবে না।`)) return;
+    await this.offlineQueue.discard(ref);
   }
 
   // ---------- হাজিরা ----------

@@ -393,6 +393,14 @@ service cloud.firestore {
     // 7. SYSTEM
     // =================================================================================
 
+    // লেনদেন দুবার পোস্ট না হওয়ার চাবি (FinanceService.collectPayment → idempotencyKey)।
+    // ট্রানজ্যাকশন না-থাকা ডকুমেন্টও পড়ে, তাই resource == null অনুমোদিত। অপরিবর্তনীয়।
+    match /idempotencyKeys/{key} {
+      allow read: if !authEnforced() || resource == null || canAccessBranch(existingBranch());
+      allow create: if !authEnforced() || canWriteBranch(incomingBranch());
+      allow update, delete: if false;
+    }
+
     // বকেয়া ইঞ্জিনের দৈনিক মার্কার (overdue-engine.service.ts)
     match /systemJobs/{id} {
       allow read: if !authEnforced() || isSignedIn();
@@ -418,7 +426,7 @@ service cloud.firestore {
         'savingsTransactions', 'loanTransactions', 'feeTransactions', 'journalEntries',
         'loanStatusHistory', 'creditScoreHistory', 'documentVersions', 'auditLogs',
         'staffAssignments', 'memberTransfers', 'savingsInterestPostings', 'smsLogs',
-        'systemJobs', '_connection_test'
+        'systemJobs', '_connection_test', 'idempotencyKeys'
       ]);
     }
   }

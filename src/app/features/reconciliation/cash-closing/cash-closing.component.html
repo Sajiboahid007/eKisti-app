@@ -20,6 +20,16 @@
     </div>
   </div>
 
+  @if (offlineQueue.mine().length) {
+    <div class="flow-alert warning no-print">
+      <span class="material-symbols-outlined">cloud_upload</span>
+      <span>
+        এই ডিভাইসে <strong>{{ offlineQueue.mine().length }}টি অফলাইন আদায়</strong> (৳{{ (offlineQueue.pendingTotal() + offlineQueue.failedTotal()) | number }}) এখনো রসিদ হয়নি, তাই নিচের হিসাবে আসেনি।
+        ক্যাশ জমার আগে মাঠ কালেকশন শিট থেকে সিঙ্ক করুন।
+      </span>
+    </div>
+  }
+
   @if (!canVerify()) {
     <div class="alert-banner info">
       <span class="material-symbols-outlined">info</span>

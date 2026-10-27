@@ -17,7 +17,7 @@ import {
 } from '../models/database.models';
 import { balancedLines } from '../finance/accounts';
 import { AuditHistoryService, stripUndefined } from './audit-history.service';
-import { EntitySequence, startingSequence } from './counter.service';
+import { EntitySequence, VoucherSequence, startingSequence } from './counter.service';
 
 interface CounterState {
   ref: DocumentReference;
@@ -35,7 +35,7 @@ interface CounterState {
  * আইডি কাউন্টার একই ট্রানজ্যাকশনে বাড়ে, তাই ব্যর্থ হলে আইডিতেও ফাঁক থাকে না।
  */
 export class TxSession {
-  private counters = new Map<EntitySequence, CounterState>();
+  private counters = new Map<EntitySequence | VoucherSequence, CounterState>();
   private branches = new Map<number, { ref: DocumentReference; data: Branch; vault: number; bank: number; touched: boolean }>();
   private writesStarted = false;
 
@@ -52,7 +52,7 @@ export class TxSession {
   // ================= READ PHASE =================
 
   /** count টি ক্রমিক আইডি সংরক্ষণ — প্রথম আইডি ফেরত দেয় */
-  async reserve(entity: EntitySequence, count: number): Promise<number> {
+  async reserve(entity: EntitySequence | VoucherSequence, count: number): Promise<number> {
     this.assertReadPhase();
     if (count <= 0) return 0;
     let state = this.counters.get(entity);

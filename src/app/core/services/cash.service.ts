@@ -23,9 +23,19 @@ import { addDaysKey, monthKeyDhaka, todayDhaka, toDhakaDayKey } from '../finance
 import { portfolioQuality, recoveryRates } from '../finance/classification';
 import { SettingsService } from './settings.service';
 import { Actor, TxRunner } from './tx-runner.service';
+import { CounterService, voucherSequence } from './counter.service';
 import { round2 } from './tx-session';
 
 export type VaultOperation = 'BANK_DEPOSIT' | 'BANK_WITHDRAW' | 'EXPENSE' | 'HO_TRANSFER_IN' | 'HO_TRANSFER_OUT' | 'OPENING';
+
+/** স্বয়ংক্রিয় স্লিপ / ভাউচার নং-এর উপসর্গ — প্রতি শাখায় প্রতি ধরনে ০০১ থেকে ক্রমিক (যেমন BD-001) */
+export const VOUCHER_PREFIX: Partial<Record<VaultOperation, string>> = {
+  BANK_DEPOSIT: 'BD', BANK_WITHDRAW: 'BW', EXPENSE: 'EXP', HO_TRANSFER_IN: 'HOI', HO_TRANSFER_OUT: 'HOO'
+};
+
+export function formatVoucherNo(prefix: string, serial: number): string {
+  return `${prefix}-${String(serial).padStart(3, '0')}`;
+}
 
 /**
  * টাকা কোথায় নেওয়া হলো:
@@ -51,6 +61,7 @@ export const EXPENSE_HEADS = [
 @Injectable({ providedIn: 'root' })
 export class CashService {
   private runner = inject(TxRunner);
+  private counters = inject(CounterService);
   private settings = inject(SettingsService);
   private firestore = this.runner.firestore;
 
@@ -177,11 +188,20 @@ export class CashService {
   // ২. ভল্ট / ব্যাংক / খরচ / প্রধান কার্যালয় তহবিল
   // =====================================================================
 
+  /** পরবর্তী স্বয়ংক্রিয় স্লিপ / ভাউচার নং (শুধু দেখানোর জন্য — আসল নং জমার সময় বরাদ্দ হয়) */
+  async peekVoucherNo(branchId: number, operation: VaultOperation): Promise<string> {
+    const prefix = VOUCHER_PREFIX[operation];
+    if (!prefix) return '';
+    return formatVoucherNo(prefix, await this.counters.peekNextIntegerId(voucherSequence(prefix, Number(branchId))));
+  }
+
   async vaultOperation(params: {
     branchId: number;
     operation: VaultOperation;
     amount: number;
     slipNo?: string;
+    /** true হলে slipNo উপেক্ষা করে ট্রানজ্যাকশনের ভেতরে পরবর্তী ক্রমিক ভাউচার নং বরাদ্দ হয় */
+    autoSlipNo?: boolean;
     note?: string;
     expenseHead?: string;
     paidTo?: string;
@@ -190,7 +210,9 @@ export class CashService {
     const amount = round2(params.amount);
     if (!(amount > 0)) throw new Error('সঠিক পরিমাণ দিন');
     if (params.operation === 'EXPENSE' && !params.expenseHead) throw new Error('খরচের খাত নির্বাচন করুন');
-    if ((params.operation === 'BANK_DEPOSIT' || params.operation === 'BANK_WITHDRAW') && !params.slipNo?.trim()) {
+    const prefix = VOUCHER_PREFIX[params.operation];
+    const autoSlip = !!prefix && (params.autoSlipNo || !params.slipNo?.trim());
+    if (!autoSlip && (params.operation === 'BANK_DEPOSIT' || params.operation === 'BANK_WITHDRAW') && !params.slipNo?.trim()) {
       throw new Error('ব্যাংক স্লিপ / চেক নম্বর লিখুন');
     }
 
@@ -205,6 +227,7 @@ export class CashService {
       const id = await s.reserve('vaultTransactions', 1);
       const journalId = await s.reserve('journalEntries', 1);
       const expenseId = params.operation === 'EXPENSE' ? await s.reserve('expenses', 1) : 0;
+      if (autoSlip) params = { ...params, slipNo: formatVoucherNo(prefix!, await s.reserve(voucherSequence(prefix!, Number(params.branchId)), 1)) };
       s.correlationId = `VLT-${id}`;
       const note = params.note?.trim();
 

@@ -18,7 +18,7 @@ export const superAdminGuard: CanActivateFn = (route, state) => {
   const authService = inject(AuthStateService);
   const router = inject(Router);
 
-  if (authService.isSuperAdmin()) {
+  if (authService.canManageUsers()) {
     return true;
   }
 

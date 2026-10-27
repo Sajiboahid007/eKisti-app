@@ -1806,9 +1806,17 @@ select.form-control {
   body.print-application-form {
     app-navbar,
     app-sidebar,
-    .page-container,
-    .modal-backdrop {
+    .modal-backdrop,
+    .page-container > *:not(app-customer-application-form) {
       display: none !important;
+    }
+
+    .page-container {
+      display: block !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      background: transparent !important;
     }
 
     .app-layout,

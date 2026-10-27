@@ -83,6 +83,64 @@
     </div>
   }
 
+  <!-- অফলাইন আদায় (ইন্টারনেট না থাকলে ডিভাইসে অপেক্ষমাণ) -->
+  @if (!offlineQueue.online() || offlineQueue.mine().length) {
+    <div class="offline-panel no-print" [class.is-offline]="!offlineQueue.online()">
+      <div class="offline-head">
+        <span class="material-symbols-outlined">{{ offlineQueue.online() ? 'cloud_upload' : 'cloud_off' }}</span>
+        <div class="offline-text">
+          @if (!offlineQueue.online()) {
+            <strong>অফলাইন মোড — ইন্টারনেট সংযোগ নেই</strong>
+            <span>কিস্তি আদায় এই ডিভাইসে জমা থাকবে; সংযোগ ফিরলে স্বয়ংক্রিয়ভাবে আসল রসিদ হবে।</span>
+          }
+          @if (offlineQueue.mine().length) {
+            <span>
+              অপেক্ষমাণ অফলাইন আদায়: <strong>{{ offlineQueue.pendingCount() }}টি</strong>
+              (৳{{ offlineQueue.pendingTotal() | number }})
+              @if (offlineQueue.failedCount()) { • <strong class="text-danger">ব্যর্থ {{ offlineQueue.failedCount() }}টি (৳{{ offlineQueue.failedTotal() | number }})</strong> }
+              — ক্যাশ ক্লোজিংয়ের আগে সিঙ্ক করুন
+            </span>
+          }
+        </div>
+        <div class="offline-actions">
+          @if (offlineQueue.mine().length) {
+            <button class="btn btn-sm btn-secondary" (click)="showOfflineList.set(!showOfflineList())">
+              {{ showOfflineList() ? 'লুকান' : 'তালিকা' }}
+            </button>
+            <button class="btn btn-sm btn-primary" (click)="syncOffline(true)" [disabled]="!offlineQueue.online() || offlineQueue.syncing()">
+              <span class="material-symbols-outlined" [class.spinning]="offlineQueue.syncing()">sync</span>
+              <span>{{ offlineQueue.syncing() ? 'পাঠানো হচ্ছে...' : 'এখন সিঙ্ক' }}</span>
+            </button>
+          }
+        </div>
+      </div>
+      @if (showOfflineList() && offlineQueue.mine().length) {
+        <table class="offline-table">
+          <thead><tr><th>রেফ</th><th>সদস্য / ঋণ</th><th class="text-right">টাকা ৳</th><th>সময়</th><th>অবস্থা</th><th></th></tr></thead>
+          <tbody>
+            @for (e of offlineQueue.mine(); track e.ref) {
+              <tr>
+                <td class="font-mono" translate="no">{{ e.ref }}</td>
+                <td>{{ e.customerName }} <span class="text-muted" translate="no">({{ e.loanAccountNo }})</span></td>
+                <td class="text-right amount-bdt">{{ (e.loanAmount + e.savingsAmount) | number }}</td>
+                <td>{{ e.collectedAt | date:'dd/MM HH:mm' }}</td>
+                <td>
+                  @if (e.status === 'PENDING') { <span class="badge badge-warning">অপেক্ষমাণ</span> }
+                  @else { <span class="badge badge-danger" [title]="e.error || ''">ব্যর্থ</span> <div class="sub-text text-danger">{{ e.error }}</div> }
+                </td>
+                <td class="text-right">
+                  @if (e.status === 'FAILED') {
+                    <button class="btn btn-sm btn-secondary" (click)="discardOffline(e.ref)">মুছুন</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  }
+
   <!-- Collection Sheet Table Card -->
   <div class="card table-card">
     <div class="card-body p-0">
@@ -158,7 +216,8 @@
                   <td class="col-inst-amount amount-bdt text-right">{{ item.view.dueAmount | number }}</td>
                   <td class="col-savings amount-bdt text-success text-right">{{ item.view.dueSavings | number }}</td>
                   <td class="col-total text-right">
-                    @if (item.collectedTodayAmount > 0) { <strong class="amount-bdt text-success">{{ item.collectedTodayAmount | number }}</strong> } @else { <span class="text-muted">—</span> }
+                    @if (item.collectedTodayAmount > 0) { <strong class="amount-bdt text-success">{{ item.collectedTodayAmount | number }}</strong> } @else if (!offlineQueue.unsyncedByLoan().get(item.loan.loanId)) { <span class="text-muted">—</span> }
+                    @if (offlineQueue.unsyncedByLoan().get(item.loan.loanId); as pend) { <div class="offline-tag" title="অফলাইন — সিঙ্কের অপেক্ষায়">+৳{{ pend | number }} অফলাইন</div> }
                   </td>
                   <td class="col-status"><span class="badge" [ngClass]="st.cls">{{ st.label }}</span></td>
                   <td class="col-action text-right">
@@ -279,6 +338,10 @@
           <span class="total-val">৳ {{ (collectAmount() + collectSavings()) | number }}</span>
         </div>
 
+        @if (!offlineQueue.online()) {
+          <div class="flow-alert warning"><span class="material-symbols-outlined">cloud_off</span><span>ইন্টারনেট নেই — আদায়টি ডিভাইসে জমা থাকবে এবং সংযোগ ফিরলে রসিদ নম্বর পাবে। গ্রাহককে হাতে লেখা রসিদে অফলাইন রেফ দিন।</span></div>
+        }
+
         @if (collectError()) {
           <div class="flow-alert danger"><span class="material-symbols-outlined">error</span><span>{{ collectError() }}</span></div>
         }
@@ -288,7 +351,7 @@
         <button class="btn btn-secondary" (click)="closeCollectModal()" [disabled]="isProcessing()">বাতিল</button>
         <button class="btn btn-success" (click)="confirmCollection()" [disabled]="isProcessing() || (collectAmount() + collectSavings()) <= 0 || (advanceNeeded() && !allowAdvance())">
           <span class="material-symbols-outlined">receipt_long</span>
-          <span>{{ isProcessing() ? 'প্রসেসিং হচ্ছে...' : 'আদায় ও রসিদ নিশ্চিত' }}</span>
+          <span>{{ isProcessing() ? 'প্রসেসিং হচ্ছে...' : (offlineQueue.online() ? 'আদায় ও রসিদ নিশ্চিত' : 'অফলাইনে আদায় জমা রাখুন') }}</span>
         </button>
       </div>
     </div>
