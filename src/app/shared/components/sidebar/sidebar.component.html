@@ -198,19 +198,24 @@
 
   <!-- সক্রিয় ব্যবহারকারী ও লগআউট -->
   <div class="sidebar-account">
-    <div class="user-avatar" [ngClass]="{
-      'avatar-admin': authService.isSystemAdmin(),
-      'avatar-ho': authService.isHeadOfficeUser(),
-      'avatar-branch': authService.isBranchStaff()
-    }">
-      {{ authService.currentUser().name.charAt(0) }}
-    </div>
-    <div class="user-info">
-      <div class="user-name">{{ authService.currentUser().name }}</div>
-      <div class="user-role-badge">
-        {{ lang.isBangla() ? authService.currentUser().roleTitleBangla : authService.currentUser().roleTitleEnglish }}
+    <!-- আমার প্রোফাইল -->
+    <a class="account-link" routerLink="/profile" routerLinkActive="active"
+      [title]="lang.isBangla() ? 'আমার প্রোফাইল' : 'My Profile'"
+      [attr.aria-label]="lang.isBangla() ? 'আমার প্রোফাইল' : 'My Profile'">
+      <div class="user-avatar" [ngClass]="{
+        'avatar-admin': authService.isSystemAdmin(),
+        'avatar-ho': authService.isHeadOfficeUser(),
+        'avatar-branch': authService.isBranchStaff()
+      }">
+        {{ authService.currentUser().name.charAt(0) }}
       </div>
-    </div>
+      <div class="user-info">
+        <div class="user-name">{{ authService.currentUser().name }}</div>
+        <div class="user-role-badge">
+          {{ lang.isBangla() ? authService.currentUser().roleTitleBangla : authService.currentUser().roleTitleEnglish }}
+        </div>
+      </div>
+    </a>
     <button class="btn-logout" (click)="logout()" [title]="lang.t('logout')" [attr.aria-label]="lang.t('logout')">
       <span class="material-symbols-outlined">logout</span>
     </button>

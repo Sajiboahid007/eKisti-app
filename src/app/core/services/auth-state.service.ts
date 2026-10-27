@@ -4,6 +4,7 @@ import { Firestore, collection, getDocs } from '@angular/fire/firestore';
 import { StaffRole, UserStaff, Role, UserCategory } from '../models/database.models';
 import { LOAN_APPROVE_ROLES, LOAN_DISBURSE_ROLES, LOAN_VERIFY_ROLES } from '../guards/loan-roles';
 import { canAccessVaultFor, canOperateVaultFor } from '../guards/vault-access';
+import { StaffCredentialService } from './staff-credential.service';
 
 export interface ActiveUserSession {
   userId: number;
@@ -21,6 +22,8 @@ export interface ActiveUserSession {
   assignedBranchIds?: number[];   // এরিয়া/রিজিওনাল ম্যানেজারের শাখাসমূহ
   phone: string;
 }
+
+const MUST_CHANGE_KEY = 'ekisti_must_change_password';
 
 // এরিয়া ভিত্তিক তদারকি: নির্ধারিত শাখাগুলোর সব তথ্য দেখতে পারেন
 export const AREA_SCOPED_ROLES: StaffRole[] = ['AREA_MANAGER', 'REGIONAL_MANAGER'];
@@ -162,6 +165,7 @@ export const PRESET_STAFF_USERS: ActiveUserSession[] = [
 export class AuthStateService {
   private router = inject(Router);
   private firestore = inject(Firestore);
+  private credentials = inject(StaffCredentialService);
 
   // Dynamic available users list loaded from database (initialized with presets)
   readonly availableUsers = signal<ActiveUserSession[]>(PRESET_STAFF_USERS);
@@ -169,6 +173,8 @@ export class AuthStateService {
   // Authentication status and user session
   readonly isAuthenticated = signal<boolean>(false);
   readonly currentUser = signal<ActiveUserSession>(PRESET_STAFF_USERS[0]);
+  /** অস্থায়ী (রিসেট করা) পাসওয়ার্ডে লগইন — নতুন পাসওয়ার্ড না দেওয়া পর্যন্ত শুধু /profile খোলা যায় */
+  readonly mustChangePassword = signal<boolean>(false);
 
   constructor() {
     const saved = localStorage.getItem('ekisti_user_session');
@@ -178,6 +184,7 @@ export class AuthStateService {
         if (parsed && parsed.userId) {
           this.currentUser.set(parsed);
           this.isAuthenticated.set(true);
+          this.mustChangePassword.set(localStorage.getItem(MUST_CHANGE_KEY) === String(parsed.userId));
         } else {
           this.isAuthenticated.set(false);
         }
@@ -462,9 +469,10 @@ export class AuthStateService {
   }
 
   /**
-   * Login using credentials (Email/Phone + Password)
+   * Login using credentials (Email/Phone + Password).
+   * পাসওয়ার্ড নির্ধারিত থাকলে (staffCredentials) তা মিলতে হবে; না থাকলে আগের ডেমো লগইন।
    */
-  login(emailOrPhone: string, password?: string): boolean {
+  async login(emailOrPhone: string, password: string = ''): Promise<boolean> {
     const cleanId = emailOrPhone.trim().toLowerCase();
     const users = this.availableUsers();
     const user = users.find(u => 
@@ -473,12 +481,21 @@ export class AuthStateService {
       u.name.toLowerCase().includes(cleanId)
     );
 
-    if (user) {
-      this.setUserSession(user);
-      return true;
+    if (!user) return false;
+
+    let mustChange = false;
+    try {
+      const result = await this.credentials.check(user.userId, password);
+      if (result.status === 'WRONG') return false;
+      mustChange = result.mustChangePassword;
+    } catch (err) {
+      // অফলাইনে পাসওয়ার্ড ডকুমেন্ট ক্যাশে না থাকলে লগইন আটকানো হয় না
+      console.error('Error verifying password:', err);
     }
 
-    return false;
+    this.setUserSession(user);
+    this.setMustChangePassword(mustChange);
+    return true;
   }
 
   /**
@@ -522,11 +539,21 @@ export class AuthStateService {
    */
   logout() {
     this.isAuthenticated.set(false);
+    this.setMustChangePassword(false);
     localStorage.removeItem('ekisti_user_session');
     this.router.navigate(['/login']);
   }
 
+  /** নিজে নতুন পাসওয়ার্ড দিলে `false` — তখন অ্যাপের সব পাতা খুলে যায় */
+  setMustChangePassword(value: boolean) {
+    this.mustChangePassword.set(value);
+    if (value) localStorage.setItem(MUST_CHANGE_KEY, String(this.currentUser().userId));
+    else localStorage.removeItem(MUST_CHANGE_KEY);
+  }
+
   private setUserSession(user: ActiveUserSession) {
+    // ডেমো লগইন / ভূমিকা পরিবর্তনে আগের কর্মীর বাধ্যতামূলক পরিবর্তন প্রযোজ্য নয়
+    if (Number(user.userId) !== Number(this.currentUser().userId)) this.setMustChangePassword(false);
     this.currentUser.set(user);
     this.isAuthenticated.set(true);
     localStorage.setItem('ekisti_user_session', JSON.stringify(user));

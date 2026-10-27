@@ -83,6 +83,11 @@
             required 
             placeholder="••••••" />
         </div>
+        <div class="forgot-row">
+          <button type="button" class="forgot-link" (click)="openForgot()">
+            {{ lang.isBangla() ? 'পাসওয়ার্ড ভুলে গেছেন?' : 'Forgot password?' }}
+          </button>
+        </div>
       </div>
 
       <button type="submit" class="btn btn-primary btn-block btn-lg" [disabled]="loading()">
@@ -95,4 +100,86 @@
       <span>{{ lang.isBangla() ? 'নিরাপদ ক্লাউড ডেটাবেজ • ইন্টিজার আইডি আর্কিটেকচার' : 'Secure Cloud Database • Integer ID Architecture' }}</span>
     </div>
   </div>
+
+  <!-- পাসওয়ার্ড ভুলে গেছেন — অ্যাডমিনের কাছে রিসেট অনুরোধ -->
+  @if (forgotOpen()) {
+    <div class="forgot-backdrop" (click)="closeForgot()">
+      <div
+        class="forgot-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="forgotTitle"
+        aria-describedby="forgotDesc"
+        (click)="$event.stopPropagation()">
+        <div class="forgot-head">
+          <span class="material-symbols-outlined forgot-head-icon">lock_reset</span>
+          <h3 id="forgotTitle">{{ lang.isBangla() ? 'পাসওয়ার্ড ভুলে গেছেন?' : 'Forgot password?' }}</h3>
+          <button
+            type="button"
+            class="forgot-close"
+            (click)="closeForgot()"
+            [attr.aria-label]="lang.isBangla() ? 'বন্ধ করুন' : 'Close'">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        @if (forgotSent()) {
+          <div class="flow-alert success forgot-alert" role="status">
+            <span class="material-symbols-outlined">mark_email_read</span>
+            <span>{{ lang.isBangla()
+              ? 'যদি এই তথ্যের সাথে কোনো কর্মী একাউন্ট থাকে, অনুরোধটি অ্যাডমিনের কাছে পাঠানো হয়েছে। সিস্টেম অ্যাডমিন একটি অস্থায়ী পাসওয়ার্ড দেবেন — সেটি দিয়ে লগইন করে নতুন পাসওয়ার্ড নির্ধারণ করুন।'
+              : 'If a staff account matches this information, the request has been sent to the admin. The System Admin will give you a temporary password — sign in with it and set a new password.' }}</span>
+          </div>
+          <div class="forgot-actions">
+            <button type="button" class="btn btn-primary" (click)="closeForgot()">
+              {{ lang.isBangla() ? 'ঠিক আছে' : 'OK' }}
+            </button>
+          </div>
+        } @else {
+          <form (ngSubmit)="sendForgot()" class="forgot-form">
+            <p id="forgotDesc" class="forgot-desc">
+              {{ lang.isBangla()
+                ? 'আপনার ইমেইল বা মোবাইল নম্বর দিন। অনুরোধটি সিস্টেম অ্যাডমিনের কাছে যাবে, তিনি আপনাকে একটি অস্থায়ী পাসওয়ার্ড দেবেন।'
+                : 'Enter your email or mobile number. The request goes to the System Admin, who will give you a temporary password.' }}
+            </p>
+
+            @if (forgotError()) {
+              <div class="flow-alert danger forgot-alert" role="alert">
+                <span class="material-symbols-outlined alert-icon">error</span>
+                <span>{{ forgotError() }}</span>
+              </div>
+            }
+
+            <div class="form-group">
+              <label for="forgotIdentifier">{{ lang.isBangla() ? 'ইমেইল বা মোবাইল নম্বর' : 'Email or mobile number' }}</label>
+              <div class="input-with-icon">
+                <span class="material-symbols-outlined input-icon">alternate_email</span>
+                <input
+                  #forgotInput
+                  id="forgotIdentifier"
+                  type="text"
+                  class="form-control"
+                  name="forgotIdentifier"
+                  autocomplete="username"
+                  [ngModel]="forgotIdentifier()"
+                  (ngModelChange)="forgotIdentifier.set($event)"
+                  [disabled]="forgotSending()"
+                  placeholder="admin@ekisti.com / 017XXXXXXXX" />
+              </div>
+            </div>
+
+            <div class="forgot-actions">
+              <button type="button" class="btn btn-secondary" (click)="closeForgot()" [disabled]="forgotSending()">
+                {{ lang.isBangla() ? 'বাতিল' : 'Cancel' }}
+              </button>
+              <button type="submit" class="btn btn-primary" [disabled]="forgotSending()">
+                <span class="material-symbols-outlined">send</span>
+                <span>{{ forgotSending() ? (lang.isBangla() ? 'পাঠানো হচ্ছে...' : 'Sending...') : (lang.isBangla() ? 'অনুরোধ পাঠান' : 'Send request') }}</span>
+              </button>
+            </div>
+          </form>
+        }
+      </div>
+    </div>
+  }
 </div>

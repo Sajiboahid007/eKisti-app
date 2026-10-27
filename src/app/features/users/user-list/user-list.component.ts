@@ -2,14 +2,33 @@ import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { UserStaff, StaffRole, Branch, CenterOrSamity, Customer, Role, SYSTEM_PERMISSIONS, PermissionDefinition, UserCategory } from '../../../core/models/database.models';
+import { UserStaff, StaffRole, Branch, CenterOrSamity, Customer, Role, SYSTEM_PERMISSIONS, PermissionDefinition, UserCategory, PasswordResetRequest } from '../../../core/models/database.models';
 import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
-import { ToastService } from '../../../core/services/toast.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { SettingsService } from '../../../core/services/settings.service';
 import { QrCodeComponent } from '../../../shared/components/qr-code/qr-code.component';
+import { StaffCredentialService, MIN_PASSWORD_LENGTH } from '../../../core/services/staff-credential.service';
+import { BUSINESS_TIME_ZONE, formatBnDate } from '../../../core/finance/dates';
+
+/** পাসওয়ার্ড মোডালের লক্ষ্য কর্মী (তালিকার সারি বা রিসেট অনুরোধ থেকে) */
+interface PasswordTarget {
+  userId: number;
+  name: string;
+  email: string;
+  phone: string;
+  branchId: number;
+  role?: string;
+  /** রিসেট অনুরোধ থেকে খোলা হলে */
+  requestId?: string;
+}
+
+const dhakaTimeBn = new Intl.DateTimeFormat('bn-BD', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TIME_ZONE });
+const dhakaDateTimeEn = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TIME_ZONE
+});
 
 @Component({
   selector: 'app-user-list',
@@ -26,6 +45,7 @@ export class UserListComponent implements OnInit {
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
   private toast = inject(ToastService);
+  private credentials = inject(StaffCredentialService);
 
   // 4-Tab State: 'admins' (সুপার অ্যাডমিন ও অ্যাডমিন) | 'head_office' (প্রধান কার্যালয়) | 'branch_staff' (শাখা ও মাঠকর্মী) | 'roles' (পদবী ও রোল ব্যবস্থাপনা)
   readonly activeTab = signal<'admins' | 'head_office' | 'branch_staff' | 'roles'>('admins');
@@ -146,6 +166,29 @@ export class UserListComponent implements OnInit {
   roleEditReason: string = '';
   roleDeleteReason: string = '';
 
+  // ==========================================
+  // পাসওয়ার্ড রিসেট অনুরোধ ও পাসওয়ার্ড পরিবর্তন (শুধু সুপার অ্যাডমিন / অ্যাডমিন)
+  // ==========================================
+  readonly minPasswordLength = MIN_PASSWORD_LENGTH;
+  readonly resetRequests = signal<PasswordResetRequest[]>([]);
+  readonly rejectingRequestId = signal<string | null>(null);
+
+  readonly showPasswordModal = signal<boolean>(false);
+  readonly passwordTarget = signal<PasswordTarget | null>(null);
+  readonly passwordMode = signal<'generate' | 'manual'>('generate');
+  readonly isSavingPassword = signal<boolean>(false);
+  /** সংরক্ষিত পাসওয়ার্ড — শুধু একবার ফলাফল ভিউতে দেখানো হয় */
+  readonly savedPassword = signal<string | null>(null);
+  readonly passwordCopied = signal<boolean>(false);
+  readonly showNewPassword = signal<boolean>(false);
+  readonly showConfirmPassword = signal<boolean>(false);
+  newPassword: string = '';
+  confirmPassword: string = '';
+  mustChangePassword: boolean = true;
+
+  /** অ্যাডমিন নিজের অ্যাকাউন্টে এই মোডাল ব্যবহার করতে পারবেন না (/profile-এ বর্তমান পাসওয়ার্ড লাগে) */
+  readonly isOwnPasswordTarget = computed(() => this.passwordTarget()?.userId === this.authService.currentUser().userId);
+
   async ngOnInit() {
     this.route.queryParams.subscribe(params => {
       if (params['tab'] === 'roles') {
@@ -159,7 +202,183 @@ export class UserListComponent implements OnInit {
       }
     });
 
-    await this.loadAllData();
+    await Promise.all([this.loadAllData(), this.loadResetRequests()]);
+  }
+
+  async loadResetRequests() {
+    if (!this.authService.canManageUsers()) {
+      this.resetRequests.set([]);
+      return;
+    }
+    try {
+      this.resetRequests.set(await this.credentials.getPendingRequests());
+    } catch (err) {
+      console.error('Error loading password reset requests:', err);
+    }
+  }
+
+  /** অনুরোধের সময় (Asia/Dhaka) */
+  formatRequestTime(iso: string): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return this.lang.isBangla()
+      ? `${formatBnDate(iso, true)}, ${dhakaTimeBn.format(d)}`
+      : dhakaDateTimeEn.format(d);
+  }
+
+  private actor() {
+    const u = this.authService.currentUser();
+    return { userId: u.userId, name: u.name, role: u.role };
+  }
+
+  openPasswordForStaff(staff: UserStaff) {
+    this.openPasswordModal({
+      userId: staff.userId, name: staff.name, email: staff.email || '', phone: staff.phone || '',
+      branchId: Number(staff.branchId) || 0, role: staff.role
+    });
+  }
+
+  openPasswordForRequest(req: PasswordResetRequest) {
+    const staff = this.staffList().find(s => s.userId === req.userId);
+    this.openPasswordModal({
+      userId: req.userId,
+      name: staff?.name || req.name,
+      email: staff?.email || req.email || '',
+      phone: staff?.phone || req.phone || '',
+      branchId: Number(staff?.branchId ?? req.branchId) || 0,
+      role: staff?.role,
+      requestId: req.requestId
+    });
+  }
+
+  private openPasswordModal(target: PasswordTarget) {
+    if (!this.authService.canManageUsers()) return;
+    this.passwordTarget.set(target);
+    this.passwordMode.set('generate');
+    this.savedPassword.set(null);
+    this.passwordCopied.set(false);
+    this.showNewPassword.set(false);
+    this.showConfirmPassword.set(false);
+    this.newPassword = '';
+    this.confirmPassword = '';
+    this.mustChangePassword = true;
+    this.showPasswordModal.set(true);
+  }
+
+  closePasswordModal() {
+    if (this.isSavingPassword()) return;
+    this.showPasswordModal.set(false);
+    this.passwordTarget.set(null);
+    this.savedPassword.set(null);
+    this.newPassword = '';
+    this.confirmPassword = '';
+  }
+
+  /** ম্যানুয়াল মোডে যাচাই — ঠিক থাকলে null, নইলে বার্তা */
+  manualPasswordError(): string | null {
+    if (this.passwordMode() !== 'manual') return null;
+    if (this.newPassword.length < MIN_PASSWORD_LENGTH) {
+      return this.lang.isBangla()
+        ? `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে`
+        : `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+    }
+    if (this.newPassword !== this.confirmPassword) {
+      return this.lang.isBangla() ? 'দুটি পাসওয়ার্ড মিলছে না' : 'Passwords do not match';
+    }
+    return null;
+  }
+
+  async savePassword() {
+    const target = this.passwordTarget();
+    if (!target || this.isSavingPassword()) return;
+    if (this.isOwnPasswordTarget()) {
+      this.toast.warning(this.lang.isBangla()
+        ? 'নিজের পাসওয়ার্ড "আমার প্রোফাইল" (/profile) পাতা থেকে বদলান।'
+        : 'Change your own password from My Profile (/profile).');
+      return;
+    }
+    const error = this.manualPasswordError();
+    if (error) {
+      this.toast.warning(error);
+      return;
+    }
+    this.isSavingPassword.set(true);
+    try {
+      const password = await this.credentials.adminSetPassword(
+        { userId: target.userId, name: target.name, email: target.email, phone: target.phone, branchId: target.branchId },
+        this.actor(),
+        {
+          newPassword: this.passwordMode() === 'manual' ? this.newPassword : undefined,
+          mustChange: this.mustChangePassword
+        }
+      );
+      this.savedPassword.set(password);
+      this.passwordCopied.set(false);
+      this.newPassword = '';
+      this.confirmPassword = '';
+      this.toast.success(this.lang.isBangla()
+        ? `${target.name}-এর পাসওয়ার্ড সংরক্ষিত হয়েছে।`
+        : `Password saved for ${target.name}.`);
+      await this.loadResetRequests();
+    } catch (err) {
+      console.error('Error setting staff password:', err);
+      const msg = err instanceof Error && err.message ? err.message : '';
+      this.toast.error(msg || (this.lang.isBangla() ? 'পাসওয়ার্ড সংরক্ষণ করা যায়নি।' : 'Could not save the password.'));
+    } finally {
+      this.isSavingPassword.set(false);
+    }
+  }
+
+  async copySavedPassword() {
+    const password = this.savedPassword();
+    if (!password) return;
+    let ok = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(password);
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      // পুরনো ব্রাউজার / অনিরাপদ (http) কনটেক্সট
+      const ta = document.createElement('textarea');
+      ta.value = password;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
+      document.body.removeChild(ta);
+    }
+    if (ok) {
+      this.passwordCopied.set(true);
+      this.toast.success(this.lang.isBangla() ? 'পাসওয়ার্ড কপি হয়েছে।' : 'Password copied.');
+    } else {
+      this.toast.warning(this.lang.isBangla() ? 'কপি করা যায়নি — পাসওয়ার্ডটি হাতে লিখে নিন।' : 'Copy failed — please note the password manually.');
+    }
+  }
+
+  async rejectResetRequest(req: PasswordResetRequest) {
+    if (!req.requestId || this.rejectingRequestId()) return;
+    const ok = confirm(this.lang.isBangla()
+      ? `${req.name}-এর পাসওয়ার্ড রিসেট অনুরোধ বাতিল করবেন?`
+      : `Reject the password reset request from ${req.name}?`);
+    if (!ok) return;
+    this.rejectingRequestId.set(req.requestId);
+    try {
+      await this.credentials.rejectRequest(req.requestId, this.actor());
+      this.toast.success(this.lang.isBangla() ? 'অনুরোধ বাতিল করা হয়েছে।' : 'Request rejected.');
+      await this.loadResetRequests();
+    } catch (err) {
+      console.error('Error rejecting reset request:', err);
+      this.toast.error(this.lang.isBangla() ? 'অনুরোধ বাতিল করা যায়নি।' : 'Could not reject the request.');
+    } finally {
+      this.rejectingRequestId.set(null);
+    }
   }
 
   async loadAllData() {

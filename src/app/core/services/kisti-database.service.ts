@@ -974,6 +974,12 @@ export class KistiDatabaseService {
     return newStaff;
   }
 
+  async getStaffById(userId: number): Promise<UserStaff | null> {
+    const snap = await getDoc(doc(this.firestore, 'staff', userId.toString()));
+    const staff = snap.exists() ? (snap.data() as UserStaff) : null;
+    return staff && !staff.isDeleted ? staff : null;
+  }
+
   async updateStaff(
     userId: number,
     updatedFields: Partial<UserStaff>,

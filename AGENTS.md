@@ -126,6 +126,7 @@ c:/unversity/eKisti-app/
         │       ├── auth-state.service.ts     # User session, 3-tier staff roles, permissions, demo logins
         │       ├── counter.service.ts        # Atomic Firestore transaction integer ID sequencer
         │       ├── audit-history.service.ts  # Generates and appends EditHistoryEntry logs
+        │       ├── staff-credential.service.ts # Staff login passwords: PBKDF2 hash in staffCredentials/{userId}; used by AuthStateService.login (legacy demo login if absent)
         │       └── language.service.ts       # Bilingual toggle (Bengali bn / English en)
         │
         ├── shared/                # Shared reusable UI components
@@ -158,6 +159,7 @@ c:/unversity/eKisti-app/
             ├── settings/          # Loan products & policy, holiday calendar, general settings
             ├── organization/      # Company structure
             │   └── branch-route-list/ # Branch management, route/samity scheduling, and meeting days
+            ├── profile/           # "আমার প্রোফাইল" — logged-in staff edits own personal fields & changes password
             └── users/             # Staff & access control
                 ├── user-list/     # 3-tier staff directory, role permission configuration, printable ID cards
                 └── user-form/     # Create & edit staff members with salary, designation, branch assignment
@@ -255,6 +257,8 @@ All domain models reside in [src/app/core/models/database.models.ts](file:///c:/
   - `SYSTEM_ADMIN`: Super Admin, Admin (Access to all branches, role configurations, system counters).
   - `HEAD_OFFICE`: MD, Area Manager, Regional Manager, Central Auditor.
   - `BRANCH_STAFF`: Branch Manager, Cashier, Field Officer (Scoped to specific `branchId` & `assignedCenterIds`).
+- **Self-service profile fields (optional, editable by the staff member on `/profile`):** `fatherName`, `motherName`, `dateOfBirth`, `gender`, `bloodGroup`, `maritalStatus`, `educationalQualification`, `phoneSecondary`, `homeTown`, `presentAddress` / `permanentAddress` (`StaffAddress`), `emergencyContact` (`StaffEmergencyContact`) — plus `name`, `email`, `phone`. Role, category, branch, assignments, salary, status, NID, joinedDate and `firebaseAuthUid` stay admin-only (enforced in `firestore.rules` via `affectedKeys().hasOnly`).
+- **Password:** never on the `staff` doc — PBKDF2 hash in `staffCredentials/{userId}` (`StaffCredential`), interim until Firebase Auth passwords.
 - **Dynamic Roles:** Configurable permissions via `SYSTEM_PERMISSIONS`.
 
 ---
@@ -304,6 +308,8 @@ Sequence starting baselines:
 - **Computed Role Checks:** `isSuperAdmin`, `isAdmin`, `isAreaManager`, `isBranchManager`, `isFieldOfficer`, `isCashier`.
 - **Computed Permissions:** `canManageUsers`, `canApproveLoans`, `canDisburseLoan`, `canCollectKisti`, `canVerifyCash`.
 - **Switching & Demo:** `loginAsRole(role)`, `switchUser(userId)`, `logout()`.
+- **Password reset (`StaffCredentialService`):** "Forgot password" on `/login` (not signed in) creates a `PENDING` `passwordResetRequests` doc. Super Admin/Admin can set or reset any staff member's password from `/users` (`adminSetPassword`: one batch writes `staffCredentials` with `mustChangePassword`, resolves that user's pending requests, queues a `PASSWORD_RESET` `smsLogs` entry and an `auditLogs` entry) or reject a request.
+- **Forced change:** `mustChangePassword` signal — `authGuard`/`permissionGuard` redirect to `/profile?mustChange=1` until the user sets a new password there (own change clears the flag).
 
 ### 5. `LanguageService` ([language.service.ts](file:///c:/unversity/eKisti-app/src/app/core/services/language.service.ts))
 - Manages bilingual UI state (`'bn'` / `'en'`).
@@ -337,6 +343,7 @@ Routes are defined in [src/app/app.routes.ts](file:///c:/unversity/eKisti-app/sr
 | `/branches` | `BranchRouteListComponent` | `permissionGuard('canManageBranches')` | Branch & samity/route management |
 | `/users` | `UserListComponent` | `[authGuard, superAdminGuard]` | Staff management, role permissions & ID cards |
 | `/users/new` | `UserFormComponent` | `[authGuard, superAdminGuard]` | Add/edit staff user profile |
+| `/profile` | `ProfileComponent` | `[authGuard]` | Logged-in staff edits own personal profile & changes password |
 
 ---
 
@@ -487,7 +494,7 @@ When writing code or assisting with `eKisti`, every AI Agent MUST follow these r
 
 1. **Standalone Components Only:** Never generate or look for `NgModule`. Use `@Component({ standalone: true, imports: [...] })`.
 2. **Signals Over Imperative State:** Use Angular signals (`signal()`, `computed()`) for UI state and reactive calculations.
-3. **Sequential Integer IDs:** Never generate random UUIDs or Firestore string IDs for business records. Use `CounterService.getNextIntegerId(...)`, or inside a money transaction `TxSession.reserve(entity, n)` (same atomic transaction). Store documents with integer keys (`doc(firestore, 'collection', id.toString())`). **Exception:** pure log collections (`auditLogs`, `loanStatusHistory`, `creditScoreHistory`, `staffAssignments`, `documentVersions`, `smsLogs`) use Firestore auto IDs, and `EditHistoryEntry.historyId` is timestamp-based (the old `counters/history` sequence was a write hotspot).
+3. **Sequential Integer IDs:** Never generate random UUIDs or Firestore string IDs for business records. Use `CounterService.getNextIntegerId(...)`, or inside a money transaction `TxSession.reserve(entity, n)` (same atomic transaction). Store documents with integer keys (`doc(firestore, 'collection', id.toString())`). **Exception:** pure log collections (`auditLogs`, `loanStatusHistory`, `creditScoreHistory`, `staffAssignments`, `documentVersions`, `smsLogs`, `passwordResetRequests`) use Firestore auto IDs, and `EditHistoryEntry.historyId` is timestamp-based (the old `counters/history` sequence was a write hotspot).
 4. **Audit History Logging:** Any modification, deletion, or creation must be audited: embedded `history[]` (capped to the last 30 entries) **and** a central `auditLogs` document written in the same batch/transaction (`AuditHistoryService.writeAuditLog`). `HistoryModalComponent` takes `entityType` + `entityId` to show the full log.
 5. **No Hardcoded Passwords in Production:** Staff authentication uses `AuthStateService` presets for testing and Firebase Auth UID links in production.
 6. **Preserve Bengali Terminology:** Always preserve correct microfinance domain terminology in comments and UI templates (কিস্তি, সঞ্চয়, সমিতি, জামিনদার, ভল্ট ক্যাশ).
@@ -528,10 +535,12 @@ Concurrent edits on the same loan are detected through `Loan.ledgerVersion` and 
 | `journalEntries` | 100001+ | Double-entry journal (chart of accounts in `core/finance/accounts.ts`) |
 | `auditLogs`, `loanStatusHistory`, `creditScoreHistory`, `staffAssignments`, `documentVersions`, `smsLogs` | auto ID | History / logs |
 | `periodClosings`, `dailyBranchSummaries`, `monthlyPortfolioSnapshots` | `${branchId}_${date}` | Day/month closing & frozen figures |
+| `staffCredentials` | fixed ID `{userId}` | Staff login password hash (PBKDF2 + salt) + optional `mustChangePassword`; owner/admin only once `authEnforced()` is on |
+| `passwordResetRequests` | auto ID | "Forgot password" requests from the login page (`PENDING` → `RESOLVED`/`REJECTED` by Super Admin/Admin); create open to unauthenticated users (structurally restricted) |
 | `settings/general`, `settings/organization` (app name, tagline, org name, address, hotline — shown in navbar/login/print headers via `SettingsService.org`), `holidays/{date}`, `meetings/{centerId}_{date}`, `systemJobs/*`, `savingsInterestPostings/*` | fixed IDs | Policy, calendar, attendance, job markers |
 
 ### Policy values that must be confirmed (⚖️)
 MRA classification day ranges & provision rates (`core/finance/classification.ts`), service-charge cap, savings interest rate, late-fee policy (fines are currently not charged), rebate % on early settlement (`LoanProduct.earlySettlementRebatePercent`, default 100).
 
 ### Security
-Client route guards (`permissionGuard`) are UX only. Real enforcement is `firestore.rules`; its `authEnforced()` switch must be turned on once Firebase Auth with `role`/`branchId` custom claims is live.
+Client route guards (`permissionGuard`) are UX only. Real enforcement is `firestore.rules`; its `authEnforced()` switch must be turned on once Firebase Auth with `role`/`branchId` custom claims is live. `passwordResetRequests` create is open even then (login page is unauthenticated) — add App Check / rate limiting before production.

@@ -494,3 +494,84 @@
     }
   }
 }
+
+/* Personal Details section: sub-headings (present / permanent address, emergency contact) */
+.sub-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 1.75rem 0 0.875rem 0;
+  padding-top: 1.25rem;
+  border-top: 1px dashed var(--border-color);
+
+  .material-symbols-outlined {
+    font-size: 20px;
+    color: var(--primary);
+  }
+}
+
+.sub-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 1.75rem 0 0.875rem 0;
+  padding-top: 1.25rem;
+  border-top: 1px dashed var(--border-color);
+
+  .sub-heading {
+    margin: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .same-as-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+  }
+}
+
+/* Phone width */
+@media (max-width: 600px) {
+  .page-container {
+    padding: 1rem;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .form-section {
+    padding: 1.25rem 1rem;
+  }
+
+  .form-footer-actions {
+    padding: 1rem;
+    flex-wrap: wrap;
+
+    .btn,
+    .btn-submit {
+      flex: 1 1 100%;
+      min-width: 0;
+      justify-content: center;
+    }
+  }
+}

@@ -159,6 +159,67 @@ export interface UserStaff extends SoftDeletable {
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   joinedDate: string;
   history: EditHistoryEntry[];
+
+  // ব্যক্তিগত প্রোফাইল (কর্মী নিজে "আমার প্রোফাইল" থেকে হালনাগাদ করতে পারেন)
+  fatherName?: string;
+  motherName?: string;
+  dateOfBirth?: string;           // YYYY-MM-DD
+  gender?: 'MALE' | 'FEMALE' | 'OTHER';
+  bloodGroup?: string;            // "B+"
+  maritalStatus?: 'SINGLE' | 'MARRIED' | 'OTHER';
+  educationalQualification?: string;
+  phoneSecondary?: string;
+  homeTown?: string;              // নিজ জেলা / শহর
+  presentAddress?: StaffAddress;  // বর্তমান ঠিকানা
+  permanentAddress?: StaffAddress; // স্থায়ী ঠিকানা
+  emergencyContact?: StaffEmergencyContact;
+}
+
+export interface StaffAddress {
+  villageOrStreet: string;
+  postOffice: string;
+  thanaOrUpazila: string;
+  district: string;
+}
+
+export interface StaffEmergencyContact {
+  name: string;
+  relation: string;
+  phone: string;
+}
+
+/**
+ * কর্মীর লগইন পাসওয়ার্ড — `staffCredentials/{userId}`, `staff` ডকুমেন্ট থেকে আলাদা (কর্মী তালিকা পড়লে হ্যাশ আসে না)।
+ * PBKDF2-SHA256 হ্যাশ; আসল পাসওয়ার্ড কখনো সংরক্ষিত হয় না।
+ * Firebase Auth চালু হলে এটি Firebase Auth পাসওয়ার্ড দিয়ে প্রতিস্থাপিত হবে।
+ */
+export interface StaffCredential {
+  userId: number;
+  passwordHash: string;           // base64
+  salt: string;                   // base64
+  iterations: number;
+  updatedAt: string;
+  updatedByUserId: number;
+  /** অ্যাডমিন রিসেট করা অস্থায়ী পাসওয়ার্ড — পরের লগইনে কর্মীকে নতুন পাসওয়ার্ড দিতে হবে */
+  mustChangePassword?: boolean;
+}
+
+/**
+ * "পাসওয়ার্ড ভুলে গেছেন" অনুরোধ (`passwordResetRequests`, Firestore auto ID)।
+ * কর্মী লগইন পাতা থেকে পাঠান; অ্যাডমিন /users থেকে অস্থায়ী পাসওয়ার্ড দিয়ে নিষ্পত্তি করেন।
+ */
+export interface PasswordResetRequest {
+  requestId?: string;
+  userId: number;
+  name: string;
+  email: string;
+  phone: string;
+  branchId: number;
+  status: 'PENDING' | 'RESOLVED' | 'REJECTED';
+  requestedAt: string;
+  resolvedAt?: string;
+  resolvedByUserId?: number;
+  resolvedByName?: string;
 }
 
 // ==========================================
@@ -837,7 +898,7 @@ export interface MeetingAttendance {
 export interface SmsLog {
   to: string;
   message: string;
-  type: 'COLLECTION_RECEIPT' | 'DUE_REMINDER' | 'OVERDUE_NOTICE' | 'DISBURSEMENT';
+  type: 'COLLECTION_RECEIPT' | 'DUE_REMINDER' | 'OVERDUE_NOTICE' | 'DISBURSEMENT' | 'PASSWORD_RESET';
   status: 'QUEUED' | 'SENT' | 'FAILED';
   relatedId?: number;
   branchId: number;

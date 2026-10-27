@@ -125,6 +125,12 @@ export const routes: Routes = [
     ]
   },
   {
+    // আমার প্রোফাইল — লগইন করা কর্মী নিজের তথ্য ও পাসওয়ার্ড হালনাগাদ করেন
+    path: 'profile',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/profile/profile.component').then(m => m.ProfileComponent)
+  },
+  {
     path: '**',
     redirectTo: 'dashboard'
   }

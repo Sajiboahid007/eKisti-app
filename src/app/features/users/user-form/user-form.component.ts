@@ -5,10 +5,18 @@ import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { KistiDatabaseService } from '../../../core/services/kisti-database.service';
 import { AuthStateService, AREA_SCOPED_ROLES } from '../../../core/services/auth-state.service';
 import { LanguageService } from '../../../core/services/language.service';
-import { StaffRole, UserStaff, Role, Branch, UserCategory } from '../../../core/models/database.models';
+import { StaffRole, UserStaff, Role, Branch, UserCategory, StaffAddress, StaffEmergencyContact } from '../../../core/models/database.models';
 import { SkeletonComponent } from '../../../shared/components/skeleton/skeleton.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { toDhakaDayKey } from '../../../core/finance/dates';
+import { isValidBdMobile } from '../../../core/finance/validation';
+import { StaffCredentialService, MIN_PASSWORD_LENGTH } from '../../../core/services/staff-credential.service';
+
+type StaffProfileFields = Pick<UserStaff,
+  'fatherName' | 'motherName' | 'dateOfBirth' | 'gender' | 'bloodGroup' | 'maritalStatus' |
+  'educationalQualification' | 'phoneSecondary' | 'homeTown' | 'presentAddress' | 'permanentAddress' | 'emergencyContact'>;
+
+const emptyAddress = (): StaffAddress => ({ villageOrStreet: '', postOffice: '', thanaOrUpazila: '', district: '' });
 
 @Component({
   selector: 'app-user-form',
@@ -24,6 +32,9 @@ export class UserFormComponent implements OnInit {
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
   private toast = inject(ToastService);
+  private credentials = inject(StaffCredentialService);
+
+  readonly bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
   submitting = signal<boolean>(false);
   loadingRoles = signal<boolean>(true);
@@ -44,6 +55,21 @@ export class UserFormComponent implements OnInit {
   status: 'ACTIVE' | 'INACTIVE' = 'ACTIVE';
   assignedBranchIds: number[] = [];   // এরিয়া/রিজিওনাল ম্যানেজারের শাখাসমূহ
 
+  // ব্যক্তিগত তথ্য ও ঠিকানা (সব ঐচ্ছিক)
+  fatherName: string = '';
+  motherName: string = '';
+  dateOfBirth: string = '';
+  gender: '' | 'MALE' | 'FEMALE' | 'OTHER' = '';
+  bloodGroup: string = '';
+  maritalStatus: '' | 'SINGLE' | 'MARRIED' | 'OTHER' = '';
+  educationalQualification: string = '';
+  phoneSecondary: string = '';
+  homeTown: string = '';
+  presentAddress: StaffAddress = emptyAddress();
+  permanentAddress: StaffAddress = emptyAddress();
+  permanentSameAsPresent: boolean = false;
+  emergencyContact: StaffEmergencyContact = { name: '', relation: '', phone: '' };
+
   get isAreaRole(): boolean {
     return AREA_SCOPED_ROLES.includes(this.role);
   }
@@ -56,6 +82,47 @@ export class UserFormComponent implements OnInit {
     this.assignedBranchIds = this.assignedBranchIds.includes(branchId)
       ? this.assignedBranchIds.filter(id => id !== branchId)
       : [...this.assignedBranchIds, branchId];
+  }
+
+  /** "বর্তমান ঠিকানার মতো" — চেক করলে বর্তমান ঠিকানা স্থায়ী ঠিকানায় কপি হয় */
+  onPermanentSameChange(checked: boolean) {
+    this.permanentSameAsPresent = checked;
+    if (checked) this.permanentAddress = { ...this.presentAddress };
+  }
+
+  /** চেকবক্স চালু থাকলে বর্তমান ঠিকানা বদলালে স্থায়ী ঠিকানাও মিলিয়ে রাখা হয় */
+  syncPermanentAddress() {
+    if (this.permanentSameAsPresent) this.permanentAddress = { ...this.presentAddress };
+  }
+
+  /** শুধু পূরণকৃত ঘর রাখে; সব ফাঁকা হলে undefined (Firestore undefined গ্রহণ করে না, তাই পুরো অবজেক্ট বাদ যায়) */
+  private compact<T extends object>(obj: T): T | undefined {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const v = String(value ?? '').trim();
+      if (v) out[key] = v;
+    }
+    return Object.keys(out).length > 0 ? (out as unknown as T) : undefined;
+  }
+
+  private buildProfileFields(): StaffProfileFields {
+    const fields: StaffProfileFields = {};
+    const set = <K extends keyof StaffProfileFields>(key: K, value: StaffProfileFields[K] | undefined) => {
+      if (value !== undefined && value !== '') fields[key] = value;
+    };
+    set('fatherName', this.fatherName.trim());
+    set('motherName', this.motherName.trim());
+    set('dateOfBirth', this.dateOfBirth.trim());
+    set('gender', this.gender || undefined);
+    set('bloodGroup', this.bloodGroup);
+    set('maritalStatus', this.maritalStatus || undefined);
+    set('educationalQualification', this.educationalQualification.trim());
+    set('phoneSecondary', this.phoneSecondary.trim());
+    set('homeTown', this.homeTown.trim());
+    set('presentAddress', this.compact(this.presentAddress));
+    set('permanentAddress', this.compact(this.permanentSameAsPresent ? this.presentAddress : this.permanentAddress));
+    set('emergencyContact', this.compact(this.emergencyContact));
+    return fields;
   }
 
   selectAllBranches() {
@@ -151,6 +218,23 @@ export class UserFormComponent implements OnInit {
       return;
     }
 
+    if (this.password.length < MIN_PASSWORD_LENGTH) {
+      this.toast.warning(this.lang.isBangla()
+        ? `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে`
+        : `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+      return;
+    }
+
+    if (this.phoneSecondary.trim() && !isValidBdMobile(this.phoneSecondary)) {
+      this.toast.warning(this.lang.isBangla() ? 'বিকল্প মোবাইল নম্বরটি সঠিক নয় (যেমন: 017XXXXXXXX)' : 'Secondary mobile number is invalid (e.g. 017XXXXXXXX)');
+      return;
+    }
+
+    if (this.emergencyContact.phone.trim() && !isValidBdMobile(this.emergencyContact.phone)) {
+      this.toast.warning(this.lang.isBangla() ? 'জরুরি যোগাযোগের মোবাইল নম্বরটি সঠিক নয় (যেমন: 017XXXXXXXX)' : 'Emergency contact phone is invalid (e.g. 017XXXXXXXX)');
+      return;
+    }
+
     this.submitting.set(true);
     const currentUser = this.authService.currentUser();
     const now = new Date().toISOString();
@@ -179,7 +263,8 @@ export class UserFormComponent implements OnInit {
           nidNumber: this.nidNumber.trim() || `19852692518000${Date.now().toString().slice(-3)}`,
           salary: Number(this.salary) || (this.category === 'SYSTEM_ADMIN' ? 70000 : (this.category === 'HEAD_OFFICE' ? 50000 : 25000)),
           status: this.status,
-          joinedDate: toDhakaDayKey(now)
+          joinedDate: toDhakaDayKey(now),
+          ...this.buildProfileFields()
         },
         {
           userId: currentUser.userId,
@@ -192,6 +277,23 @@ export class UserFormComponent implements OnInit {
       // 2. Synchronize active in-memory user sessions with selected dynamic role
       const matchedRole = this.dynamicRoles().find(r => r.code === this.role);
       this.authService.syncUserFromDb(newStaffDoc, matchedRole);
+
+      // 3. প্রাথমিক পাসওয়ার্ড (PBKDF2 হ্যাশ) সংরক্ষণ — ব্যর্থ হলেও কর্মী তৈরি থেকে যায়
+      try {
+        await this.credentials.setPassword(
+          newStaffDoc.userId,
+          this.password,
+          { userId: currentUser.userId, name: currentUser.name, role: currentUser.role },
+          'নতুন কর্মীর প্রাথমিক পাসওয়ার্ড নির্ধারণ'
+        );
+      } catch (pwErr) {
+        console.error('Error saving initial password:', pwErr);
+        this.toast.warning(
+          this.lang.isBangla()
+            ? `ইউজার #${newStaffDoc.userId} তৈরি হয়েছে, কিন্তু পাসওয়ার্ড সংরক্ষণ হয়নি — পরে পাসওয়ার্ড নির্ধারণ করুন`
+            : `User #${newStaffDoc.userId} was created, but the password was not saved — please set it later`
+        );
+      }
 
       this.toast.success(
         this.lang.isBangla()

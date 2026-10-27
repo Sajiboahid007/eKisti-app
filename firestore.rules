@@ -154,9 +154,90 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // নিজের userId (custom claim) — staff / staffCredentials ডকুমেন্ট আইডির সাথে মেলানো হয়
+    function isOwnStaffDoc(id) {
+      return isSignedIn() && request.auth.token.get('userId', -1) == int(id);
+    }
+
     match /staff/{id} {
       allow read: if !authEnforced() || isSignedIn();
-      allow create, update: if !authEnforced() || isAdmin();
+      allow create: if !authEnforced() || isAdmin();
+      // অ্যাডমিন সব হালনাগাদ করতে পারেন; কর্মী নিজে ("আমার প্রোফাইল", /profile) শুধু ব্যক্তিগত ঘরগুলো।
+      // role, category, branchId, branchName, assignedCenterIds, assignedBranchIds, salary, status,
+      // nidNumber, joinedDate, firebaseAuthUid, isDeleted — শুধু অ্যাডমিন।
+      allow update: if !authEnforced() || isAdmin()
+                    || (isOwnStaffDoc(id)
+                        && changedKeys().hasOnly([
+                             'name', 'email', 'phone', 'phoneSecondary',
+                             'fatherName', 'motherName', 'dateOfBirth', 'gender', 'bloodGroup',
+                             'maritalStatus', 'educationalQualification', 'homeTown',
+                             'presentAddress', 'permanentAddress', 'emergencyContact',
+                             'history'
+                           ]));
+      allow delete: if false;
+    }
+
+    // কর্মীর লগইন পাসওয়ার্ড হ্যাশ (staff-credential.service.ts) — PBKDF2 hash + salt, আসল পাসওয়ার্ড নয়।
+    // ⚠️ authEnforced() বন্ধ থাকা পর্যন্ত API key থাকা যে কেউ এই হ্যাশ পড়তে পারে (অফলাইন brute-force ঝুঁকি)।
+    //    এটি সাময়িক ব্যবস্থা — Firebase Auth (email/password) চালু হলে এই কালেকশন বাদ দিয়ে
+    //    Firebase Auth পাসওয়ার্ড ব্যবহার করতে হবে। তখন লগইনের আগে (sign-in ছাড়া) এখানে পড়া যাবে না।
+    //
+    // `mustChangePassword` (ঐচ্ছিক bool): অ্যাডমিন রিসেট করলে true — কর্মী নিজে নতুন পাসওয়ার্ড দিলে false।
+    // Auth চালু হলে কর্মী (অ্যাডমিন নয়) নিজের ডকুমেন্টে হ্যাশ না বদলিয়ে লিখতে পারবেন না, তাই
+    // শুধু mustChangePassword=false করে "বাধ্যতামূলক পরিবর্তন" এড়ানো যাবে না (ownCredentialWriteOk)।
+    // (নতুন salt দিয়ে একই অস্থায়ী পাসওয়ার্ড আবার দিলে হ্যাশ বদলায় — সেটি নিয়ম দিয়ে ঠেকানো সম্ভব নয়।)
+    function ownCredentialWriteOk() {
+      return request.resource.data.get('mustChangePassword', false) == false
+             && (resource == null || request.resource.data.passwordHash != resource.data.passwordHash);
+    }
+
+    match /staffCredentials/{id} {
+      allow read: if !authEnforced() || isOwnStaffDoc(id) || isAdmin();
+      allow create, update: if (!authEnforced() || isAdmin() || (isOwnStaffDoc(id) && ownCredentialWriteOk()))
+                    // ডকুমেন্ট আইডি = userId, আবশ্যিক ঘর ও টাইপ
+                    && request.resource.data.keys().hasAll(['userId', 'passwordHash', 'salt', 'iterations', 'updatedAt', 'updatedByUserId'])
+                    && request.resource.data.keys().hasOnly(['userId', 'passwordHash', 'salt', 'iterations', 'updatedAt', 'updatedByUserId', 'mustChangePassword'])
+                    && request.resource.data.get('mustChangePassword', false) is bool
+                    && request.resource.data.userId is int
+                    && string(request.resource.data.userId) == id
+                    && request.resource.data.passwordHash is string
+                    && request.resource.data.passwordHash.size() > 0
+                    && request.resource.data.salt is string
+                    && request.resource.data.salt.size() > 0
+                    && request.resource.data.iterations is int
+                    && request.resource.data.iterations > 0
+                    && request.resource.data.updatedAt is string
+                    && request.resource.data.updatedByUserId is int;
+      allow delete: if false;
+    }
+
+    // "পাসওয়ার্ড ভুলে গেছেন" অনুরোধ (staff-credential.service.ts → requestReset / adminSetPassword / rejectRequest)।
+    // লগইন পাতা থেকে (সাইন-ইন ছাড়া) তৈরি হয়, তাই create সবার জন্য খোলা — কিন্তু শুধু নির্দিষ্ট ঘরসহ PENDING অনুরোধ।
+    // পড়া ও নিষ্পত্তি (RESOLVED / REJECTED) শুধু সুপার অ্যাডমিন / অ্যাডমিন; মোছা যাবে না।
+    // ⚠️ সাইন-ইন ছাড়া create খোলা থাকায় স্প্যাম / ভুয়া অনুরোধের ঝুঁকি আছে — পরে Firebase App Check
+    //    এবং/অথবা Cloud Function দিয়ে রেট-লিমিট (প্রতি userId / IP) যোগ করুন।
+    // ⚠️ Auth চালু হলে requestReset()-এর আগের "অপেক্ষমাণ অনুরোধ আছে কি না" কোয়েরি (সাইন-ইন ছাড়া read)
+    //    এই নিয়মে আটকে যাবে — তখন সেটি বাদ দিতে / Cloud Function-এ সরাতে হবে।
+    match /passwordResetRequests/{id} {
+      allow read: if !authEnforced() || isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['requestId', 'userId', 'name', 'email', 'phone', 'branchId', 'status', 'requestedAt'])
+                    && request.resource.data.keys().hasAll(['requestId', 'userId', 'name', 'email', 'phone', 'branchId', 'status', 'requestedAt'])
+                    && request.resource.data.requestId == id
+                    && request.resource.data.userId is int
+                    && request.resource.data.branchId is int
+                    && request.resource.data.name is string && request.resource.data.name.size() <= 200
+                    && request.resource.data.email is string && request.resource.data.email.size() <= 200
+                    && request.resource.data.phone is string && request.resource.data.phone.size() <= 30
+                    && request.resource.data.requestedAt is string && request.resource.data.requestedAt.size() <= 40
+                    && request.resource.data.status == 'PENDING';
+      allow update: if (!authEnforced() || isAdmin())
+                    // শুধু অপেক্ষমাণ অনুরোধ একবার নিষ্পত্তি; অনুরোধকারীর তথ্য অপরিবর্তিত
+                    && resource.data.status == 'PENDING'
+                    && changedKeys().hasOnly(['status', 'resolvedAt', 'resolvedByUserId', 'resolvedByName'])
+                    && request.resource.data.status in ['RESOLVED', 'REJECTED']
+                    && request.resource.data.resolvedAt is string
+                    && request.resource.data.resolvedByUserId is int
+                    && request.resource.data.resolvedByName is string;
       allow delete: if false;
     }
 
@@ -381,6 +462,9 @@ service cloud.firestore {
     }
 
     // SMS কিউ — তৈরি করা যাবে; পরে শুধু `status` (QUEUED → SENT/FAILED) বদলানো যাবে
+    // (`type` যাচাই করা হয় না, তাই PASSWORD_RESET সহ সব ধরন চলে।)
+    // ⚠️ PASSWORD_RESET বার্তায় অস্থায়ী পাসওয়ার্ড সাধারণ লেখায় থাকে, অথচ যেকোনো সাইন-ইন করা কর্মী smsLogs
+    //    পড়তে পারেন — SMS গেটওয়ে / Cloud Function চালু হলে বার্তা পাঠানোর পর মুছে ফেলা বা read সীমিত করা উচিত।
     match /smsLogs/{id} {
       allow read: if !authEnforced() || isSignedIn();
       allow create: if !authEnforced() || (isSignedIn() && !isReadOnlyRole());
@@ -419,7 +503,7 @@ service cloud.firestore {
     //    নতুন কালেকশনের জন্য উপরে নিজস্ব match ব্লক লিখুন এবং নামটি এই তালিকায় যোগ করুন।
     match /{collectionName}/{docPath=**} {
       allow read, write: if !authEnforced() && !(collectionName in [
-        'branches', 'centers', 'staff', 'roles', 'settings', 'holidays', 'loanProducts',
+        'branches', 'centers', 'staff', 'staffCredentials', 'passwordResetRequests', 'roles', 'settings', 'holidays', 'loanProducts',
         'counters', 'customers', 'loans', 'installments', 'meetings', 'followUps', 'insuranceClaims',
         'collections', 'reconciliations', 'periodClosings', 'vaultTransactions', 'expenses',
         'dailyBranchSummaries', 'monthlyPortfolioSnapshots',

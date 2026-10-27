@@ -1,0 +1,431 @@
+<div class="page-container profile-page">
+  <!-- পেজ হেডার -->
+  <div class="page-header">
+    <div class="header-left">
+      <div class="breadcrumb">
+        <a routerLink="/dashboard">{{ lang.isBangla() ? 'ড্যাশবোর্ড' : 'Dashboard' }}</a>
+        <span class="material-symbols-outlined separator">chevron_right</span>
+        <span>{{ lang.isBangla() ? 'আমার প্রোফাইল' : 'My Profile' }}</span>
+      </div>
+      <h2>{{ lang.isBangla() ? 'আমার প্রোফাইল' : 'My Profile' }}</h2>
+      <p class="sub-text">
+        {{ lang.isBangla() ? 'নিজের ব্যক্তিগত তথ্য, ঠিকানা ও লগইন পাসওয়ার্ড হালনাগাদ করুন' : 'Update your personal details, address and login password' }}
+      </p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="card form-card">
+      <div class="form-section">
+        <app-skeleton variant="form" [rows]="8" />
+      </div>
+    </div>
+  } @else {
+    @if (authService.mustChangePassword()) {
+      <div class="flow-alert danger readonly-alert" role="alert">
+        <span class="material-symbols-outlined">lock_reset</span>
+        <div>
+          {{ lang.isBangla()
+            ? 'আপনি অস্থায়ী পাসওয়ার্ড দিয়ে লগইন করেছেন। নিচের "পাসওয়ার্ড পরিবর্তন" অংশে নতুন পাসওয়ার্ড দিন — তার আগে অ্যাপের অন্য পাতা খোলা যাবে না।'
+            : 'You signed in with a temporary password. Set a new password in the Change Password section below — other pages stay locked until then.' }}
+        </div>
+      </div>
+    }
+    @if (readOnly()) {
+      <div class="flow-alert warning readonly-alert">
+        <span class="material-symbols-outlined">warning</span>
+        <div>
+          {{ lang.isBangla()
+            ? 'আপনার কর্মী রেকর্ড ডাটাবেজে পাওয়া যায়নি (ডেমো ব্যবহারকারী)। শুধু সেশনের তথ্য দেখানো হচ্ছে — প্রোফাইল সংরক্ষণ ও পাসওয়ার্ড পরিবর্তন বন্ধ আছে।'
+            : 'Your staff record was not found in the database (demo user). Session details are shown read-only — saving and password change are disabled.' }}
+        </div>
+      </div>
+    }
+
+    <!-- প্রোফাইল হেডার কার্ড -->
+    <div class="card profile-hero">
+      <div class="hero-main">
+        <div class="hero-avatar" [ngClass]="{
+          'avatar-admin': session().category === 'SYSTEM_ADMIN',
+          'avatar-ho': session().category === 'HEAD_OFFICE',
+          'avatar-branch': session().category === 'BRANCH_STAFF'
+        }">{{ initial() }}</div>
+        <div class="hero-text">
+          <h3 class="hero-name">{{ staff()?.name || session().name }}</h3>
+          <div class="hero-role">
+            {{ lang.isBangla() ? session().roleTitleBangla : session().roleTitleEnglish }}
+          </div>
+          <div class="hero-branch">
+            <span class="material-symbols-outlined">apartment</span>
+            <span>{{ staff()?.branchName || session().branchName }}</span>
+          </div>
+        </div>
+        <div class="hero-badges">
+          @if (staff(); as s) {
+            <span class="badge" [ngClass]="statusBadge(s.status)">{{ statusLabel(s.status) }}</span>
+          }
+          <span class="badge badge-secondary">{{ categoryLabel(staff()?.category || session().category) }}</span>
+        </div>
+      </div>
+
+      <div class="hero-facts">
+        <div class="fact">
+          <span class="fact-label">{{ lang.isBangla() ? 'কর্মী আইডি' : 'User ID' }}</span>
+          <span class="fact-value" translate="no">#{{ session().userId }}</span>
+        </div>
+        <div class="fact">
+          <span class="fact-label">{{ lang.isBangla() ? 'পদবী' : 'Role' }}</span>
+          <span class="fact-value">{{ lang.isBangla() ? session().roleTitleBangla : session().roleTitleEnglish }}</span>
+        </div>
+        <div class="fact">
+          <span class="fact-label">{{ lang.isBangla() ? 'শাখা' : 'Branch' }}</span>
+          <span class="fact-value">{{ staff()?.branchName || session().branchName }}</span>
+        </div>
+        <div class="fact">
+          <span class="fact-label">{{ lang.isBangla() ? 'যোগদানের তারিখ' : 'Joined' }}</span>
+          <span class="fact-value">{{ displayDate(staff()?.joinedDate) }}</span>
+        </div>
+        <div class="fact">
+          <span class="fact-label">{{ lang.isBangla() ? 'জাতীয় পরিচয়পত্র (NID)' : 'National ID (NID)' }}</span>
+          <span class="fact-value" translate="no">{{ staff()?.nidNumber || '—' }}</span>
+        </div>
+        <div class="fact">
+          <span class="fact-label">{{ lang.isBangla() ? 'মাসিক বেতন' : 'Monthly Salary' }}</span>
+          <span class="fact-value">
+            @if (staff()?.salary) { ৳ {{ staff()!.salary | number }} } @else { — }
+          </span>
+        </div>
+        <div class="fact">
+          <span class="fact-label">{{ lang.isBangla() ? 'অবস্থা' : 'Status' }}</span>
+          <span class="fact-value">{{ statusLabel(staff()?.status) }}</span>
+        </div>
+      </div>
+      <p class="hero-note">
+        <span class="material-symbols-outlined">lock</span>
+        {{ lang.isBangla() ? 'পদবী, শাখা, NID, বেতন, অবস্থা ও যোগদানের তারিখ শুধু অ্যাডমিন পরিবর্তন করতে পারেন।' : 'Role, branch, NID, salary, status and joined date can only be changed by an admin.' }}
+      </p>
+    </div>
+
+    <!-- সম্পাদনাযোগ্য প্রোফাইল ফর্ম -->
+    <div class="card form-card">
+      <form (ngSubmit)="saveProfile()" class="profile-form-content">
+        <fieldset [disabled]="readOnly() || saving()" class="plain-fieldset">
+
+          <!-- ১. লগইন ও যোগাযোগ -->
+          <div class="form-section">
+            <div class="section-title-wrap">
+              <span class="material-symbols-outlined section-icon">contact_phone</span>
+              <div>
+                <h3 class="section-heading">{{ lang.isBangla() ? '১. নাম ও যোগাযোগ' : '1. Name & Contact' }}</h3>
+                <p class="section-hint">
+                  {{ lang.isBangla() ? 'ইমেইল ও মোবাইল নম্বর দিয়ে লগইন করা হয় — অন্য কর্মীর সাথে মিলতে পারবে না।' : 'Email and mobile are login identifiers and must be unique.' }}
+                </p>
+              </div>
+            </div>
+
+            <div class="fields-grid-2">
+              <div class="form-group">
+                <label for="pf-name">{{ lang.isBangla() ? 'পূর্ণ নাম' : 'Full Name' }} <span class="required">*</span></label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">badge</span>
+                  <input id="pf-name" type="text" class="form-control" [(ngModel)]="form.name" name="name" required
+                    [placeholder]="lang.isBangla() ? 'যেমন: মোঃ তারেক হোসেন' : 'e.g. Md. Tareq Hossain'" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-email">{{ lang.isBangla() ? 'ইমেইল' : 'Email' }} <span class="required">*</span></label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">mail</span>
+                  <input id="pf-email" type="email" class="form-control" [(ngModel)]="form.email" name="email" required
+                    autocomplete="email" placeholder="name@example.com" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-phone">{{ lang.isBangla() ? 'মোবাইল নম্বর' : 'Mobile Number' }} <span class="required">*</span></label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">smartphone</span>
+                  <input id="pf-phone" type="tel" inputmode="tel" class="form-control" [(ngModel)]="form.phone" name="phone" required
+                    autocomplete="tel" placeholder="017XXXXXXXX" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-phone2">{{ lang.isBangla() ? 'বিকল্প মোবাইল নম্বর' : 'Secondary Mobile' }}</label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">phone_android</span>
+                  <input id="pf-phone2" type="tel" inputmode="tel" class="form-control" [(ngModel)]="form.phoneSecondary" name="phoneSecondary"
+                    placeholder="018XXXXXXXX" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ২. ব্যক্তিগত তথ্য -->
+          <div class="form-section">
+            <div class="section-title-wrap">
+              <span class="material-symbols-outlined section-icon">person</span>
+              <div>
+                <h3 class="section-heading">{{ lang.isBangla() ? '২. ব্যক্তিগত তথ্য' : '2. Personal Details' }}</h3>
+                <p class="section-hint">
+                  {{ lang.isBangla() ? 'পিতা-মাতার নাম, জন্ম তারিখ ও অন্যান্য ব্যক্তিগত তথ্য।' : 'Parents, date of birth and other personal details.' }}
+                </p>
+              </div>
+            </div>
+
+            <div class="fields-grid-2">
+              <div class="form-group">
+                <label for="pf-father">{{ lang.isBangla() ? 'পিতার নাম' : "Father's Name" }}</label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">man</span>
+                  <input id="pf-father" type="text" class="form-control" [(ngModel)]="form.fatherName" name="fatherName" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-mother">{{ lang.isBangla() ? 'মাতার নাম' : "Mother's Name" }}</label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">woman</span>
+                  <input id="pf-mother" type="text" class="form-control" [(ngModel)]="form.motherName" name="motherName" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-dob">{{ lang.isBangla() ? 'জন্ম তারিখ' : 'Date of Birth' }}</label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">cake</span>
+                  <input id="pf-dob" type="date" class="form-control" [(ngModel)]="form.dateOfBirth" name="dateOfBirth" [max]="maxBirthDate" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-gender">{{ lang.isBangla() ? 'লিঙ্গ' : 'Gender' }}</label>
+                <div class="input-with-icon select-wrapper">
+                  <span class="material-symbols-outlined input-icon">wc</span>
+                  <select id="pf-gender" class="form-control" [(ngModel)]="form.gender" name="gender">
+                    <option value="" disabled>{{ lang.isBangla() ? 'নির্বাচন করুন' : 'Select' }}</option>
+                    <option value="MALE">{{ lang.isBangla() ? 'পুরুষ' : 'Male' }}</option>
+                    <option value="FEMALE">{{ lang.isBangla() ? 'মহিলা' : 'Female' }}</option>
+                    <option value="OTHER">{{ lang.isBangla() ? 'অন্যান্য' : 'Other' }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-blood">{{ lang.isBangla() ? 'রক্তের গ্রুপ' : 'Blood Group' }}</label>
+                <div class="input-with-icon select-wrapper">
+                  <span class="material-symbols-outlined input-icon">bloodtype</span>
+                  <select id="pf-blood" class="form-control" [(ngModel)]="form.bloodGroup" name="bloodGroup">
+                    <option value="">{{ lang.isBangla() ? 'নির্বাচন করুন' : 'Select' }}</option>
+                    @for (g of bloodGroups; track g) {
+                      <option [value]="g" translate="no">{{ g }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-marital">{{ lang.isBangla() ? 'বৈবাহিক অবস্থা' : 'Marital Status' }}</label>
+                <div class="input-with-icon select-wrapper">
+                  <span class="material-symbols-outlined input-icon">diversity_1</span>
+                  <select id="pf-marital" class="form-control" [(ngModel)]="form.maritalStatus" name="maritalStatus">
+                    <option value="" disabled>{{ lang.isBangla() ? 'নির্বাচন করুন' : 'Select' }}</option>
+                    <option value="SINGLE">{{ lang.isBangla() ? 'অবিবাহিত' : 'Single' }}</option>
+                    <option value="MARRIED">{{ lang.isBangla() ? 'বিবাহিত' : 'Married' }}</option>
+                    <option value="OTHER">{{ lang.isBangla() ? 'অন্যান্য' : 'Other' }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-edu">{{ lang.isBangla() ? 'শিক্ষাগত যোগ্যতা' : 'Educational Qualification' }}</label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">school</span>
+                  <input id="pf-edu" type="text" class="form-control" [(ngModel)]="form.educationalQualification" name="educationalQualification"
+                    [placeholder]="lang.isBangla() ? 'যেমন: স্নাতক (বি.কম)' : 'e.g. Bachelor (B.Com)'" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pf-hometown">{{ lang.isBangla() ? 'নিজ জেলা / শহর' : 'Home District / Town' }}</label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">location_city</span>
+                  <input id="pf-hometown" type="text" class="form-control" [(ngModel)]="form.homeTown" name="homeTown"
+                    [placeholder]="lang.isBangla() ? 'যেমন: কুমিল্লা' : 'e.g. Cumilla'" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ৩. ঠিকানা -->
+          <div class="form-section">
+            <div class="section-title-wrap">
+              <span class="material-symbols-outlined section-icon">home_pin</span>
+              <div>
+                <h3 class="section-heading">{{ lang.isBangla() ? '৩. ঠিকানা' : '3. Address' }}</h3>
+                <p class="section-hint">{{ lang.isBangla() ? 'বর্তমান ও স্থায়ী ঠিকানা।' : 'Present and permanent address.' }}</p>
+              </div>
+            </div>
+
+            <h4 class="sub-heading">{{ lang.isBangla() ? 'বর্তমান ঠিকানা' : 'Present Address' }}</h4>
+            <div class="fields-grid-2">
+              <div class="form-group">
+                <label for="pa-village">{{ lang.isBangla() ? 'গ্রাম / রাস্তা / বাসা' : 'Village / Street / House' }}</label>
+                <input id="pa-village" type="text" class="form-control plain" [(ngModel)]="form.presentAddress.villageOrStreet" name="paVillage" (ngModelChange)="syncPermanent()" />
+              </div>
+              <div class="form-group">
+                <label for="pa-po">{{ lang.isBangla() ? 'ডাকঘর' : 'Post Office' }}</label>
+                <input id="pa-po" type="text" class="form-control plain" [(ngModel)]="form.presentAddress.postOffice" name="paPostOffice" (ngModelChange)="syncPermanent()" />
+              </div>
+              <div class="form-group">
+                <label for="pa-thana">{{ lang.isBangla() ? 'থানা / উপজেলা' : 'Thana / Upazila' }}</label>
+                <input id="pa-thana" type="text" class="form-control plain" [(ngModel)]="form.presentAddress.thanaOrUpazila" name="paThana" (ngModelChange)="syncPermanent()" />
+              </div>
+              <div class="form-group">
+                <label for="pa-district">{{ lang.isBangla() ? 'জেলা' : 'District' }}</label>
+                <input id="pa-district" type="text" class="form-control plain" [(ngModel)]="form.presentAddress.district" name="paDistrict" (ngModelChange)="syncPermanent()" />
+              </div>
+            </div>
+
+            <div class="sub-heading-row">
+              <h4 class="sub-heading">{{ lang.isBangla() ? 'স্থায়ী ঠিকানা' : 'Permanent Address' }}</h4>
+              <label class="same-check">
+                <input type="checkbox" [ngModel]="sameAsPresent" (ngModelChange)="onSameAsPresentChange($event)" name="sameAsPresent" />
+                <span>{{ lang.isBangla() ? 'স্থায়ী ঠিকানা বর্তমান ঠিকানার মতো' : 'Permanent address same as present' }}</span>
+              </label>
+            </div>
+            <div class="fields-grid-2">
+              <div class="form-group">
+                <label for="pr-village">{{ lang.isBangla() ? 'গ্রাম / রাস্তা / বাসা' : 'Village / Street / House' }}</label>
+                <input id="pr-village" type="text" class="form-control plain" [(ngModel)]="form.permanentAddress.villageOrStreet" name="prVillage" [readonly]="sameAsPresent" />
+              </div>
+              <div class="form-group">
+                <label for="pr-po">{{ lang.isBangla() ? 'ডাকঘর' : 'Post Office' }}</label>
+                <input id="pr-po" type="text" class="form-control plain" [(ngModel)]="form.permanentAddress.postOffice" name="prPostOffice" [readonly]="sameAsPresent" />
+              </div>
+              <div class="form-group">
+                <label for="pr-thana">{{ lang.isBangla() ? 'থানা / উপজেলা' : 'Thana / Upazila' }}</label>
+                <input id="pr-thana" type="text" class="form-control plain" [(ngModel)]="form.permanentAddress.thanaOrUpazila" name="prThana" [readonly]="sameAsPresent" />
+              </div>
+              <div class="form-group">
+                <label for="pr-district">{{ lang.isBangla() ? 'জেলা' : 'District' }}</label>
+                <input id="pr-district" type="text" class="form-control plain" [(ngModel)]="form.permanentAddress.district" name="prDistrict" [readonly]="sameAsPresent" />
+              </div>
+            </div>
+          </div>
+
+          <!-- ৪. জরুরি যোগাযোগ -->
+          <div class="form-section">
+            <div class="section-title-wrap">
+              <span class="material-symbols-outlined section-icon">emergency</span>
+              <div>
+                <h3 class="section-heading">{{ lang.isBangla() ? '৪. জরুরি যোগাযোগ' : '4. Emergency Contact' }}</h3>
+                <p class="section-hint">{{ lang.isBangla() ? 'প্রয়োজনে যাঁর সাথে যোগাযোগ করা হবে।' : 'Person to contact in an emergency.' }}</p>
+              </div>
+            </div>
+
+            <div class="fields-grid-3">
+              <div class="form-group">
+                <label for="ec-name">{{ lang.isBangla() ? 'নাম' : 'Name' }}</label>
+                <input id="ec-name" type="text" class="form-control plain" [(ngModel)]="form.emergencyContact.name" name="ecName" />
+              </div>
+              <div class="form-group">
+                <label for="ec-relation">{{ lang.isBangla() ? 'সম্পর্ক' : 'Relation' }}</label>
+                <input id="ec-relation" type="text" class="form-control plain" [(ngModel)]="form.emergencyContact.relation" name="ecRelation"
+                  [placeholder]="lang.isBangla() ? 'যেমন: ভাই' : 'e.g. Brother'" />
+              </div>
+              <div class="form-group">
+                <label for="ec-phone">{{ lang.isBangla() ? 'মোবাইল নম্বর' : 'Mobile Number' }}</label>
+                <input id="ec-phone" type="tel" inputmode="tel" class="form-control plain" [(ngModel)]="form.emergencyContact.phone" name="ecPhone" placeholder="01XXXXXXXXX" />
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="form-footer-actions">
+          <button type="button" class="btn btn-secondary" (click)="discardChanges()" [disabled]="readOnly() || saving()">
+            <span class="material-symbols-outlined">undo</span>
+            <span>{{ lang.isBangla() ? 'পরিবর্তন বাতিল' : 'Discard' }}</span>
+          </button>
+          <button type="submit" class="btn btn-primary btn-submit" [disabled]="readOnly() || saving()">
+            <span class="material-symbols-outlined">{{ saving() ? 'hourglass_top' : 'save' }}</span>
+            <span>{{ saving() ? (lang.isBangla() ? 'সংরক্ষণ হচ্ছে...' : 'Saving...') : (lang.isBangla() ? 'প্রোফাইল সংরক্ষণ' : 'Save Profile') }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- পাসওয়ার্ড পরিবর্তন -->
+    <div class="card form-card password-card">
+      <form (ngSubmit)="changePassword()" autocomplete="off">
+        <fieldset [disabled]="readOnly() || changingPassword()" class="plain-fieldset">
+          <div class="form-section">
+            <div class="section-title-wrap">
+              <span class="material-symbols-outlined section-icon">key</span>
+              <div>
+                <h3 class="section-heading">{{ lang.isBangla() ? 'পাসওয়ার্ড পরিবর্তন' : 'Change Password' }}</h3>
+                <p class="section-hint">
+                  @if (hasPassword()) {
+                    {{ lang.isBangla() ? 'নিরাপত্তার জন্য বর্তমান পাসওয়ার্ড দিয়ে নতুন পাসওয়ার্ড নির্ধারণ করুন।' : 'Enter your current password to set a new one.' }}
+                  } @else {
+                    {{ lang.isBangla() ? 'আপনার এখনো কোনো পাসওয়ার্ড নির্ধারিত হয়নি — নতুন পাসওয়ার্ড নির্ধারণ করুন।' : 'No password is set yet — set a new password.' }}
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div class="fields-grid-3">
+              @if (hasPassword()) {
+                <div class="form-group">
+                  <label for="pw-current">{{ lang.isBangla() ? 'বর্তমান পাসওয়ার্ড' : 'Current Password' }} <span class="required">*</span></label>
+                  <div class="input-with-icon">
+                    <span class="material-symbols-outlined input-icon">lock_open</span>
+                    <input id="pw-current" [type]="showPasswords() ? 'text' : 'password'" class="form-control" [(ngModel)]="currentPassword"
+                      name="currentPassword" autocomplete="current-password" required />
+                  </div>
+                </div>
+              }
+              <div class="form-group">
+                <label for="pw-new">{{ lang.isBangla() ? 'নতুন পাসওয়ার্ড' : 'New Password' }} <span class="required">*</span></label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">lock</span>
+                  <input id="pw-new" [type]="showPasswords() ? 'text' : 'password'" class="form-control" [(ngModel)]="newPassword"
+                    name="newPassword" autocomplete="new-password" required [attr.minlength]="minPasswordLength" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="pw-confirm">{{ lang.isBangla() ? 'নতুন পাসওয়ার্ড নিশ্চিত করুন' : 'Confirm New Password' }} <span class="required">*</span></label>
+                <div class="input-with-icon">
+                  <span class="material-symbols-outlined input-icon">lock_reset</span>
+                  <input id="pw-confirm" [type]="showPasswords() ? 'text' : 'password'" class="form-control" [(ngModel)]="confirmPassword"
+                    name="confirmPassword" autocomplete="new-password" required />
+                </div>
+                @if (confirmPassword && newPassword !== confirmPassword) {
+                  <small class="field-error">{{ lang.isBangla() ? 'পাসওয়ার্ড মিলছে না' : 'Passwords do not match' }}</small>
+                }
+              </div>
+            </div>
+
+            <div class="password-tools">
+              <label class="same-check">
+                <input type="checkbox" [ngModel]="showPasswords()" (ngModelChange)="showPasswords.set($event)" name="showPasswords" />
+                <span>{{ lang.isBangla() ? 'পাসওয়ার্ড দেখান' : 'Show passwords' }}</span>
+              </label>
+              <span class="pw-hint">
+                {{ lang.isBangla() ? 'কমপক্ষে ' + minPasswordLength + ' অক্ষর' : 'At least ' + minPasswordLength + ' characters' }}
+              </span>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="form-footer-actions">
+          <button type="submit" class="btn btn-primary btn-submit" [disabled]="readOnly() || changingPassword()">
+            <span class="material-symbols-outlined">{{ changingPassword() ? 'hourglass_top' : 'password' }}</span>
+            <span>{{ changingPassword() ? (lang.isBangla() ? 'পরিবর্তন হচ্ছে...' : 'Updating...') : (lang.isBangla() ? 'পাসওয়ার্ড পরিবর্তন করুন' : 'Change Password') }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+</div>

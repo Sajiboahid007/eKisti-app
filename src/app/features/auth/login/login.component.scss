@@ -263,6 +263,118 @@
   padding-top: 1rem;
 }
 
+/* ===== পাসওয়ার্ড ভুলে গেছেন ===== */
+.forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.forgot-link {
+  background: none;
+  border: none;
+  padding: 0.15rem 0;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.forgot-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(2, 6, 23, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.forgot-panel {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+  padding: 1.5rem;
+  box-sizing: border-box;
+  animation: slideUp 0.2s ease-out;
+}
+
+.forgot-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+
+  .forgot-head-icon {
+    font-size: 24px;
+    color: var(--primary);
+  }
+
+  h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 800;
+    color: var(--secondary);
+  }
+}
+
+.forgot-close {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+
+  &:hover { background: #f1f5f9; color: var(--text-primary); }
+}
+
+.forgot-desc {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+.forgot-alert {
+  margin-bottom: 1rem;
+}
+
+.forgot-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 580px) {
+  .forgot-panel {
+    padding: 1.25rem 1rem;
+  }
+  .forgot-actions {
+    flex-direction: column-reverse;
+
+    .btn { width: 100%; justify-content: center; }
+  }
+}
+
 @media (max-width: 580px) {
   .login-card {
     padding: 1.75rem 1.25rem;

@@ -275,14 +275,312 @@
         </div>
       </div>
 
-      <!-- SECTION 4: Area Scoped Branch Assignment (Conditional for Area/Regional Managers) -->
+      <!-- SECTION 4: Personal Details & Address (all optional) -->
+      <div class="form-section">
+        <div class="section-title-wrap">
+          <span class="material-symbols-outlined section-icon text-primary">contact_page</span>
+          <div>
+            <h3 class="section-heading">
+              {{ lang.isBangla() ? '৪. ব্যক্তিগত তথ্য ও ঠিকানা' : '4. Personal Details & Address' }}
+            </h3>
+            <p class="section-hint">
+              {{ lang.isBangla() ? 'সব ঘর ঐচ্ছিক — পরিবার, জন্ম তারিখ, নিজ জেলা, ঠিকানা ও জরুরি যোগাযোগ।' : 'All fields are optional — family, date of birth, home town, address and emergency contact.' }}
+            </p>
+          </div>
+        </div>
+
+        <div class="fields-grid-2">
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'পিতার নাম' : 'Father Name' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">man</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="fatherName"
+                name="fatherName"
+                [placeholder]="lang.isBangla() ? 'যেমন: মোঃ আব্দুল করিম' : 'e.g. Md. Abdul Karim'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'মাতার নাম' : 'Mother Name' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">woman</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="motherName"
+                name="motherName"
+                [placeholder]="lang.isBangla() ? 'যেমন: মোসাঃ রহিমা খাতুন' : 'e.g. Mst. Rahima Khatun'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'জন্ম তারিখ' : 'Date of Birth' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">cake</span>
+              <input
+                type="date"
+                class="form-control"
+                [(ngModel)]="dateOfBirth"
+                name="dateOfBirth" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'লিঙ্গ' : 'Gender' }}</label>
+            <div class="input-with-icon select-wrapper">
+              <span class="material-symbols-outlined input-icon">wc</span>
+              <select class="form-control" [(ngModel)]="gender" name="gender">
+                <option value="">{{ lang.isBangla() ? '-- নির্বাচন করুন --' : '-- Select --' }}</option>
+                <option value="MALE">{{ lang.isBangla() ? 'পুরুষ' : 'Male' }}</option>
+                <option value="FEMALE">{{ lang.isBangla() ? 'মহিলা' : 'Female' }}</option>
+                <option value="OTHER">{{ lang.isBangla() ? 'অন্যান্য' : 'Other' }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'রক্তের গ্রুপ' : 'Blood Group' }}</label>
+            <div class="input-with-icon select-wrapper">
+              <span class="material-symbols-outlined input-icon">bloodtype</span>
+              <select class="form-control" [(ngModel)]="bloodGroup" name="bloodGroup">
+                <option value="">{{ lang.isBangla() ? '-- নির্বাচন করুন --' : '-- Select --' }}</option>
+                @for (bg of bloodGroups; track bg) {
+                  <option [value]="bg" translate="no">{{ bg }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'বৈবাহিক অবস্থা' : 'Marital Status' }}</label>
+            <div class="input-with-icon select-wrapper">
+              <span class="material-symbols-outlined input-icon">diversity_1</span>
+              <select class="form-control" [(ngModel)]="maritalStatus" name="maritalStatus">
+                <option value="">{{ lang.isBangla() ? '-- নির্বাচন করুন --' : '-- Select --' }}</option>
+                <option value="SINGLE">{{ lang.isBangla() ? 'অবিবাহিত' : 'Single' }}</option>
+                <option value="MARRIED">{{ lang.isBangla() ? 'বিবাহিত' : 'Married' }}</option>
+                <option value="OTHER">{{ lang.isBangla() ? 'অন্যান্য' : 'Other' }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'শিক্ষাগত যোগ্যতা' : 'Educational Qualification' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">school</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="educationalQualification"
+                name="educationalQualification"
+                [placeholder]="lang.isBangla() ? 'যেমন: স্নাতক (বি.এ)' : 'e.g. Bachelor (B.A.)'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'বিকল্প মোবাইল নম্বর' : 'Secondary Mobile' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">phone_iphone</span>
+              <input
+                type="tel"
+                class="form-control"
+                [(ngModel)]="phoneSecondary"
+                name="phoneSecondary"
+                placeholder="018XXXXXXXX" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'নিজ জেলা / শহর' : 'Home Town / District' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">location_on</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="homeTown"
+                name="homeTown"
+                [placeholder]="lang.isBangla() ? 'যেমন: বগুড়া' : 'e.g. Bogura'" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Present Address -->
+        <h4 class="sub-heading">
+          <span class="material-symbols-outlined">home_pin</span>
+          <span>{{ lang.isBangla() ? 'বর্তমান ঠিকানা' : 'Present Address' }}</span>
+        </h4>
+        <div class="fields-grid-2">
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'গ্রাম / রাস্তা' : 'Village / Street' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">home</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="presentAddress.villageOrStreet"
+                name="present_villageOrStreet"
+                (ngModelChange)="syncPermanentAddress()"
+                [placeholder]="lang.isBangla() ? 'যেমন: বাড়ি ১২, রোড ৫' : 'e.g. House 12, Road 5'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'ডাকঘর' : 'Post Office' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">markunread_mailbox</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="presentAddress.postOffice"
+                name="present_postOffice"
+                (ngModelChange)="syncPermanentAddress()"
+                [placeholder]="lang.isBangla() ? 'যেমন: মিরপুর' : 'e.g. Mirpur'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'থানা / উপজেলা' : 'Thana / Upazila' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">location_city</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="presentAddress.thanaOrUpazila"
+                name="present_thanaOrUpazila"
+                (ngModelChange)="syncPermanentAddress()"
+                [placeholder]="lang.isBangla() ? 'যেমন: পল্লবী' : 'e.g. Pallabi'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'জেলা' : 'District' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">map</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="presentAddress.district"
+                name="present_district"
+                (ngModelChange)="syncPermanentAddress()"
+                [placeholder]="lang.isBangla() ? 'যেমন: ঢাকা' : 'e.g. Dhaka'" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Permanent Address -->
+        <div class="sub-heading-row">
+          <h4 class="sub-heading">
+            <span class="material-symbols-outlined">cottage</span>
+            <span>{{ lang.isBangla() ? 'স্থায়ী ঠিকানা' : 'Permanent Address' }}</span>
+          </h4>
+          <label class="same-as-check">
+            <input
+              type="checkbox"
+              [checked]="permanentSameAsPresent"
+              (change)="onPermanentSameChange($any($event.target).checked)" />
+            <span>{{ lang.isBangla() ? 'বর্তমান ঠিকানার মতো' : 'Same as present address' }}</span>
+          </label>
+        </div>
+        <div class="fields-grid-2">
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'গ্রাম / রাস্তা' : 'Village / Street' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">home</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="permanentAddress.villageOrStreet"
+                name="permanent_villageOrStreet"
+                [disabled]="permanentSameAsPresent"
+                [placeholder]="lang.isBangla() ? 'যেমন: বাড়ি ১২, রোড ৫' : 'e.g. House 12, Road 5'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'ডাকঘর' : 'Post Office' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">markunread_mailbox</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="permanentAddress.postOffice"
+                name="permanent_postOffice"
+                [disabled]="permanentSameAsPresent"
+                [placeholder]="lang.isBangla() ? 'যেমন: মিরপুর' : 'e.g. Mirpur'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'থানা / উপজেলা' : 'Thana / Upazila' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">location_city</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="permanentAddress.thanaOrUpazila"
+                name="permanent_thanaOrUpazila"
+                [disabled]="permanentSameAsPresent"
+                [placeholder]="lang.isBangla() ? 'যেমন: পল্লবী' : 'e.g. Pallabi'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'জেলা' : 'District' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">map</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="permanentAddress.district"
+                name="permanent_district"
+                [disabled]="permanentSameAsPresent"
+                [placeholder]="lang.isBangla() ? 'যেমন: ঢাকা' : 'e.g. Dhaka'" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Emergency Contact -->
+        <h4 class="sub-heading">
+          <span class="material-symbols-outlined">emergency</span>
+          <span>{{ lang.isBangla() ? 'জরুরি যোগাযোগ' : 'Emergency Contact' }}</span>
+        </h4>
+        <div class="fields-grid-2">
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'নাম' : 'Name' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">person</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="emergencyContact.name"
+                name="emergencyName"
+                [placeholder]="lang.isBangla() ? 'যেমন: মোসাঃ সালমা বেগম' : 'e.g. Mst. Salma Begum'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'সম্পর্ক' : 'Relation' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">family_restroom</span>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="emergencyContact.relation"
+                name="emergencyRelation"
+                [placeholder]="lang.isBangla() ? 'যেমন: স্ত্রী / ভাই' : 'e.g. Wife / Brother'" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ lang.isBangla() ? 'মোবাইল নম্বর' : 'Mobile Number' }}</label>
+            <div class="input-with-icon">
+              <span class="material-symbols-outlined input-icon">call</span>
+              <input
+                type="tel"
+                class="form-control"
+                [(ngModel)]="emergencyContact.phone"
+                name="emergencyPhone"
+                placeholder="017XXXXXXXX" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 5: Area Scoped Branch Assignment (Conditional for Area/Regional Managers) -->
       @if (isAreaRole) {
         <div class="form-section area-scope-section">
           <div class="section-title-wrap">
             <span class="material-symbols-outlined section-icon text-primary">hub</span>
             <div>
               <h3 class="section-heading">
-                {{ lang.isBangla() ? '৪. এরিয়াভুক্ত শাখা নিয়ন্ত্রণ' : '4. Area Scoped Branch Oversight' }}
+                {{ lang.isBangla() ? '৫. এরিয়াভুক্ত শাখা নিয়ন্ত্রণ' : '5. Area Scoped Branch Oversight' }}
                 <span class="required">*</span>
               </h3>
               <p class="section-hint">

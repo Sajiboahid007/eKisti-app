@@ -38,6 +38,44 @@
     </div>
   </div>
 
+  <!-- পাসওয়ার্ড রিসেট অনুরোধ (শুধু সুপার অ্যাডমিন / অ্যাডমিন; অপেক্ষমাণ থাকলেই দেখায়) -->
+  @if (authService.canManageUsers() && resetRequests().length > 0) {
+    <div class="card reset-requests-card mb-3">
+      <div class="reset-requests-header">
+        <span class="material-symbols-outlined reset-requests-icon">key</span>
+        <h3>{{ lang.isBangla() ? 'পাসওয়ার্ড রিসেট অনুরোধ' : 'Password Reset Requests' }}</h3>
+        <span class="reset-count-badge">{{ resetRequests().length }}</span>
+      </div>
+      <ul class="reset-request-list">
+        @for (req of resetRequests(); track req.requestId) {
+          <li class="reset-request-item">
+            <div class="reset-request-info">
+              <strong>{{ req.name }} <span class="text-muted-id">#{{ req.userId }}</span></strong>
+              <span class="reset-request-contact">
+                @if (req.email) { <span><span class="material-symbols-outlined">mail</span>{{ req.email }}</span> }
+                @if (req.phone) { <span><span class="material-symbols-outlined">call</span>{{ req.phone }}</span> }
+              </span>
+              <span class="reset-request-time">
+                <span class="material-symbols-outlined">schedule</span>{{ formatRequestTime(req.requestedAt) }}
+              </span>
+            </div>
+            <div class="reset-request-actions">
+              <button class="btn btn-primary btn-sm" (click)="openPasswordForRequest(req)">
+                <span class="material-symbols-outlined">lock_reset</span>
+                <span>{{ lang.isBangla() ? 'পাসওয়ার্ড রিসেট' : 'Reset Password' }}</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" [disabled]="rejectingRequestId() === req.requestId" (click)="rejectResetRequest(req)">
+                <span class="material-symbols-outlined">close</span>
+                <span>{{ lang.isBangla() ? 'বাতিল' : 'Reject' }}</span>
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
+
   <!-- Top 4-Tier Tabs Header -->
   <div class="tabs-header">
     <button 
@@ -125,7 +163,7 @@
                   <th>{{ lang.isBangla() ? 'অধিক্ষেত্র / কর্মক্ষেত্র' : 'Scope / Jurisdiction' }}</th>
                   <th class="text-end">{{ lang.t('userSalary') }}</th>
                   <th style="width: 120px;">{{ lang.t('status') }}</th>
-                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
+                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -209,6 +247,14 @@
                             <span class="material-symbols-outlined">edit</span>
                           </button>
 
+                          <!-- Change / Reset Password -->
+                          <button
+                            class="btn-action-icon btn-password"
+                            (click)="openPasswordForStaff(staff)"
+                            [title]="lang.isBangla() ? 'পাসওয়ার্ড পরিবর্তন' : 'Change password'">
+                            <span class="material-symbols-outlined">lock_reset</span>
+                          </button>
+
                           <!-- Delete Staff -->
                           <button 
                             class="btn-action-icon btn-delete" 
@@ -280,7 +326,7 @@
                   <th>{{ lang.isBangla() ? 'কর্মস্থল' : 'Workplace' }}</th>
                   <th class="text-end">{{ lang.t('userSalary') }}</th>
                   <th style="width: 120px;">{{ lang.t('status') }}</th>
-                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
+                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -375,6 +421,14 @@
                             <span class="material-symbols-outlined">edit</span>
                           </button>
 
+                          <!-- Change / Reset Password -->
+                          <button
+                            class="btn-action-icon btn-password"
+                            (click)="openPasswordForStaff(staff)"
+                            [title]="lang.isBangla() ? 'পাসওয়ার্ড পরিবর্তন' : 'Change password'">
+                            <span class="material-symbols-outlined">lock_reset</span>
+                          </button>
+
                           <!-- Delete Staff -->
                           <button 
                             class="btn-action-icon btn-delete" 
@@ -447,7 +501,7 @@
                   <th>{{ lang.isBangla() ? 'রুট / সমিতি' : 'Assigned Routes' }}</th>
                   <th class="text-end">{{ lang.t('userSalary') }}</th>
                   <th style="width: 120px;">{{ lang.t('status') }}</th>
-                  <th class="text-center" style="width: 130px;">{{ lang.t('action') }}</th>
+                  <th class="text-center" style="width: 170px;">{{ lang.t('action') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -539,6 +593,14 @@
                             (click)="openEditStaff(staff)" 
                             [title]="lang.isBangla() ? 'তথ্য এডিট করুন' : 'Edit staff'">
                             <span class="material-symbols-outlined">edit</span>
+                          </button>
+
+                          <!-- Change / Reset Password -->
+                          <button
+                            class="btn-action-icon btn-password"
+                            (click)="openPasswordForStaff(staff)"
+                            [title]="lang.isBangla() ? 'পাসওয়ার্ড পরিবর্তন' : 'Change password'">
+                            <span class="material-symbols-outlined">lock_reset</span>
                           </button>
 
                           <!-- Delete Staff -->
@@ -1672,6 +1734,158 @@
             <span>{{ lang.isBangla() ? 'হ্যাঁ, সফট-ডিলিট করুন' : 'Yes, Soft Delete' }}</span>
           }
         </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================== -->
+<!-- 8. CHANGE / RESET STAFF PASSWORD MODAL (পাসওয়ার্ড পরিবর্তন) -->
+<!-- ========================================== -->
+@if (showPasswordModal() && passwordTarget(); as target) {
+  <div class="modal-backdrop" (click)="savedPassword() ? null : closePasswordModal()">
+    <div class="modal-dialog password-modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h3>
+            <span class="material-symbols-outlined title-icon">lock_reset</span>
+            {{ lang.isBangla() ? 'পাসওয়ার্ড পরিবর্তন' : 'Change Password' }}
+          </h3>
+          <p class="sub-text">#{{ target.userId }} — {{ target.name }}@if (target.role) { ({{ getRoleTitle(target.role) }}) }</p>
+        </div>
+        <button class="close-btn" [disabled]="isSavingPassword()" (click)="closePasswordModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        @if (isOwnPasswordTarget()) {
+          <!-- নিজের অ্যাকাউন্ট: /profile ব্যবহার করতে হবে -->
+          <div class="pw-note pw-note-info">
+            <span class="material-symbols-outlined">info</span>
+            <span>
+              {{ lang.isBangla()
+                ? 'এটি আপনার নিজের অ্যাকাউন্ট। নিজের পাসওয়ার্ড বদলাতে বর্তমান পাসওয়ার্ড লাগে — তাই "আমার প্রোফাইল" পাতা ব্যবহার করুন।'
+                : 'This is your own account. Changing your own password needs your current password — please use My Profile.' }}
+            </span>
+          </div>
+        } @else if (savedPassword(); as pw) {
+          <!-- ফলাফল: পাসওয়ার্ড শুধু একবার দেখানো হয় -->
+          <div class="pw-result">
+            <span class="material-symbols-outlined pw-result-icon">check_circle</span>
+            <p class="pw-result-title">
+              {{ lang.isBangla() ? 'পাসওয়ার্ড সংরক্ষিত হয়েছে' : 'Password saved' }}
+            </p>
+            <div class="pw-result-box">
+              <code translate="no">{{ pw }}</code>
+              <button class="btn btn-outline-primary btn-sm" (click)="copySavedPassword()">
+                <span class="material-symbols-outlined">{{ passwordCopied() ? 'done' : 'content_copy' }}</span>
+                <span>{{ passwordCopied() ? (lang.isBangla() ? 'কপি হয়েছে' : 'Copied') : (lang.isBangla() ? 'কপি' : 'Copy') }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="pw-note pw-note-danger">
+            <span class="material-symbols-outlined">warning</span>
+            <span>
+              {{ lang.isBangla()
+                ? 'এই পাসওয়ার্ড আর কখনো দেখানো হবে না। এখনই কপি করে বা লিখে নিন এবং কর্মীকে নিজে জানান।'
+                : 'This password will not be shown again. Copy or note it now and tell the staff member yourself.' }}
+            </span>
+          </div>
+          @if (mustChangePassword) {
+            <p class="pw-hint">
+              {{ lang.isBangla() ? 'পরের লগইনে কর্মীকে নতুন পাসওয়ার্ড দিতে হবে।' : 'The staff member must set a new password at next login.' }}
+            </p>
+          }
+        } @else {
+          <!-- মোড নির্বাচন -->
+          <div class="pw-mode-grid">
+            <button type="button" class="pw-mode-card" [class.selected]="passwordMode() === 'generate'" (click)="passwordMode.set('generate')">
+              <span class="material-symbols-outlined">autorenew</span>
+              <span class="pw-mode-text">
+                <strong>{{ lang.isBangla() ? 'অস্থায়ী পাসওয়ার্ড তৈরি করুন' : 'Generate temporary password' }}</strong>
+                <span>{{ lang.isBangla() ? 'সিস্টেম ৮ অক্ষরের পাসওয়ার্ড তৈরি করবে' : 'System creates an 8-character password' }}</span>
+              </span>
+            </button>
+            <button type="button" class="pw-mode-card" [class.selected]="passwordMode() === 'manual'" (click)="passwordMode.set('manual')">
+              <span class="material-symbols-outlined">edit_note</span>
+              <span class="pw-mode-text">
+                <strong>{{ lang.isBangla() ? 'নিজে পাসওয়ার্ড দিন' : 'Set password manually' }}</strong>
+                <span>{{ lang.isBangla() ? 'কমপক্ষে ' + minPasswordLength + ' অক্ষর' : 'At least ' + minPasswordLength + ' characters' }}</span>
+              </span>
+            </button>
+          </div>
+
+          @if (passwordMode() === 'manual') {
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'নতুন পাসওয়ার্ড' : 'New password' }} <span class="required">*</span></label>
+              <div class="pw-input-wrap">
+                <input class="form-control" [type]="showNewPassword() ? 'text' : 'password'" autocomplete="new-password"
+                  [(ngModel)]="newPassword" [placeholder]="lang.isBangla() ? 'নতুন পাসওয়ার্ড' : 'New password'" />
+                <button type="button" class="pw-toggle" (click)="showNewPassword.set(!showNewPassword())"
+                  [title]="showNewPassword() ? (lang.isBangla() ? 'লুকান' : 'Hide') : (lang.isBangla() ? 'দেখুন' : 'Show')">
+                  <span class="material-symbols-outlined">{{ showNewPassword() ? 'visibility_off' : 'visibility' }}</span>
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>{{ lang.isBangla() ? 'পাসওয়ার্ড নিশ্চিত করুন' : 'Confirm password' }} <span class="required">*</span></label>
+              <div class="pw-input-wrap">
+                <input class="form-control" [type]="showConfirmPassword() ? 'text' : 'password'" autocomplete="new-password"
+                  [(ngModel)]="confirmPassword" [placeholder]="lang.isBangla() ? 'আবার লিখুন' : 'Re-type password'" />
+                <button type="button" class="pw-toggle" (click)="showConfirmPassword.set(!showConfirmPassword())"
+                  [title]="showConfirmPassword() ? (lang.isBangla() ? 'লুকান' : 'Hide') : (lang.isBangla() ? 'দেখুন' : 'Show')">
+                  <span class="material-symbols-outlined">{{ showConfirmPassword() ? 'visibility_off' : 'visibility' }}</span>
+                </button>
+              </div>
+            </div>
+            @if ((newPassword || confirmPassword) && manualPasswordError(); as err) {
+              <p class="pw-error">{{ err }}</p>
+            }
+          }
+
+          <label class="pw-checkbox">
+            <input type="checkbox" [(ngModel)]="mustChangePassword" />
+            <span>{{ lang.isBangla() ? 'পরের লগইনে কর্মীকে নতুন পাসওয়ার্ড দিতে হবে' : 'Staff must set a new password at next login' }}</span>
+          </label>
+
+          <div class="pw-note pw-note-warning">
+            <span class="material-symbols-outlined">sms_failed</span>
+            <span>
+              {{ lang.isBangla()
+                ? 'SMS গেটওয়ে এখনো সংযুক্ত নয় — SMS পাঠানো হবে না। সংরক্ষণের পর পাসওয়ার্ডটি আপনাকে নিজে কর্মীকে জানাতে হবে।'
+                : 'SMS gateway is not connected yet — no SMS will be sent. After saving, you must tell the staff member the password yourself.' }}
+            </span>
+          </div>
+        }
+      </div>
+
+      <div class="modal-footer">
+        @if (isOwnPasswordTarget()) {
+          <button class="btn btn-secondary" (click)="closePasswordModal()">{{ lang.isBangla() ? 'বন্ধ করুন' : 'Close' }}</button>
+          <a routerLink="/profile" class="btn btn-primary" (click)="closePasswordModal()">
+            <span class="material-symbols-outlined">account_circle</span>
+            <span>{{ lang.isBangla() ? 'আমার প্রোফাইল' : 'My Profile' }}</span>
+          </a>
+        } @else if (savedPassword()) {
+          <button class="btn btn-primary" (click)="closePasswordModal()">
+            <span class="material-symbols-outlined">done</span>
+            <span>{{ lang.isBangla() ? 'সম্পন্ন' : 'Done' }}</span>
+          </button>
+        } @else {
+          <button class="btn btn-secondary" [disabled]="isSavingPassword()" (click)="closePasswordModal()">{{ lang.isBangla() ? 'বাতিল' : 'Cancel' }}</button>
+          <button class="btn btn-primary" [disabled]="isSavingPassword() || !!manualPasswordError()" (click)="savePassword()">
+            @if (isSavingPassword()) {
+              <span class="material-symbols-outlined spinning">sync</span>
+              <span>{{ lang.isBangla() ? 'সংরক্ষণ হচ্ছে...' : 'Saving...' }}</span>
+            } @else {
+              <span class="material-symbols-outlined">lock_reset</span>
+              <span>{{ passwordMode() === 'generate'
+                ? (lang.isBangla() ? 'অস্থায়ী পাসওয়ার্ড তৈরি করুন' : 'Generate password')
+                : (lang.isBangla() ? 'পাসওয়ার্ড সংরক্ষণ করুন' : 'Save password') }}</span>
+            }
+          </button>
+        }
       </div>
     </div>
   </div>

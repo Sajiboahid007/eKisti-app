@@ -1,8 +1,10 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AuthStateService } from '../../../core/services/auth-state.service';
+import { ActiveUserSession, AuthStateService } from '../../../core/services/auth-state.service';
+import { StaffCredentialService } from '../../../core/services/staff-credential.service';
+import { normalizeBdMobile } from '../../../core/finance/validation';
 import { LanguageService } from '../../../core/services/language.service';
 import { StaffRole } from '../../../core/models/database.models';
 import { SettingsService } from '../../../core/services/settings.service';
@@ -20,6 +22,7 @@ export class LoginComponent {
   private router = inject(Router);
   readonly authService = inject(AuthStateService);
   readonly lang = inject(LanguageService);
+  private credentials = inject(StaffCredentialService);
 
   emailOrPhone: string = 'admin@ekisti.com';
   password: string = '123456';
@@ -77,8 +80,8 @@ export class LoginComponent {
     }
 
     this.loading.set(true);
-    setTimeout(() => {
-      const ok = this.authService.login(this.emailOrPhone, this.password);
+    setTimeout(async () => {
+      const ok = await this.authService.login(this.emailOrPhone, this.password);
       this.loading.set(false);
       if (ok) {
         this.router.navigate(['/dashboard']);
@@ -90,5 +93,76 @@ export class LoginComponent {
 
   quickLogin(role: StaffRole) {
     this.authService.loginAsRole(role);
+  }
+
+  // ===== পাসওয়ার্ড ভুলে গেছেন =====
+  @ViewChild('forgotInput') private forgotInput?: ElementRef<HTMLInputElement>;
+
+  forgotOpen = signal<boolean>(false);
+  forgotIdentifier = signal<string>('');
+  forgotSending = signal<boolean>(false);
+  forgotSent = signal<boolean>(false);
+  forgotError = signal<string>('');
+
+  openForgot() {
+    this.forgotIdentifier.set(this.emailOrPhone.trim());
+    this.forgotSent.set(false);
+    this.forgotError.set('');
+    this.forgotOpen.set(true);
+    setTimeout(() => this.forgotInput?.nativeElement.focus());
+  }
+
+  closeForgot() {
+    if (this.forgotSending()) return;
+    this.forgotOpen.set(false);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    if (this.forgotOpen()) this.closeForgot();
+  }
+
+  async sendForgot() {
+    const identifier = this.forgotIdentifier().trim();
+    this.forgotError.set('');
+    if (!identifier) {
+      this.forgotError.set(this.lang.isBangla() ? 'অনুগ্রহ করে ইমেইল বা মোবাইল নম্বর দিন' : 'Please enter email or mobile number');
+      return;
+    }
+
+    this.forgotSending.set(true);
+    try {
+      // কর্মী তালিকা Firestore থেকে তখনো লোড না হলে আবার এনে খোঁজা
+      let staff = this.findStaff(identifier);
+      if (!staff) {
+        await this.authService.loadUsersFromFirestore();
+        staff = this.findStaff(identifier);
+      }
+      // গোপনীয়তা: একাউন্ট আছে কি না তা প্রকাশ করা হয় না — মিল থাকুক বা না থাকুক, একই বার্তা
+      if (staff) {
+        await this.credentials.requestReset({
+          userId: staff.userId, name: staff.name, email: staff.email,
+          phone: staff.phone, branchId: staff.branchId
+        });
+      }
+      this.forgotSent.set(true);
+    } catch {
+      this.forgotError.set(this.lang.isBangla()
+        ? 'অনুরোধ পাঠানো যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।'
+        : 'Could not send the request. Check your internet connection and try again.');
+    } finally {
+      this.forgotSending.set(false);
+    }
+  }
+
+  /** ইমেইল (case-insensitive) বা মোবাইল নম্বর দিয়ে কর্মী খোঁজা — নাম দিয়ে নয় */
+  private findStaff(identifier: string): ActiveUserSession | undefined {
+    const email = identifier.toLowerCase();
+    const normalized = normalizeBdMobile(identifier);
+    const mobile = /^\d{6,}$/.test(normalized) ? normalized : '';
+    return this.authService.availableUsers().find(u =>
+      (!!u.email && u.email.trim().toLowerCase() === email) ||
+      (!!u.phone && !!mobile && normalizeBdMobile(u.phone) === mobile)
+    );
   }
 }
