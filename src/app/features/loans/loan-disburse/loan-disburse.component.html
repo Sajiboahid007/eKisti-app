@@ -93,15 +93,30 @@
           </form>
         } @else {
         <form (ngSubmit)="onSubmit()">
-          <div class="form-row">
+          <div class="form-row" [class.form-row-3]="authService.canSelectBranch()">
+            @if (authService.canSelectBranch()) {
+              <div class="form-group flex-1">
+                <label>শাখা নির্বাচন করুন</label>
+                <select class="form-control" [ngModel]="selectedBranchId()" (ngModelChange)="onBranchChange($event)" name="branchSelect">
+                  <option [ngValue]="0">সকল শাখা</option>
+                  @for (b of accessibleBranches(); track b.branchId) {
+                    <option [ngValue]="b.branchId">{{ b.name }}</option>
+                  }
+                </select>
+              </div>
+            }
+
             <!-- Select Customer -->
             <div class="form-group flex-2">
               <label>গ্রাহক নির্বাচন করুন <span class="required">*</span></label>
               <select class="form-control" [ngModel]="selectedCustomerId()" (ngModelChange)="selectedCustomerId.set(+$event)" name="customerSelect" required>
-                @for (c of customers(); track c.customerId) {
+                @for (c of filteredCustomers(); track c.customerId) {
                   <option [value]="c.customerId">
                     #{{ c.customerId }} — {{ c.fullName }} ({{ c.phonePrimary }} / NID: {{ c.nidNumber }})
                   </option>
+                }
+                @empty {
+                  <option [value]="0" disabled>এই শাখায় কোনো সক্রিয় গ্রাহক নেই</option>
                 }
               </select>
               <div class="form-hint">গ্রাহকের নাম বা আইডি দেখে নির্বাচন করুন</div>

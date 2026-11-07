@@ -103,6 +103,35 @@
   }
 }
 
+.branch-filter {
+  min-width: 170px;
+  max-width: 230px;
+  flex-shrink: 0;
+
+  .branch-select {
+    height: 38px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    background-color: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 8px);
+    color: var(--text-primary);
+    padding: 0 0.75rem;
+
+    &:focus {
+      border-color: var(--primary);
+      outline: none;
+    }
+  }
+
+  @media (max-width: 768px) {
+    min-width: 100%;
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
 .filter-pills {
   display: flex;
   align-items: center;

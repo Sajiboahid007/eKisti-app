@@ -335,10 +335,15 @@ export class ReportsComponent implements OnInit {
       this.staff.set(staff);
       this.customers.set(customers.filter(c => this.auth.canAccessBranch(c.branchId)));
       this.loans.set(loans);
-      if (accessible.length === 1) this.branchId.set(accessible[0].branchId);
-      else {
+      if (!this.auth.canSelectBranch()) {
+        if (accessible.length > 0) this.branchId.set(accessible[0].branchId);
+      } else {
         const own = accessible.find(b => b.branchId === this.auth.currentUser().branchId);
-        if (own) this.branchId.set(own.branchId);
+        if (own && own.branchId > 0) {
+          this.branchId.set(own.branchId);
+        } else {
+          this.branchId.set(0);
+        }
       }
     } catch (err: any) {
       this.notice.set({ kind: 'danger', text: err?.message || 'ভিত্তি তথ্য লোড করা যায়নি' });
@@ -351,6 +356,9 @@ export class ReportsComponent implements OnInit {
   setTab(t: ReportTab) {
     this.tab.set(t);
     this.notice.set(null);
+    if (t === 'DAYBOOK' && !this.branchId() && this.branches().length === 1) {
+      this.branchId.set(this.branches()[0].branchId);
+    }
     void this.loadTab();
   }
 

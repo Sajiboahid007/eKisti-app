@@ -54,6 +54,7 @@ export class ReceiptListComponent implements OnInit {
 
   // ফিল্টার
   readonly searchQuery = signal<string>('');
+  readonly branchFilter = signal<number>(0); // 0 = সকল শাখা
   readonly dateFrom = signal<string>('');
   readonly dateTo = signal<string>('');
   readonly methodFilter = signal<PaymentMethod | 'ALL'>('ALL');
@@ -92,15 +93,26 @@ export class ReceiptListComponent implements OnInit {
     return all.filter(r => this.authService.canAccessBranch(r.branchId));
   });
 
-  /** কালেক্টর ড্রপডাউনের জন্য অনন্য কর্মী তালিকা */
+  /** ড্রপডাউনের জন্য প্রবেশযোগ্য শাখা তালিকা */
+  readonly accessibleBranches = computed(() =>
+    this.branches().filter(b => this.authService.canAccessBranch(b.branchId))
+  );
+
+  /** কালেক্টর ড্রপডাউনের জন্য অনন্য কর্মী তালিকা (নির্বাচিত শাখা ফিল্টার অনুযায়ী) */
   readonly collectors = computed(() => {
     const map = new Map<number, string>();
-    this.permittedReceipts().forEach(r => map.set(r.collectedByUserId, r.collectedByName));
+    const branch = Number(this.branchFilter());
+    const list = branch > 0
+      ? this.permittedReceipts().filter(r => r.branchId === branch)
+      : this.permittedReceipts();
+
+    list.forEach(r => map.set(r.collectedByUserId, r.collectedByName));
     return [...map].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   });
 
   readonly filteredReceipts = computed<PaymentCollection[]>(() => {
     const q = this.searchQuery().trim().toLowerCase();
+    const branch = Number(this.branchFilter());
     const from = this.dateFrom();
     const to = this.dateTo();
     const method = this.methodFilter();
@@ -108,6 +120,7 @@ export class ReceiptListComponent implements OnInit {
     const handover = this.handoverFilter();
 
     return this.permittedReceipts().filter(r => {
+      if (branch > 0 && r.branchId !== branch) return false;
       if (method !== 'ALL' && r.paymentMethod !== method) return false;
       if (collector && r.collectedByUserId !== collector) return false;
       if (handover === 'PENDING' && r.isHandedOverToBranch) return false;
@@ -148,7 +161,8 @@ export class ReceiptListComponent implements OnInit {
 
   readonly hasActiveFilters = computed(() =>
     !!this.searchQuery().trim() || !!this.dateFrom() || !!this.dateTo() ||
-    this.methodFilter() !== 'ALL' || !!this.collectorFilter() || this.handoverFilter() !== 'ALL'
+    this.methodFilter() !== 'ALL' || !!this.collectorFilter() || this.handoverFilter() !== 'ALL' ||
+    (this.authService.canSelectBranch() && this.branchFilter() > 0)
   );
 
   readonly totalPages = computed(() => {
@@ -176,12 +190,16 @@ export class ReceiptListComponent implements OnInit {
   });
 
   constructor() {
-    // অন্য পেজ থেকে নির্দিষ্ট রসিদ/ঋণ খুঁজে আসা: /collections/receipts?search=40008 — বাকি ফিল্টার মুছে শুধু সেটি
+    // অন্য পেজ থেকে নির্দিষ্ট রসিদ/ঋণ খুঁজে আসা: /collections/receipts?search=40008 বা ?branchId=1
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
       const search = params.get('search');
       if (search) {
         this.clearFilters();
         this.searchQuery.set(search);
+      }
+      const branch = params.get('branchId');
+      if (branch && this.authService.canSelectBranch()) {
+        this.branchFilter.set(Number(branch));
       }
     });
   }
@@ -210,6 +228,13 @@ export class ReceiptListComponent implements OnInit {
     }
   }
 
+  /** শাখা ফিল্টার পরিবর্তন ও সংশ্লিষ্ট কর্মী ফিল্টার সমন্বয় */
+  onBranchFilterChange(branchId: number | string) {
+    this.branchFilter.set(Number(branchId) || 0);
+    this.collectorFilter.set(0);
+    this.currentPage.set(1);
+  }
+
   /** যেকোনো ফিল্টার পরিবর্তনে প্রথম পৃষ্ঠায় ফিরে যাওয়া */
   updateFilter<T>(target: WritableSignal<T>, value: T) {
     target.set(value);
@@ -230,6 +255,9 @@ export class ReceiptListComponent implements OnInit {
     this.methodFilter.set('ALL');
     this.collectorFilter.set(0);
     this.handoverFilter.set('ALL');
+    if (this.authService.canSelectBranch()) {
+      this.branchFilter.set(0);
+    }
     this.currentPage.set(1);
   }
 

@@ -293,6 +293,19 @@ export class AuthStateService {
   );
 
   /**
+   * শাখা ড্রপডাউন প্রদর্শন ও ফিল্টার করার অনুমতি
+   * (সুপার অ্যাডমিন, অ্যাডমিন, হেড অফিস কর্মকর্তা এবং এরিয়া/রিজিওনাল ম্যানেজার)
+   */
+  readonly canSelectBranch = computed<boolean>(() => {
+    const user = this.currentUser();
+    if (this.isSuperAdmin() || this.isAdmin()) return true;
+    if (user.category === 'SYSTEM_ADMIN' || user.category === 'HEAD_OFFICE') return true;
+    if (this.isAreaManager() || this.isAreaScoped()) return true;
+    if (this.hasNationwideAccess()) return true;
+    return false;
+  });
+
+  /**
    * Branch IDs the current user may see. `null` = all branches.
    * Area/Regional managers get only their assigned branches (empty list = no access until assigned);
    * branch staff get their own branch.

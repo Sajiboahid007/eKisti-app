@@ -5,7 +5,7 @@
       <p class="sub-text">দৈনিক আদায়, বকেয়া, পোর্টফোলিও মান, ক্যাশ বই, ট্রায়াল ব্যালেন্স ও শাখা MIS</p>
     </div>
     <div class="header-right">
-      @if (branches().length > 1) {
+      @if (auth.canSelectBranch() && branches().length > 0) {
         <select class="form-control branch-select" [ngModel]="branchId()" (ngModelChange)="onBranchChange($event)" aria-label="শাখা">
           <option [ngValue]="0">সকল শাখা</option>
           @for (b of branches(); track b.branchId) { <option [ngValue]="b.branchId">{{ b.name }}</option> }

@@ -99,6 +99,16 @@ export class LoanDisburseComponent implements OnInit {
   readonly selectedReceiptForPrint = signal<DisbursementReceiptData | null>(null);
 
   // Form Signals
+  readonly selectedBranchId = signal<number>(0);
+  readonly accessibleBranches = computed(() => this.branches().filter(b => this.authService.canAccessBranch(b.branchId)));
+  readonly filteredCustomers = computed(() => {
+    const list = this.customers();
+    if (this.authService.canSelectBranch() && Number(this.selectedBranchId()) > 0) {
+      return list.filter(c => c.branchId === Number(this.selectedBranchId()));
+    }
+    return list;
+  });
+
   readonly selectedCustomerId = signal<number>(0);
   readonly selectedProductId = signal<number>(1);
   readonly principalAmount = signal<number>(20000);
@@ -338,6 +348,15 @@ export class LoanDisburseComponent implements OnInit {
     this.formFeePaid.set(product.formAndProcessingFee || 0);
     this.insuranceFeePaid.set(product.insuranceFee || 0);
     this.firstInstallmentDueDate.set(this.lifecycle.defaultFirstDueDate(product, product.frequency, undefined, this.selectedCenter()?.meetingDay));
+  }
+
+  onBranchChange(branchId: number | string) {
+    this.selectedBranchId.set(Number(branchId) || 0);
+    const validCustomers = this.filteredCustomers();
+    const currentId = this.selectedCustomerId();
+    if (!validCustomers.some(c => c.customerId === currentId)) {
+      this.selectedCustomerId.set(validCustomers.length > 0 ? validCustomers[0].customerId : 0);
+    }
   }
 
   onProductChange(productId: number | string) {

@@ -55,6 +55,17 @@
     </div>
 
     <div class="filter-row">
+      @if (authService.canSelectBranch()) {
+        <label class="filter-field">
+          <span>শাখা</span>
+          <select class="form-control" [ngModel]="branchFilter()" (ngModelChange)="onBranchFilterChange($event)">
+            <option [ngValue]="0">সকল শাখা</option>
+            @for (b of accessibleBranches(); track b.branchId) {
+              <option [ngValue]="b.branchId">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+      }
       <label class="filter-field">
         <span>শুরুর তারিখ</span>
         <input type="date" class="form-control" [ngModel]="dateFrom()" (ngModelChange)="updateFilter(dateFrom, $event)" />
@@ -179,6 +190,9 @@
                   </td>
                   <td>
                     <div class="cell-title">{{ rec.collectedByName }}</div>
+                    @if (authService.canSelectBranch()) {
+                      <div class="sub-text">{{ getBranch(rec.branchId)?.name || ('শাখা #' + rec.branchId) }}</div>
+                    }
                     @if (rec.isReversed) {
                       <span class="badge badge-danger" [title]="rec.reversalReason || ''">বাতিল</span>
                     } @else if (rec.isHandedOverToBranch) {

@@ -81,6 +81,10 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
+
+  &.form-row-3 {
+    grid-template-columns: 1fr 1.4fr 1fr;
+  }
 }
 
 /* লেবেল + টগল এক সারিতে; পাশের কলামের লেবেলও একই উচ্চতা, তাই ইনপুটগুলো এক লাইনে থাকে */
@@ -551,11 +555,18 @@
   }
 }
 
+@media (max-width: 1100px) {
+  .form-row.form-row-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 900px) {
   .disburse-grid {
     grid-template-columns: 1fr;
   }
-  .form-row {
+  .form-row,
+  .form-row.form-row-3 {
     grid-template-columns: 1fr;
   }
 }

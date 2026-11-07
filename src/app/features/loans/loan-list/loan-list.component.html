@@ -26,6 +26,17 @@
         (ngModelChange)="currentPage.set(1)" />
     </div>
 
+    @if (authService.canSelectBranch()) {
+      <div class="branch-filter">
+        <select class="form-control branch-select" [ngModel]="branchFilter()" (ngModelChange)="onBranchChange($event)" aria-label="শাখা">
+          <option [ngValue]="0">সকল শাখা</option>
+          @for (b of accessibleBranches(); track b.branchId) {
+            <option [ngValue]="b.branchId">{{ b.name }}</option>
+          }
+        </select>
+      </div>
+    }
+
     <div class="filter-pills">
       <button class="pill-btn" [class.active]="selectedFilter === 'ALL'" (click)="setFilter('ALL')">
         সব ঋণ ({{ getPermittedCount('ALL') }})

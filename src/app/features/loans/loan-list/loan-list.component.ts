@@ -46,6 +46,9 @@ export class LoanListComponent implements OnInit {
   readonly centers = signal<CenterOrSamity[]>([]);
   readonly loading = signal<boolean>(true);
 
+  readonly branchFilter = signal<number>(0);
+  readonly accessibleBranches = computed(() => this.branches().filter(b => this.authService.canAccessBranch(b.branchId)));
+
   searchQuery: string = '';
   selectedFilter: string = 'ALL'; // ALL, ACTIVE, OVERDUE, CLOSED
 
@@ -147,6 +150,14 @@ export class LoanListComponent implements OnInit {
     return all;
   }
 
+  getScopedLoans(): Loan[] {
+    let list = this.getPermittedLoans();
+    if (this.authService.canSelectBranch() && Number(this.branchFilter()) > 0) {
+      list = list.filter(l => l.branchId === Number(this.branchFilter()));
+    }
+    return list;
+  }
+
   /** ট্যাব অনুযায়ী ঋণ — "সব ঋণ" = বিতরণকৃত পোর্টফোলিও (আবেদন প্রবাহ ও প্রত্যাখ্যাত বাদ) */
   private byTab(list: Loan[], tab: string): Loan[] {
     switch (tab) {
@@ -159,7 +170,7 @@ export class LoanListComponent implements OnInit {
   }
 
   filteredLoans(): Loan[] {
-    let list = this.byTab(this.getPermittedLoans(), this.selectedFilter);
+    let list = this.byTab(this.getScopedLoans(), this.selectedFilter);
 
     const q = this.searchQuery.trim().toLowerCase();
     if (!q) return list;
@@ -172,7 +183,12 @@ export class LoanListComponent implements OnInit {
   }
 
   getPermittedCount(status?: string): number {
-    return this.byTab(this.getPermittedLoans(), status || 'ALL').length;
+    return this.byTab(this.getScopedLoans(), status || 'ALL').length;
+  }
+
+  onBranchChange(branchId: number | string) {
+    this.branchFilter.set(Number(branchId) || 0);
+    this.currentPage.set(1);
   }
 
   getBranchName(branchId: number): string {
